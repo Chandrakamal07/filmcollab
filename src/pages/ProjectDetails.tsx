@@ -1680,7 +1680,7 @@ export default function ProjectDetails() {
     const editedValue = sectionValues[sectionKey] !== undefined ? sectionValues[sectionKey] : currentValue;
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
             {icon}
@@ -1691,7 +1691,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, currentValue)}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -1703,7 +1703,7 @@ export default function ProjectDetails() {
               <Textarea
                 value={editedValue}
                 onChange={(e) => setSectionValues(prev => ({ ...prev, [sectionKey]: e.target.value }))}
-                className="min-h-[120px] border-yellow-200 dark:border-yellow-900/40 focus-visible:ring-yellow-500"
+                className="min-h-[120px] border-border/80 bg-surface-elevated/50 focus-visible:ring-primary"
                 placeholder={`Enter ${title.toLowerCase()}...`}
               />
               <div className="flex gap-2 justify-end">
@@ -1716,7 +1716,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={async () => {
                     if (dbColumn === "skills_required") {
                       try {
@@ -1762,7 +1762,7 @@ export default function ProjectDetails() {
                       <Badge 
                         key={idx} 
                         variant="secondary" 
-                        className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50 hover:bg-yellow-100 dark:hover:bg-yellow-950/50"
+                        className="bg-primary/10 text-primary border border-primary/25 hover:bg-primary/15"
                       >
                         {trimmed}
                       </Badge>
@@ -1813,10 +1813,10 @@ export default function ProjectDetails() {
     }
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
-            <Users className="h-5 w-5 text-yellow-600" />
+            <Users className="h-5 w-5 text-primary" />
             Contact Information
           </CardTitle>
           {project?.is_creator && !isEditing && (
@@ -1824,7 +1824,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, JSON.stringify(contactData))}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -1843,7 +1843,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="Contact Name"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1856,7 +1856,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="contact@example.com"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1868,7 +1868,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="+91 XXXXX XXXXX"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1880,7 +1880,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="https://example.com"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1892,7 +1892,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="https://instagram.com/profile"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1904,7 +1904,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="WhatsApp link or phone number"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -1918,7 +1918,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={() => saveSection(sectionKey, "contact_info")}
                 >
                   Save
@@ -1935,7 +1935,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Email:</span>
                 <span className="text-foreground">
                   {contactData.email ? (
-                    <a href={`mailto:${contactData.email}`} className="text-yellow-600 hover:underline">{contactData.email}</a>
+                    <a href={`mailto:${contactData.email}`} className="text-primary hover:underline">{contactData.email}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1949,7 +1949,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Website:</span>
                 <span className="text-foreground">
                   {contactData.website ? (
-                    <a href={contactData.website.startsWith('http') ? contactData.website : `https://${contactData.website}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.website}</a>
+                    <a href={contactData.website.startsWith('http') ? contactData.website : `https://${contactData.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.website}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1959,7 +1959,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Instagram:</span>
                 <span className="text-foreground">
                   {contactData.instagram ? (
-                    <a href={contactData.instagram.startsWith('http') ? contactData.instagram : `https://instagram.com/${contactData.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.instagram}</a>
+                    <a href={contactData.instagram.startsWith('http') ? contactData.instagram : `https://instagram.com/${contactData.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.instagram}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1970,9 +1970,9 @@ export default function ProjectDetails() {
                 <span className="text-foreground">
                   {contactData.whatsapp ? (
                     contactData.whatsapp.startsWith('http') || contactData.whatsapp.startsWith('https') ? (
-                      <a href={contactData.whatsapp} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">Chat on WhatsApp</a>
+                      <a href={contactData.whatsapp} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Chat on WhatsApp</a>
                     ) : (
-                      <a href={`https://wa.me/${contactData.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.whatsapp}</a>
+                      <a href={`https://wa.me/${contactData.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.whatsapp}</a>
                     )
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
@@ -2040,10 +2040,10 @@ export default function ProjectDetails() {
     };
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
-            <Calendar className="h-5 w-5 text-yellow-600" />
+            <Calendar className="h-5 w-5 text-primary" />
             Timeline
           </CardTitle>
           {project?.is_creator && !isEditing && (
@@ -2051,7 +2051,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, JSON.stringify(timelineEvents))}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -2061,14 +2061,14 @@ export default function ProjectDetails() {
           {isEditing ? (
             <div className="space-y-4">
               {draftEvents.map((event, index) => (
-                <div key={index} className="flex gap-4 items-start border-b border-yellow-50 pb-4 last:border-0 last:pb-0">
+                <div key={index} className="flex gap-4 items-start border-b border-border/60 pb-4 last:border-0 last:pb-0">
                   <div className="w-1/3 space-y-1">
                     <label className="text-xs font-semibold text-muted-foreground">Date</label>
                     <Input
                       type="date"
                       value={event.date}
                       onChange={(e) => handleUpdateEvent(index, "date", e.target.value)}
-                      className="border-yellow-100 focus:border-yellow-500"
+                      className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                     />
                   </div>
                   <div className="flex-1 space-y-1">
@@ -2077,7 +2077,7 @@ export default function ProjectDetails() {
                       value={event.notes}
                       onChange={(e) => handleUpdateEvent(index, "notes", e.target.value)}
                       placeholder="Enter notes for this day..."
-                      className="min-h-[60px] border-yellow-100 focus:border-yellow-500"
+                      className="min-h-[60px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                     />
                   </div>
                   <Button
@@ -2097,7 +2097,7 @@ export default function ProjectDetails() {
                 variant="outline"
                 size="sm"
                 onClick={handleAddEvent}
-                className="w-full border-dashed border-yellow-300 hover:border-yellow-500 text-yellow-600 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
+                className="w-full border-dashed border-primary/40 hover:border-primary text-primary hover:bg-primary/10"
               >
                 <Plus className="h-4 w-4 mr-1" /> Add Timeline Milestone
               </Button>
@@ -2112,7 +2112,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={() => saveSection(sectionKey, "timeline")}
                 >
                   Save
@@ -2122,12 +2122,12 @@ export default function ProjectDetails() {
           ) : (
             <div className="space-y-4">
               {timelineEvents.length > 0 ? (
-                <div className="relative pl-6 border-l-2 border-yellow-200 dark:border-yellow-900/40 ml-3 space-y-6">
+                <div className="relative pl-6 border-l-2 border-primary/35 ml-3 space-y-6">
                   {timelineEvents.map((event, index) => (
                     <div key={index} className="relative">
-                      <span className="absolute -left-[31px] top-1.5 bg-yellow-500 border-4 border-white rounded-full w-4 h-4 shadow-sm"></span>
+                      <span className="absolute -left-[31px] top-1.5 bg-primary border-4 border-card rounded-full w-4 h-4 shadow-sm"></span>
                       <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="text-xs font-bold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 px-2 py-0.5 rounded border border-yellow-100 dark:border-yellow-900/40 w-fit shrink-0">
+                        <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded border border-primary/25 w-fit shrink-0">
                           {event.date ? new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : "Date TBD"}
                         </span>
                         <p className="text-sm text-foreground/90 flex-1 whitespace-pre-wrap leading-relaxed mt-0.5">
@@ -2169,7 +2169,7 @@ export default function ProjectDetails() {
             <p className="text-muted-foreground mb-6">The requested project could not be found.</p>
             <Button 
               onClick={() => navigate("/projects")}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700"
+              className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Projects
@@ -2192,7 +2192,7 @@ export default function ProjectDetails() {
           <Button 
             variant="outline" 
             onClick={() => navigate("/projects")}
-            className="flex items-center gap-2 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
+            className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Projects
@@ -2202,7 +2202,7 @@ export default function ProjectDetails() {
             <Button 
               variant="outline" 
               onClick={handleShare} 
-              className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
+              className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
             >
               <Share2 className="h-4 w-4 mr-2" />
               Share
@@ -2211,7 +2211,7 @@ export default function ProjectDetails() {
               <Button 
                 variant="outline" 
                 onClick={() => setIsEditDialogOpen(true)} 
-                className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
+                className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
               >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
@@ -2236,12 +2236,12 @@ export default function ProjectDetails() {
           }} 
           className="w-full"
         >
-          <TabsList className={`grid w-full ${sourceTab === 'created' ? 'grid-cols-5' : 'grid-cols-4'} bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl h-auto`}>
-            <TabsTrigger value="overview" className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all">Overview</TabsTrigger>
+          <TabsList className={`grid w-full ${sourceTab === 'created' ? 'grid-cols-5' : 'grid-cols-4'} bg-surface-elevated border border-border/80 p-1 rounded-xl h-auto`}>
+            <TabsTrigger value="overview" className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all">Overview</TabsTrigger>
             <TabsTrigger 
               value="tasks" 
               disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               <span>Tasks</span>
               {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
@@ -2249,7 +2249,7 @@ export default function ProjectDetails() {
             <TabsTrigger 
               value="chat" 
               disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               <span>Chat</span>
               {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
@@ -2257,14 +2257,14 @@ export default function ProjectDetails() {
             <TabsTrigger 
               value="team" 
               disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               <span className="hidden sm:inline">Team Members</span>
               <span className="sm:hidden">Members</span>
               {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
             </TabsTrigger>
             {sourceTab === 'created' && (
-              <TabsTrigger value="applicants" className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all">Applicants</TabsTrigger>
+              <TabsTrigger value="applicants" className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all">Applicants</TabsTrigger>
             )}
           </TabsList>
 
@@ -2273,20 +2273,21 @@ export default function ProjectDetails() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <div className="lg:col-span-2 space-y-6">
                 {/* Project Header Info in Overview */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex flex-wrap justify-between items-start gap-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-2xl font-bold text-foreground">{project?.title}</h2>
+                          <div className="w-full mb-1"><span className="noir-eyebrow">Production Overview</span></div>
+                          <h2 className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground">{project?.title}</h2>
                           {project?.featured && (
-                            <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                            <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                               <Star className="h-3 w-3 mr-1" />
                               Featured
                             </Badge>
                           )}
                           {project?.popular && (
-                            <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                            <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                               <Star className="h-3 w-3 mr-1" />
                               Popular
                             </Badge>
@@ -2315,7 +2316,7 @@ export default function ProjectDetails() {
                   "full_description",
                   "description",
                   project?.full_description || project?.description || "",
-                  <Briefcase className="h-5 w-5 text-yellow-600" />
+                  <Briefcase className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Production Notes */}
@@ -2324,7 +2325,7 @@ export default function ProjectDetails() {
                   "production_notes",
                   "production_notes",
                   project?.production_notes || "",
-                  <FileText className="h-5 w-5 text-yellow-600" />
+                  <FileText className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Target Audience */}
@@ -2333,7 +2334,7 @@ export default function ProjectDetails() {
                   "target_audience",
                   "target_audience",
                   project?.target_audience || "",
-                  <Users className="h-5 w-5 text-yellow-600" />
+                  <Users className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Distribution Plan */}
@@ -2342,7 +2343,7 @@ export default function ProjectDetails() {
                   "distribution_plan",
                   "distribution_plan",
                   project?.distribution_plan || "",
-                  <Globe className="h-5 w-5 text-yellow-600" />
+                  <Globe className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Timeline */}
@@ -2354,13 +2355,13 @@ export default function ProjectDetails() {
                   "requirements",
                   "skills_required",
                   project?.requirements || "",
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <AlertCircle className="h-5 w-5 text-primary" />
                 )}
               </div>
 
               <div className="space-y-6">
                 {/* Project Info */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardHeader>
                     <CardTitle className="text-foreground">Project Information</CardTitle>
                   </CardHeader>
@@ -2438,7 +2439,7 @@ export default function ProjectDetails() {
 
                     {/* Category Multiselect and Selected Chips */}
                     {project?.allow_applicants && (
-                      <div className="pt-4 border-t border-yellow-100 space-y-3 animate-fade-in">
+                      <div className="pt-4 border-t border-border/60 space-y-3 animate-fade-in">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Required Crew Roles</p>
                         {project?.is_creator ? (
                           <div className="space-y-2">
@@ -2447,14 +2448,14 @@ export default function ProjectDetails() {
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="w-full justify-between border-yellow-200 dark:border-yellow-900/40 text-xs text-foreground bg-background hover:bg-muted"
+                                  className="w-full justify-between border-border/80 text-xs text-foreground bg-surface-elevated/50 hover:bg-surface-hover"
                                 >
                                   <span>
                                     {project?.hiring_categories && project.hiring_categories.length > 0 
                                       ? `Select Roles (${project.hiring_categories.length} selected)`
                                       : "Select Roles..."}
                                   </span>
-                                  <Plus className="h-3 w-3 text-yellow-600 ml-2" />
+                                  <Plus className="h-3 w-3 text-primary ml-2" />
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-56 p-2 bg-popover text-popover-foreground border border-border shadow-md rounded-md z-50">
@@ -2476,13 +2477,13 @@ export default function ProjectDetails() {
                                     return (
                                       <div 
                                         key={cat} 
-                                        className="flex items-center gap-2 p-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 rounded cursor-pointer transition-colors"
+                                        className="flex items-center gap-2 p-1.5 hover:bg-surface-hover rounded cursor-pointer transition-colors"
                                         onClick={() => handleToggleHiringCategory(cat)}
                                       >
                                         <Checkbox 
                                           checked={isSelected} 
                                           onCheckedChange={() => handleToggleHiringCategory(cat)}
-                                          className="border-yellow-400 text-yellow-600 focus:ring-yellow-500"
+                                          className="border-primary/50 text-primary focus:ring-primary"
                                         />
                                         <span className="text-xs font-medium text-foreground/90 select-none">{cat}</span>
                                       </div>
@@ -2501,7 +2502,7 @@ export default function ProjectDetails() {
                               <Badge 
                                 key={idx} 
                                 variant="secondary" 
-                                className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50 text-[11px] font-medium flex items-center gap-1"
+                                className="bg-primary/10 text-primary border border-primary/25 text-[11px] font-medium flex items-center gap-1"
                               >
                                 {cat}
                                 {project?.is_creator && (
@@ -2510,7 +2511,7 @@ export default function ProjectDetails() {
                                       e.stopPropagation();
                                       handleToggleHiringCategory(cat);
                                     }}
-                                    className="ml-1 text-yellow-600 hover:text-yellow-800 font-bold"
+                                    className="ml-1 text-primary hover:text-primary-hover font-bold"
                                   >
                                     ×
                                   </button>
@@ -2530,7 +2531,7 @@ export default function ProjectDetails() {
                 {renderContactSection()}
 
                 {/* Action Buttons */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardContent className="pt-6">
                     {project?.is_creator ? (
                       <Dialog>
@@ -2589,7 +2590,7 @@ export default function ProjectDetails() {
                       </Dialog>
                     ) : (project?.allow_applicants && !project?.is_creator && isCategoryMatched) ? (
                       <Button 
-                        className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white animate-fade-in" 
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary-hover font-medium animate-fade-in" 
                         onClick={handleJoinProject}
                       >
                         <UserPlus className="h-4 w-4 mr-2" />
@@ -2605,8 +2606,8 @@ export default function ProjectDetails() {
           {/* Tasks Tab */}
           <TabsContent value="tasks" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -2621,7 +2622,7 @@ export default function ProjectDetails() {
                   {canCreateTasks && (
                     <Dialog open={showCreateTask} onOpenChange={setShowCreateTask}>
                       <DialogTrigger asChild>
-                        <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                        <Button className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                           <Plus className="h-4 w-4 mr-2" />
                           Create Task
                         </Button>
@@ -2637,7 +2638,7 @@ export default function ProjectDetails() {
                               value={newTask.title}
                               onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
                               placeholder="Enter task title"
-                              className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                              className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             />
                           </div>
                           <div>
@@ -2646,13 +2647,13 @@ export default function ProjectDetails() {
                               value={newTask.description}
                               onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
                               placeholder="Enter task description"
-                              className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                              className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-medium text-foreground">Assign To</label>
                             <Select value={newTask.assigned_to} onValueChange={(value) => setNewTask(prev => ({ ...prev, assigned_to: value }))}>
-                              <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                              <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                                 <SelectValue placeholder="Select team member" />
                               </SelectTrigger>
                               <SelectContent>
@@ -2667,7 +2668,7 @@ export default function ProjectDetails() {
                     <div>
                       <label className="text-sm font-medium text-foreground">Priority</label>
                       <Select value={newTask.priority} onValueChange={(value: "low" | "medium" | "high") => setNewTask(prev => ({ ...prev, priority: value }))}>
-                        <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                        <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -2683,14 +2684,14 @@ export default function ProjectDetails() {
                         type="date"
                         value={newTask.due_date}
                         onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
-                        className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                        className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                       />
                     </div>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setShowCreateTask(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                      <Button variant="outline" onClick={() => setShowCreateTask(false)} className="border-border/80 hover:border-primary/40 hover:bg-surface-hover">
                         Cancel
                       </Button>
-                      <Button onClick={handleCreateTask} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                      <Button onClick={handleCreateTask} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                         Create Task
                       </Button>
                     </div>
@@ -2703,16 +2704,16 @@ export default function ProjectDetails() {
             <Accordion type="multiple" defaultValue={["in-progress", "pending"]} className="w-full space-y-4">
                 {/* In Progress Section */}
                 <AccordionItem value="in-progress" className="border-none">
-                  <AccordionTrigger className="hover:no-underline bg-yellow-50/60 dark:bg-yellow-950/20 px-4 py-3 rounded-lg border border-yellow-200/60 dark:border-yellow-900/40 text-foreground">
+                  <AccordionTrigger className="hover:no-underline bg-primary/10 px-4 py-3 rounded-xl border border-primary/30 text-foreground">
                     <div className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5 text-yellow-600" />
-                      <h4 className="font-semibold text-yellow-900">In Progress ({tasks.filter(t => t.status === 'in-progress').length})</h4>
+                      <AlertCircle className="h-5 w-5 text-primary" />
+                      <h4 className="font-semibold text-foreground">In Progress ({tasks.filter(t => t.status === 'in-progress').length})</h4>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
                     <div className="space-y-4">
                       {tasks.filter(t => t.status === 'in-progress').map((task) => (
-                        <Card key={task.id} className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                        <Card key={task.id} className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -2722,8 +2723,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2736,7 +2737,7 @@ export default function ProjectDetails() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Select value={task.status} onValueChange={(value: "pending" | "in-progress" | "completed") => handleUpdateTaskStatus(task.id, value)}>
-                                  <SelectTrigger className="w-36 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
+                                  <SelectTrigger className="w-36 border-border/80 bg-surface-elevated/50 focus:border-primary whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2793,8 +2794,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2845,16 +2846,16 @@ export default function ProjectDetails() {
 
                 {/* Completed Section */}
                 <AccordionItem value="completed" className="border-none">
-                  <AccordionTrigger className="hover:no-underline bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+                  <AccordionTrigger className="hover:no-underline bg-emerald-500/10 px-4 py-3 rounded-xl border border-emerald-500/30">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <h4 className="font-semibold text-green-900">Completed ({tasks.filter(t => t.status === 'completed').length})</h4>
+                      <CheckCircle className="h-5 w-5 text-emerald-500" />
+                      <h4 className="font-semibold text-foreground">Completed ({tasks.filter(t => t.status === 'completed').length})</h4>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
                     <div className="space-y-4">
                       {tasks.filter(t => t.status === 'completed').map((task) => (
-                        <Card key={task.id} className="border-green-200 opacity-75">
+                        <Card key={task.id} className="border-emerald-500/30 bg-card/80 opacity-85 rounded-xl">
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -2864,8 +2865,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2878,7 +2879,7 @@ export default function ProjectDetails() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Select value={task.status} onValueChange={(value: "pending" | "in-progress" | "completed") => handleUpdateTaskStatus(task.id, value)}>
-                                  <SelectTrigger className="w-36 border-green-200 focus:border-green-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
+                                  <SelectTrigger className="w-36 border-emerald-500/30 bg-surface-elevated/50 focus:border-emerald-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2921,8 +2922,8 @@ export default function ProjectDetails() {
           {/* Chat Tab */}
           <TabsContent value="chat" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -2931,11 +2932,11 @@ export default function ProjectDetails() {
                 </p>
               </Card>
             ) : (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground overflow-hidden shadow-sm rounded-xl">
+              <Card className="border-border/80 bg-card text-card-foreground overflow-hidden shadow-noir rounded-xl">
               <CardHeader className="border-b border-border bg-muted/20 py-4">
                 <CardTitle className="flex items-center justify-between text-foreground">
                   <div className="flex items-center gap-2 text-base font-semibold">
-                    <MessageCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
+                    <MessageCircle className="h-5 w-5 text-primary" />
                     Team Chat
                   </div>
                   <span className="text-xs text-muted-foreground font-normal">
@@ -2975,17 +2976,17 @@ export default function ProjectDetails() {
                         <div key={message.id} className="w-full flex flex-col">
                           {showDateHeader && (
                             <div className="flex justify-center my-4">
-                              <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                              <span className="bg-surface-elevated border border-border/80 text-muted-foreground font-mono text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm">
                                 {formatDateHeader(message.timestamp)}
                               </span>
                             </div>
                           )}
                           <div className={cn("flex gap-3 max-w-[85%] w-full", isMe ? "ml-auto flex-row-reverse" : "mr-auto")}>
                           {/* Avatar */}
-                          <Avatar className="h-8 w-8 shrink-0 border border-yellow-200/50 dark:border-yellow-900/30">
+                          <Avatar className="h-8 w-8 shrink-0 border border-border/80">
                             <AvatarFallback className={cn(
                               "text-[10px] font-bold text-white",
-                              isMe ? "bg-gradient-to-br from-yellow-500 to-yellow-600" : "bg-gradient-to-br from-gray-500 to-gray-600"
+                              isMe ? "bg-primary text-primary-foreground" : "bg-surface-elevated text-foreground"
                             )}>
                               {initials}
                             </AvatarFallback>
@@ -3000,13 +3001,13 @@ export default function ProjectDetails() {
                             <div className={cn(
                               "p-3 rounded-2xl text-sm shadow-sm inline-block text-left",
                               isMe 
-                                ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-tr-none" 
-                                : "bg-card text-card-foreground border border-border rounded-tl-none"
+                                ? "bg-primary text-primary-foreground rounded-tr-none" 
+                                : "bg-surface-elevated text-foreground border border-border/70 rounded-tl-none"
                             )}>
                                 <p className="whitespace-pre-wrap break-words leading-relaxed">
                                   {message.message.split(/(@\S+)/g).map((part: string, i: number) => {
                                     if (part.startsWith('@')) {
-                                      return <span key={i} className={cn("font-bold px-1 rounded-sm", isMe ? "bg-white/20 text-white" : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400")}>{part}</span>;
+                                      return <span key={i} className={cn("font-bold px-1 rounded-sm", isMe ? "bg-black/20 text-primary-foreground" : "bg-primary/15 text-primary")}>{part}</span>;
                                     }
                                     return part;
                                   })}
@@ -3031,11 +3032,11 @@ export default function ProjectDetails() {
                     ).map((u, i) => (
                       <div 
                         key={i}
-                        className="flex items-center gap-2 p-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded cursor-pointer"
+                        className="flex items-center gap-2 p-2 hover:bg-surface-hover rounded cursor-pointer"
                         onClick={() => insertMention(u.name?.split(' ')[0] || u.full_name?.split(' ')[0] || u.username || "User")}
                       >
                         <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px] bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40">{u.name?.[0] || u.full_name?.[0] || 'U'}</AvatarFallback>
+                          <AvatarFallback className="text-[10px] bg-primary/15 text-primary border border-primary/30">{u.name?.[0] || u.full_name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm font-medium text-foreground">{u.name || u.full_name || u.username}</span>
                       </div>
@@ -3058,9 +3059,9 @@ export default function ProjectDetails() {
                     onChange={handleMessageChange}
                     placeholder="Type a message... (Use @ to mention)"
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="flex-1 border-yellow-200 dark:border-yellow-900/30 focus:border-yellow-500 bg-background text-foreground"
+                    className="flex-1 border-border/80 focus:border-primary bg-surface-elevated/50 text-foreground"
                   />
-                  <Button onClick={handleSendMessage} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shrink-0 shadow-sm transition-transform active:scale-95 px-3 sm:px-4">
+                  <Button onClick={handleSendMessage} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium shrink-0 shadow-sm transition-transform active:scale-95 px-3 sm:px-4">
                     <Send className="h-4 w-4 sm:mr-1.5" />
                     <span className="hidden sm:inline">Send</span>
                   </Button>
@@ -3073,8 +3074,8 @@ export default function ProjectDetails() {
           {/* Team Members Tab */}
           <TabsContent value="team" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -3083,19 +3084,19 @@ export default function ProjectDetails() {
                 </p>
               </Card>
             ) : (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground">
-                  <Users className="h-5 w-5 text-yellow-600" />
+                  <Users className="h-5 w-5 text-primary" />
                   Team Members
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {projectMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-4 p-3 border rounded-lg border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-semibold">
+                    <div key={member.id} className="flex items-center gap-4 p-3 border rounded-xl border-border/80 bg-surface-elevated/40 text-card-foreground">
+                      <div className="w-12 h-12 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center">
+                        <span className="text-primary font-semibold">
                           {member.avatar}
                         </span>
                       </div>
@@ -3105,7 +3106,7 @@ export default function ProjectDetails() {
                         <p className="text-xs text-muted-foreground">Joined: {formatDate(member.joined_date)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 px-2 sm:px-3">
+                        <Button variant="outline" size="sm" className="border-border/80 hover:border-primary/40 hover:bg-surface-hover px-2 sm:px-3">
                           <MessageCircle className="h-4 w-4 sm:mr-2" />
                           <span className="hidden sm:inline">Message</span>
                         </Button>
@@ -3152,19 +3153,19 @@ export default function ProjectDetails() {
           {/* Applicants Tab (Only for created projects) */}
           {sourceTab === 'created' && (
             <TabsContent value="applicants" className="space-y-6">
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <UserPlus className="h-5 w-5 text-yellow-600" />
+                    <UserPlus className="h-5 w-5 text-primary" />
                     Project Applicants
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {applicants.length > 0 ? applicants.map((applicant) => (
-                      <div key={applicant.id} className="flex items-center gap-4 p-4 border rounded-lg border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-                        <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-semibold">
+                      <div key={applicant.id} className="flex items-center gap-4 p-4 border rounded-xl border-border/80 bg-surface-elevated/40 text-card-foreground">
+                        <div className="w-12 h-12 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center">
+                          <span className="text-primary font-semibold">
                             {applicant.avatar}
                           </span>
                         </div>
@@ -3178,7 +3179,7 @@ export default function ProjectDetails() {
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
                             {applicant.skills.map((skill, index) => (
-                              <Badge key={index} variant="outline" className="text-xs border-yellow-200 dark:border-yellow-900/50 bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400">
+                              <Badge key={index} variant="outline" className="text-xs border-primary/25 bg-primary/10 text-primary">
                                 {skill}
                               </Badge>
                             ))}
@@ -3189,17 +3190,17 @@ export default function ProjectDetails() {
                             applicant.status === "accepted" ? "default" :
                             applicant.status === "rejected" ? "destructive" : "secondary"
                           } className={
-                            applicant.status === "accepted" ? "bg-green-100 text-green-800" :
-                            applicant.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"
+                            applicant.status === "accepted" ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30" :
+                            applicant.status === "rejected" ? "bg-destructive/15 text-destructive border border-destructive/30" : "bg-primary/15 text-primary border border-primary/30"
                           }>
                             {applicant.status}
                           </Badge>
                           {applicant.status === "pending" && (
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleAcceptApplicant(applicant.id)} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                              <Button size="sm" onClick={() => handleAcceptApplicant(applicant.id)} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                                 Accept
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleRejectApplicant(applicant.id)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                              <Button size="sm" variant="outline" onClick={() => handleRejectApplicant(applicant.id)} className="border-border/80 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive">
                                 Reject
                               </Button>
                             </div>
@@ -3222,7 +3223,7 @@ export default function ProjectDetails() {
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold">Edit Project Details</DialogTitle>
+              <DialogTitle className="font-display text-xl font-bold tracking-tight">Edit Project Details</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdateProject} className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-4">
@@ -3344,7 +3345,7 @@ export default function ProjectDetails() {
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                   Save Changes
                 </Button>
               </div>
@@ -3371,7 +3372,7 @@ export default function ProjectDetails() {
               </Button>
               <Button 
                 onClick={handleConfirmHire}
-                className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
+                className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
               >
                 Confirm
               </Button>

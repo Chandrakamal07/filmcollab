@@ -398,7 +398,7 @@ export default function JobDetails() {
           <Button 
             variant="outline" 
             onClick={() => navigate("/jobs")}
-            className="flex items-center gap-2 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+            className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Jobs
@@ -406,11 +406,11 @@ export default function JobDetails() {
         </div>
 
         {/* Job Header */}
-        <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+        <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
           <CardHeader>
             <div className="flex justify-between items-start">
               <div className="space-y-2">
-                <CardTitle className="text-2xl font-bold text-foreground">
+                <CardTitle className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground">
                   {job.title}
                 </CardTitle>
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -423,19 +423,19 @@ export default function JobDetails() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleEdit} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
+                <Button variant="outline" onClick={handleEdit} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
                   <Edit className="h-4 w-4 mr-2" />
                   Edit
                 </Button>
-                <Button variant="outline" onClick={handleDelete} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
+                <Button variant="outline" onClick={handleDelete} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </Button>
-                <Button variant="outline" onClick={handleSave} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
-                  <Bookmark className={`h-4 w-4 mr-2 ${isSaved ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                <Button variant="outline" onClick={handleSave} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                  <Bookmark className={`h-4 w-4 mr-2 ${isSaved ? 'fill-primary text-primary' : ''}`} />
                   {isSaved ? 'Saved' : 'Save'}
                 </Button>
-                <Button variant="outline" onClick={handleShare} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
+                <Button variant="outline" onClick={handleShare} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
@@ -446,9 +446,9 @@ export default function JobDetails() {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Overview</TabsTrigger>
-            <TabsTrigger value="applicants" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Applicants ({applicants.length})</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-surface-elevated border border-border/80">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
+            <TabsTrigger value="applicants" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Applicants ({applicants.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -457,10 +457,10 @@ export default function JobDetails() {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Job Description */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Briefcase className="h-5 w-5 text-yellow-600" />
+                      <Briefcase className="h-5 w-5 text-primary" />
                       Job Description
                     </CardTitle>
                   </CardHeader>
@@ -472,7 +472,7 @@ export default function JobDetails() {
                 </Card>
 
                 {/* Requirements */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Requirements</CardTitle>
                   </CardHeader>
@@ -484,7 +484,7 @@ export default function JobDetails() {
                       <h4 className="font-medium text-foreground">Required Skills:</h4>
                       <div className="flex flex-wrap gap-2">
                         {(Array.isArray(job.skills_required) ? job.skills_required : [job.skills_required]).map((skill, index) => (
-                          <Badge key={index} variant="secondary" className="bg-yellow-100 text-yellow-800">
+                          <Badge key={index} variant="secondary" className="bg-primary/10 text-primary border border-primary/25">
                             {skill}
                           </Badge>
                         ))}
@@ -496,7 +496,7 @@ export default function JobDetails() {
                         <h4 className="font-medium text-foreground">Tags:</h4>
                         <div className="flex flex-wrap gap-2">
                           {job.job_tags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                               {tag}
                             </Badge>
                           ))}
@@ -507,7 +507,7 @@ export default function JobDetails() {
                 </Card>
 
                 {/* Benefits */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Benefits</CardTitle>
                   </CardHeader>
@@ -522,7 +522,7 @@ export default function JobDetails() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Job Info */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Job Information</CardTitle>
                   </CardHeader>
@@ -596,7 +596,7 @@ export default function JobDetails() {
                     <div className="flex items-center gap-3">
                       <Badge 
                         variant={job.status === 'Active' ? 'default' : 'secondary'}
-                        className={`w-fit ${job.status === 'Active' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 text-yellow-800'}`}
+                        className={`w-fit ${job.status === 'Active' ? 'bg-primary text-primary-foreground' : 'bg-surface-elevated text-muted-foreground border border-border/80'}`}
                       >
                         {job.status}
                       </Badge>
@@ -606,10 +606,10 @@ export default function JobDetails() {
 
                 {job.user_id !== user?.id && (
                   /* Apply Button */
-                  <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                  <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                     <CardContent className="pt-6">
                       <Button 
-                        className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white" 
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary-hover font-medium" 
                         size="lg"
                         onClick={handleApply}
                         disabled={isApplied}
@@ -629,20 +629,20 @@ export default function JobDetails() {
           </TabsContent>
 
           <TabsContent value="applicants" className="space-y-6">
-            <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+            <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
               <CardHeader>
                 <CardTitle className="text-foreground">Job Applicants</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {applicants.map((applicant) => (
-                    <Card key={applicant.id} className="p-4 border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                    <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
                       <div className="flex justify-between items-start">
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
                             <h3 className="font-semibold text-foreground">{applicant.name}</h3>
-                            <Badge variant="outline" className="border-yellow-200 dark:border-yellow-900/40">{applicant.status}</Badge>
+                            <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status}</Badge>
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
@@ -660,7 +660,7 @@ export default function JobDetails() {
                           </div>
                           <div className="flex flex-wrap gap-1">
                             {applicant.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                              <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
                                 {skill}
                               </Badge>
                             ))}
@@ -670,10 +670,10 @@ export default function JobDetails() {
                           </p>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                          <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
                             View Resume
                           </Button>
-                          <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                          <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
                             View Portfolio
                           </Button>
                         </div>
@@ -700,7 +700,7 @@ export default function JobDetails() {
                     id="title"
                     value={editForm.title || ''}
                     onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div>
@@ -709,7 +709,7 @@ export default function JobDetails() {
                     id="company"
                     value={editForm.company || ''}
                     onChange={(e) => setEditForm({...editForm, company: e.target.value})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -719,7 +719,7 @@ export default function JobDetails() {
                   id="location"
                   value={editForm.location || ''}
                   onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -730,7 +730,7 @@ export default function JobDetails() {
                     type="number"
                     value={editForm.min_salary || ''}
                     onChange={(e) => setEditForm({...editForm, min_salary: parseInt(e.target.value)})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div>
@@ -740,7 +740,7 @@ export default function JobDetails() {
                     type="number"
                     value={editForm.max_salary || ''}
                     onChange={(e) => setEditForm({...editForm, max_salary: parseInt(e.target.value)})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -751,7 +751,7 @@ export default function JobDetails() {
                   value={editForm.description || ''}
                   onChange={(e) => setEditForm({...editForm, description: e.target.value})}
                   rows={4}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -761,7 +761,7 @@ export default function JobDetails() {
                   value={editForm.requirements || ''}
                   onChange={(e) => setEditForm({...editForm, requirements: e.target.value})}
                   rows={3}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -770,7 +770,7 @@ export default function JobDetails() {
                   id="skills_required"
                   value={editForm.skills_required || ''}
                   onChange={(e) => setEditForm({...editForm, skills_required: e.target.value})}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -780,14 +780,14 @@ export default function JobDetails() {
                   value={editForm.benefits || ''}
                   onChange={(e) => setEditForm({...editForm, benefits: e.target.value})}
                   rows={3}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="job_type" className="text-foreground">Job Type</Label>
                   <Select value={editForm.job_type || ''} onValueChange={(value) => setEditForm({...editForm, job_type: value})}>
-                    <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Select job type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -801,7 +801,7 @@ export default function JobDetails() {
                 <div>
                   <Label htmlFor="experience_level" className="text-foreground">Experience Level</Label>
                   <Select value={editForm.experience_level || ''} onValueChange={(value) => setEditForm({...editForm, experience_level: value})}>
-                    <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Select experience level" />
                     </SelectTrigger>
                     <SelectContent>
@@ -814,10 +814,10 @@ export default function JobDetails() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="border-border/80 hover:border-primary/40 hover:bg-surface-hover">
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateJob} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                <Button onClick={handleUpdateJob} className="bg-primary text-primary-foreground hover:bg-primary-hover">
                   Update Job
                 </Button>
               </div>

@@ -331,32 +331,33 @@ export default function CommunityPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-4 bg-yellow-50 min-h-screen p-4 -m-4">
+      <div className="space-y-5 bg-background min-h-screen p-4 md:p-6">
         {/* Header */}
-        <div className="bg-white p-4 rounded-lg shadow-sm border-yellow-200">
+        <div className="bg-card p-5 rounded-xl shadow-noir border border-border/80">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Community</h1>
-              <p className="text-gray-600 text-sm">
+              <p className="noir-eyebrow text-primary mb-1">Guilds & Collectives</p>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-foreground mb-1">Community</h1>
+              <p className="text-muted-foreground text-sm">
                 Connect with film professionals, join groups, and participate in discussions
               </p>
             </div>
-            <div className="flex gap-3">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+            <div className="flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px] max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="Search groups..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-9 border-yellow-200 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 text-sm"
+                  className="pl-9 h-9 bg-surface-elevated border-border/80 rounded-lg text-sm"
                 />
               </div>
-              <Button variant="outline" className="h-9 px-3 border-yellow-200 text-gray-700 hover:bg-yellow-50 rounded-lg text-sm">
-                <Filter className="w-4 h-4 mr-1" />
+              <Button variant="outline" className="h-9 px-3 border-border/80 bg-surface-elevated text-foreground hover:bg-surface-hover rounded-lg text-sm">
+                <Filter className="w-4 h-4 mr-1.5" />
                 Filters
               </Button>
-              <Button className="h-9 px-3 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white rounded-lg text-sm">
-                <Plus className="w-4 h-4 mr-1" />
+              <Button className="h-9 px-4 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg text-sm shadow-noir font-medium">
+                <Plus className="w-4 h-4 mr-1.5" />
                 Create Group
               </Button>
             </div>
@@ -364,14 +365,14 @@ export default function CommunityPage() {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm">
-          <div className="flex border-b border-yellow-200 px-4">
+        <div className="bg-card rounded-xl shadow-noir border border-border/80">
+          <div className="flex border-b border-border/60 px-4">
             <button
               onClick={() => setActiveTab("groups")}
               className={`px-4 py-3 border-b-2 font-medium transition-colors text-sm ${
                 activeTab === "groups"
-                  ? "border-yellow-500 text-yellow-600"
-                  : "border-transparent text-gray-500 hover:text-yellow-600"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               Groups
@@ -380,8 +381,8 @@ export default function CommunityPage() {
               onClick={() => setActiveTab("joined")}
               className={`px-4 py-3 border-b-2 font-medium transition-colors text-sm ${
                 activeTab === "joined"
-                  ? "border-yellow-500 text-yellow-600"
-                  : "border-transparent text-gray-500 hover:text-yellow-600"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               Joined
@@ -390,8 +391,8 @@ export default function CommunityPage() {
               onClick={() => setActiveTab("created")}
               className={`px-4 py-3 border-b-2 font-medium transition-colors text-sm ${
                 activeTab === "created"
-                  ? "border-yellow-500 text-yellow-600"
-                  : "border-transparent text-gray-500 hover:text-yellow-600"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               Created
@@ -400,13 +401,12 @@ export default function CommunityPage() {
         </div>
 
         {/* Tab Content */}
-
         {activeTab === "groups" && (
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-card rounded-xl shadow-noir border border-border/80 p-5">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Trending Groups</h2>
-                <Button variant="outline" size="sm" className="border-yellow-200 text-gray-700 hover:bg-yellow-50 text-xs h-8">
+                <h2 className="font-display text-xl font-semibold text-foreground">Trending Groups</h2>
+                <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated text-foreground hover:bg-surface-hover text-xs h-8">
                   Browse All Groups
                 </Button>
               </div>
@@ -415,52 +415,48 @@ export default function CommunityPage() {
                 {trendingGroups.map((group) => (
                   <Card 
                     key={group.id} 
-                    className="hover:shadow-lg transition-shadow border-yellow-200 rounded-lg cursor-pointer"
+                    className="bg-surface-elevated border-border/80 hover:border-primary/40 shadow-noir transition-all rounded-xl cursor-pointer group"
                     onClick={() => handleGroupClick(group)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                         <div>
-                          <CardTitle className="text-sm text-gray-900">{group.name}</CardTitle>
-                          <CardDescription className="mt-1 text-gray-600 text-xs">
+                          <CardTitle className="font-display text-base text-foreground group-hover:text-primary transition-colors">{group.name}</CardTitle>
+                          <CardDescription className="mt-1 text-muted-foreground text-xs leading-relaxed">
                             {group.description}
                           </CardDescription>
                         </div>
-                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-yellow-600 h-6 w-6 p-0">
-                          <MoreHorizontal className="w-3 h-3" />
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary h-6 w-6 p-0">
+                          <MoreHorizontal className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3 font-mono text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.members.toLocaleString()} members
-                          </span>
+                          <Users className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.members.toLocaleString()} members</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.posts} posts
-                          </span>
+                          <MessageSquare className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.posts} posts</span>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-1 mb-3">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {group.tags.map((tag, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
+                          <Badge key={index} variant="secondary" className="text-[11px] bg-primary/10 text-primary border border-primary/25 font-mono">
                             #{tag}
                           </Badge>
                         ))}
                       </div>
 
-                      <div className="flex gap-1">
-                        <Button size="sm" className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-7 text-xs">
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover h-8 text-xs font-medium">
                           Join Group
                         </Button>
-                        <Button size="sm" variant="outline" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50 h-7 w-7 p-0">
-                          <Eye className="w-3 h-3" />
+                        <Button size="sm" variant="outline" className="border-border/80 bg-card hover:bg-surface-hover h-8 w-8 p-0">
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardContent>
@@ -472,11 +468,11 @@ export default function CommunityPage() {
         )}
 
         {activeTab === "joined" && (
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-card rounded-xl shadow-noir border border-border/80 p-5">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">My Joined Groups</h2>
-                <Button variant="outline" size="sm" className="border-yellow-200 text-gray-700 hover:bg-yellow-50 text-xs h-8">
+                <h2 className="font-display text-xl font-semibold text-foreground">My Joined Groups</h2>
+                <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated text-foreground hover:bg-surface-hover text-xs h-8">
                   Browse More Groups
                 </Button>
               </div>
@@ -485,59 +481,55 @@ export default function CommunityPage() {
                 {joinedGroups.map((group) => (
                   <Card 
                     key={group.id} 
-                    className="hover:shadow-lg transition-shadow border-yellow-200 rounded-lg cursor-pointer"
+                    className="bg-surface-elevated border-border/80 hover:border-primary/40 shadow-noir transition-all rounded-xl cursor-pointer group"
                     onClick={() => handleGroupClick(group)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                         <div>
-                          <CardTitle className="text-sm text-gray-900">{group.name}</CardTitle>
-                          <CardDescription className="mt-1 text-gray-600 text-xs">
+                          <CardTitle className="font-display text-base text-foreground group-hover:text-primary transition-colors">{group.name}</CardTitle>
+                          <CardDescription className="mt-1 text-muted-foreground text-xs leading-relaxed">
                             {group.description}
                           </CardDescription>
                         </div>
-                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-yellow-600 h-6 w-6 p-0">
-                          <MoreHorizontal className="w-3 h-3" />
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary h-6 w-6 p-0">
+                          <MoreHorizontal className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3 font-mono text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.members.toLocaleString()} members
-                          </span>
+                          <Users className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.members.toLocaleString()} members</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.posts} posts
-                          </span>
+                          <MessageSquare className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.posts} posts</span>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-1 mb-3">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {group.tags.map((tag, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
+                          <Badge key={index} variant="secondary" className="text-[11px] bg-primary/10 text-primary border border-primary/25 font-mono">
                             #{tag}
                           </Badge>
                         ))}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                      <div className="flex items-center justify-between text-xs font-mono text-muted-foreground mb-3">
                         <span>Joined: {group.joinedDate}</span>
-                        <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                        <Badge variant="outline" className="text-[10px] bg-primary/15 text-primary border-primary/30 uppercase">
                           {group.role}
                         </Badge>
                       </div>
 
-                      <div className="flex gap-1">
-                        <Button size="sm" className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-7 text-xs">
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover h-8 text-xs font-medium">
                           Open Group
                         </Button>
-                        <Button size="sm" variant="outline" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50 h-7 w-7 p-0">
-                          <Eye className="w-3 h-3" />
+                        <Button size="sm" variant="outline" className="border-border/80 bg-card hover:bg-surface-hover h-8 w-8 p-0">
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardContent>
@@ -549,12 +541,12 @@ export default function CommunityPage() {
         )}
 
         {activeTab === "created" && (
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-card rounded-xl shadow-noir border border-border/80 p-5">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">My Created Groups</h2>
-                <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-8 text-xs">
-                  <Plus className="w-3 h-3 mr-1" />
+                <h2 className="font-display text-xl font-semibold text-foreground">My Created Groups</h2>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover h-8 text-xs font-medium">
+                  <Plus className="w-3.5 h-3.5 mr-1" />
                   Create New Group
                 </Button>
               </div>
@@ -563,52 +555,48 @@ export default function CommunityPage() {
                 {joinedGroups.filter(g => g.role === 'Admin').map((group) => (
                   <Card 
                     key={group.id} 
-                    className="hover:shadow-lg transition-shadow border-yellow-200 rounded-lg cursor-pointer"
+                    className="bg-surface-elevated border-border/80 hover:border-primary/40 shadow-noir transition-all rounded-xl cursor-pointer group"
                     onClick={() => handleGroupClick(group)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                         <div>
-                          <CardTitle className="text-sm text-gray-900">{group.name}</CardTitle>
-                          <CardDescription className="mt-1 text-gray-600 text-xs">
+                          <CardTitle className="font-display text-base text-foreground group-hover:text-primary transition-colors">{group.name}</CardTitle>
+                          <CardDescription className="mt-1 text-muted-foreground text-xs leading-relaxed">
                             {group.description}
                           </CardDescription>
                         </div>
-                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-yellow-600 h-6 w-6 p-0">
-                          <MoreHorizontal className="w-3 h-3" />
+                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary h-6 w-6 p-0">
+                          <MoreHorizontal className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-3 mb-3 font-mono text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.members.toLocaleString()} members
-                          </span>
+                          <Users className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.members.toLocaleString()} members</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">
-                            {group.posts} posts
-                          </span>
+                          <MessageSquare className="w-3.5 h-3.5 text-primary/80" />
+                          <span>{group.posts} posts</span>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-1 mb-3">
+                      <div className="flex flex-wrap gap-1.5 mb-3">
                         {group.tags.map((tag, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-200">
+                          <Badge key={index} variant="secondary" className="text-[11px] bg-primary/10 text-primary border border-primary/25 font-mono">
                             #{tag}
                           </Badge>
                         ))}
                       </div>
 
-                      <div className="flex gap-1">
-                        <Button size="sm" className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-7 text-xs">
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover h-8 text-xs font-medium">
                           Manage Group
                         </Button>
-                        <Button size="sm" variant="outline" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50 h-7 w-7 p-0">
-                          <Eye className="w-3 h-3" />
+                        <Button size="sm" variant="outline" className="border-border/80 bg-card hover:bg-surface-hover h-8 w-8 p-0">
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </CardContent>
@@ -621,11 +609,11 @@ export default function CommunityPage() {
 
         {/* Group Details Popup */}
         {showGroupDetails && selectedGroup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border/80 shadow-noir rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
               <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">{selectedGroup.name}</h2>
+                <div className="flex items-center justify-between mb-4 border-b border-border/60 pb-3">
+                  <h2 className="font-display text-xl font-bold text-foreground">{selectedGroup.name}</h2>
                   <Button variant="ghost" size="sm" onClick={() => setShowGroupDetails(false)}>
                     <X className="w-4 h-4" />
                   </Button>
@@ -634,36 +622,36 @@ export default function CommunityPage() {
                 <div className="space-y-4">
                   {/* Group Description */}
                   <div>
-                    <h3 className="font-semibold mb-2 text-gray-900">Description</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">{selectedGroup.description}</p>
+                    <h3 className="font-semibold mb-2 text-foreground">Description</h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{selectedGroup.description}</p>
                   </div>
 
                   {/* Group Stats */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-yellow-50 p-3 rounded-lg text-center border border-yellow-200">
-                      <div className="text-lg font-bold text-yellow-600">{selectedGroup.members.toLocaleString()}</div>
-                      <div className="text-xs text-gray-600">Members</div>
+                    <div className="bg-surface-elevated p-3 rounded-xl text-center border border-border/80">
+                      <div className="text-lg font-mono font-bold text-primary">{selectedGroup.members.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">Members</div>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg text-center border border-yellow-200">
-                      <div className="text-lg font-bold text-yellow-600">{selectedGroup.posts}</div>
-                      <div className="text-xs text-gray-600">Posts</div>
+                    <div className="bg-surface-elevated p-3 rounded-xl text-center border border-border/80">
+                      <div className="text-lg font-mono font-bold text-primary">{selectedGroup.posts}</div>
+                      <div className="text-xs text-muted-foreground">Posts</div>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg text-center border border-yellow-200">
-                      <div className="text-lg font-bold text-yellow-600">{selectedGroup.category}</div>
-                      <div className="text-xs text-gray-600">Category</div>
+                    <div className="bg-surface-elevated p-3 rounded-xl text-center border border-border/80">
+                      <div className="text-lg font-mono font-bold text-primary">{selectedGroup.category}</div>
+                      <div className="text-xs text-muted-foreground">Category</div>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg text-center border border-yellow-200">
-                      <div className="text-lg font-bold text-yellow-600">{selectedGroup.status || 'Active'}</div>
-                      <div className="text-xs text-gray-600">Status</div>
+                    <div className="bg-surface-elevated p-3 rounded-xl text-center border border-border/80">
+                      <div className="text-lg font-mono font-bold text-primary">{selectedGroup.status || 'Active'}</div>
+                      <div className="text-xs text-muted-foreground">Status</div>
                     </div>
                   </div>
 
                   {/* Tags */}
                   <div>
-                    <h3 className="font-semibold mb-2 text-gray-900">Tags</h3>
-                    <div className="flex flex-wrap gap-1">
+                    <h3 className="font-semibold mb-2 text-foreground">Tags</h3>
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedGroup.tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs bg-gray-100 text-gray-700 border-gray-200">
+                        <Badge key={index} variant="secondary" className="text-xs bg-surface-elevated text-muted-foreground border border-border/80 font-mono">
                           #{tag}
                         </Badge>
                       ))}
@@ -674,36 +662,36 @@ export default function CommunityPage() {
                   {selectedGroup.createdBy && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <h3 className="font-semibold mb-2 text-gray-900">Created By</h3>
-                        <p className="text-gray-600 text-sm">{selectedGroup.createdBy}</p>
+                        <h3 className="font-semibold mb-2 text-foreground">Created By</h3>
+                        <p className="text-muted-foreground text-sm">{selectedGroup.createdBy}</p>
                       </div>
                       <div>
-                        <h3 className="font-semibold mb-2 text-gray-900">Created Date</h3>
-                        <p className="text-gray-600 text-sm">{selectedGroup.createdDate}</p>
+                        <h3 className="font-semibold mb-2 text-foreground">Created Date</h3>
+                        <p className="text-muted-foreground text-sm font-mono">{selectedGroup.createdDate}</p>
                       </div>
                     </div>
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-2 pt-4">
+                  <div className="flex gap-2 pt-4 border-t border-border/60">
                     {selectedGroup.createdBy ? (
                       <>
-                        <Button className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                        <Button className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover">
                           <Settings className="w-4 h-4 mr-2" />
                           Manage Group
                         </Button>
-                        <Button variant="outline" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50" onClick={() => setShowGroupDetails(false)}>
+                        <Button variant="outline" className="border-border/80 bg-surface-elevated hover:bg-surface-hover" onClick={() => setShowGroupDetails(false)}>
                           <Share2 className="w-4 h-4 mr-2" />
                           Share Group
                         </Button>
                       </>
                     ) : (
                       <>
-                        <Button className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                        <Button className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover">
                           <UserPlus className="w-4 h-4 mr-2" />
                           Join Group
                         </Button>
-                        <Button variant="outline" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50" onClick={() => setShowGroupDetails(false)}>
+                        <Button variant="outline" className="border-border/80 bg-surface-elevated hover:bg-surface-hover" onClick={() => setShowGroupDetails(false)}>
                           <Share2 className="w-4 h-4 mr-2" />
                           Share Group
                         </Button>

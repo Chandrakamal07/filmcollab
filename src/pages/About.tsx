@@ -1,82 +1,104 @@
 import { LandingTopbar } from "@/components/layout/landing-topbar";
 import { LandingFooter } from "@/components/layout/landing-footer";
 import { Film, Users, Globe, Target } from "lucide-react";
+import { FadeInSection, StaggerItem } from "@/components/ui/motion-primitives";
 
 export default function About() {
   return (
-    <div className="min-h-screen flex flex-col bg-white font-sans overflow-x-hidden pt-16">
+    <div className="min-h-screen flex flex-col bg-background text-foreground font-sans overflow-x-hidden pt-16">
       <LandingTopbar />
-      
+
       {/* Hero Section */}
-      <section className="relative pt-20 pb-20 overflow-hidden bg-yellow-50">
-        <div className="container mx-auto px-6 relative z-10 text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            About <span className="text-yellow-600">FilmCollab</span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            We're on a mission to democratize filmmaking by connecting passionate creators across the globe.
-          </p>
+      <section className="relative pt-20 pb-20 overflow-hidden noir-backdrop border-b border-border/70">
+        <div className="container mx-auto px-6 relative z-10 text-center max-w-4xl">
+          <FadeInSection variant="marketing">
+            <div className="noir-eyebrow mb-5">
+              <Film className="h-3.5 w-3.5" />
+              <span>Our Mission</span>
+            </div>
+            <h1 className="noir-heading-hero mb-6">
+              About <span className="italic text-primary">FilmCollab</span>
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto">
+              We're on a mission to democratize filmmaking by connecting passionate creators
+              across the globe.
+            </p>
+          </FadeInSection>
         </div>
       </section>
 
       {/* Story Section */}
-      <section className="py-24 bg-white relative">
-        <div className="container mx-auto px-6">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">Our Story</h2>
-              <p className="text-gray-600 mb-4 leading-relaxed text-lg">
-                Founded by filmmakers for filmmakers, FilmCollab was born out of the frustration of scattered networks and fragmented production tools. We realized that the hardest part of making a film shouldn't be finding the right people to make it with.
+      <section className="py-24 bg-background relative">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <FadeInSection variant="marketing">
+              <h2 className="noir-heading-section mb-6">Our Story</h2>
+              <p className="text-muted-foreground mb-4 leading-relaxed text-base md:text-lg">
+                Founded by filmmakers for filmmakers, FilmCollab was born out of the frustration
+                of scattered networks and fragmented production tools. We realized that the
+                hardest part of making a film shouldn't be finding the right people to make it
+                with.
               </p>
-              <p className="text-gray-600 leading-relaxed text-lg">
-                Today, we provide a unified platform where talent meets opportunity, where projects are managed seamlessly, and where the next generation of cinema comes to life.
+              <p className="text-muted-foreground leading-relaxed text-base md:text-lg">
+                Today, we provide a unified platform where talent meets opportunity, where
+                projects are managed seamlessly, and where the next generation of cinema comes to
+                life.
               </p>
-            </div>
-            <div className="bg-gray-100 rounded-3xl p-8 relative overflow-hidden h-[400px] flex items-center justify-center border border-gray-200">
-              <Film className="w-32 h-32 text-gray-300 absolute" />
-              <div className="relative z-10 text-center">
-                <p className="text-2xl font-semibold text-gray-800 italic">"Empowering creators to tell stories that matter."</p>
+            </FadeInSection>
+            <FadeInSection variant="marketing" delay={0.1}>
+              <div className="rounded-2xl p-10 relative overflow-hidden h-[380px] flex items-center justify-center border border-border/80 bg-surface-elevated shadow-noir">
+                <Film className="w-40 h-40 text-primary/10 absolute" />
+                <div className="relative z-10 text-center max-w-md">
+                  <p className="font-display text-2xl md:text-3xl text-foreground italic leading-snug">
+                    "Empowering creators to tell stories that matter."
+                  </p>
+                </div>
               </div>
-            </div>
+            </FadeInSection>
           </div>
         </div>
       </section>
 
       {/* Values Section */}
-      <section className="py-24 bg-gray-50">
-        <div className="container mx-auto px-6">
-          <h2 className="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-16">Our Core Values</h2>
-          
-          <div className="grid md:grid-cols-3 gap-12">
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-6">
-                <Users className="w-10 h-10" />
+      <section className="py-24 bg-surface-base border-t border-border/70">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <FadeInSection variant="marketing">
+            <h2 className="noir-heading-section text-center mb-16">Our Core Values</h2>
+          </FadeInSection>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <StaggerItem index={0} className="text-center p-8 rounded-xl border border-border/70 bg-card">
+              <div className="w-16 h-16 mx-auto border border-primary/30 bg-primary/12 text-primary rounded-2xl flex items-center justify-center mb-6">
+                <Users className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Community First</h3>
-              <p className="text-gray-600">
-                We believe in the power of collaboration. Every feature we build is designed to strengthen connections between creators.
+              <h3 className="text-xl font-semibold text-foreground mb-3">Community First</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                We believe in the power of collaboration. Every feature we build is designed to
+                strengthen connections between creators.
               </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-6">
-                <Globe className="w-10 h-10" />
+            </StaggerItem>
+
+            <StaggerItem index={1} className="text-center p-8 rounded-xl border border-border/70 bg-card">
+              <div className="w-16 h-16 mx-auto border border-primary/30 bg-primary/12 text-primary rounded-2xl flex items-center justify-center mb-6">
+                <Globe className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Global Reach</h3>
-              <p className="text-gray-600">
-                Talent knows no borders. We provide a platform that breaks down geographical barriers in the film industry.
+              <h3 className="text-xl font-semibold text-foreground mb-3">Global Reach</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Talent knows no borders. We provide a platform that breaks down geographical
+                barriers in the film industry.
               </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="w-20 h-20 mx-auto bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mb-6">
-                <Target className="w-10 h-10" />
+            </StaggerItem>
+
+            <StaggerItem index={2} className="text-center p-8 rounded-xl border border-border/70 bg-card">
+              <div className="w-16 h-16 mx-auto border border-primary/30 bg-primary/12 text-primary rounded-2xl flex items-center justify-center mb-6">
+                <Target className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Innovation</h3>
-              <p className="text-gray-600">
-                We continuously evolve our tools to meet the modern demands of production, casting, and project management.
+              <h3 className="text-xl font-semibold text-foreground mb-3">Innovation</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                We continuously evolve our tools to meet the modern demands of production,
+                casting, and project management.
               </p>
-            </div>
+            </StaggerItem>
           </div>
         </div>
       </section>

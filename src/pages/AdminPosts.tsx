@@ -91,9 +91,7 @@ export default function AdminPosts() {
   const getTypeBadgeVariant = (type: string) => {
     switch (type) {
       case "Text":
-        return "secondary";
       case "Image":
-        return "secondary";
       case "Video":
         return "secondary";
       default:
@@ -104,7 +102,6 @@ export default function AdminPosts() {
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case "Published":
-        return "secondary";
       case "Pending":
         return "secondary";
       case "Flagged":
@@ -129,15 +126,15 @@ export default function AdminPosts() {
 
   const getTagBadgeStyle = (tag: string): string => {
     const tagConfig = availableTags.find(t => t.label === tag);
-    if (!tagConfig) return "";
+    if (!tagConfig) return "bg-surface-elevated text-foreground border border-border/80";
 
     return ({
-      orange: "bg-orange-50 text-orange-700 hover:bg-orange-100",
-      purple: "bg-purple-50 text-purple-700 hover:bg-purple-100",
-      green: "bg-green-50 text-green-700 hover:bg-green-100",
-      blue: "bg-blue-50 text-blue-700 hover:bg-blue-100",
-      yellow: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-    }[tagConfig.color] || "");
+      orange: "bg-amber-500/15 text-amber-500 border border-amber-500/30",
+      purple: "bg-purple-500/15 text-purple-400 border border-purple-500/30",
+      green: "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30",
+      blue: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+      yellow: "bg-primary/15 text-primary border border-primary/30"
+    }[tagConfig.color] || "bg-surface-elevated text-foreground");
   };
 
   // Filter posts based on search and filters
@@ -154,22 +151,18 @@ export default function AdminPosts() {
 
   const handleViewPost = (postId: number) => {
     console.log("View post:", postId);
-    // Implement view post functionality
   };
 
   const handleApprovePost = (postId: number) => {
     console.log("Approve post:", postId);
-    // Implement approve post functionality
   };
 
   const handleFlagPost = (postId: number) => {
     console.log("Flag post:", postId);
-    // Implement flag post functionality
   };
 
   const handleDeletePost = (postId: number) => {
     console.log("Delete post:", postId);
-    // Implement delete post functionality
   };
 
   const handleEditTags = (postId: number, currentTags: string[]) => {
@@ -177,7 +170,6 @@ export default function AdminPosts() {
   };
 
   const handleSavePostTags = (postId: number) => {
-    // Here you would typically make an API call to update the post's tags
     const postToUpdate = posts.find(p => p.id === postId);
     if (postToUpdate && editingTags) {
       postToUpdate.tags = editingTags.tags;
@@ -203,35 +195,36 @@ export default function AdminPosts() {
     <AdminLayout pageTitle="Posts Management">
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Posts Management</h1>
-          <p className="text-muted-foreground mt-1">Moderate user posts and content</p>
+        <div className="border-b border-border/60 pb-5">
+          <p className="noir-eyebrow mb-1">Content Moderation</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Posts Management</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Moderate user posts and content</p>
         </div>
 
         {/* Main Content Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">Posts</CardTitle>
-            <p className="text-muted-foreground">Review and moderate user-generated content</p>
+        <Card className="noir-card border-border/80 bg-card">
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-2xl font-display">Posts</CardTitle>
+            <p className="text-muted-foreground text-sm">Review and moderate user-generated content</p>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             {/* Search and Filter Bar */}
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative flex-1">
+              <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search by content or creator..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-surface-elevated border-border/80"
                 />
               </div>
               
-              <div className="flex gap-4 items-center">
+              <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">Type:</label>
+                  <label className="text-sm font-medium text-muted-foreground">Type:</label>
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="w-[120px]">
+                    <SelectTrigger className="w-[120px] bg-surface-elevated border-border/80">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -244,9 +237,9 @@ export default function AdminPosts() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">Status:</label>
+                  <label className="text-sm font-medium text-muted-foreground">Status:</label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[120px]">
+                    <SelectTrigger className="w-[120px] bg-surface-elevated border-border/80">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -261,10 +254,10 @@ export default function AdminPosts() {
             </div>
 
             {/* Posts Table */}
-            <div className="border rounded-lg">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Post ID</TableHead>
                     <TableHead>Content</TableHead>
                     <TableHead>Type</TableHead>
@@ -279,26 +272,26 @@ export default function AdminPosts() {
                   {filteredPosts.map((post) => {
                     const StatusIcon = getStatusIcon(post.status);
                     return (
-                      <TableRow key={post.id}>
-                        <TableCell className="font-medium">#{post.id}</TableCell>
-                        <TableCell className="max-w-xs truncate">{post.content}</TableCell>
+                      <TableRow key={post.id} className="border-border/60 hover:bg-surface-hover/50">
+                        <TableCell className="font-mono font-medium text-muted-foreground">#{post.id}</TableCell>
+                        <TableCell className="max-w-xs truncate text-foreground">{post.content}</TableCell>
                         <TableCell>
-                          <Badge variant={getTypeBadgeVariant(post.type)}>
+                          <Badge variant={getTypeBadgeVariant(post.type)} className="bg-surface-elevated border border-border/80 text-foreground">
                             {post.type}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                              <User className="h-4 w-4 text-yellow-600" />
+                            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                              <User className="h-4 w-4 text-primary" />
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium">{post.creator.name}</span>
-                              <span className="text-xs text-muted-foreground">@{post.creator.username}</span>
+                              <span className="text-sm font-medium text-foreground">{post.creator.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">@{post.creator.username}</span>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{post.date}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{post.date}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadgeVariant(post.status)} className="flex items-center gap-1 w-fit">
                             <StatusIcon className="h-3 w-3" />
@@ -332,13 +325,13 @@ export default function AdminPosts() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:bg-yellow-50"
+                                  className="h-8 w-8 hover:bg-primary/10"
                                 >
-                                  <Tags className="h-4 w-4 text-yellow-600" />
+                                  <Tags className="h-4 w-4 text-primary" />
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80 p-0" align="end">
-                                <Command>
+                              <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                                <Command className="bg-card">
                                   <CommandInput placeholder="Search tags..." />
                                   <CommandEmpty>No tags found.</CommandEmpty>
                                   <CommandGroup>
@@ -352,9 +345,9 @@ export default function AdminPosts() {
                                         >
                                           <div className={cn(
                                             "flex h-4 w-4 items-center justify-center rounded border",
-                                            isSelected ? "bg-yellow-500 border-yellow-500" : "border-gray-200"
+                                            isSelected ? "bg-primary border-primary" : "border-border"
                                           )}>
-                                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                                           </div>
                                           <Badge 
                                             variant="secondary"
@@ -366,10 +359,10 @@ export default function AdminPosts() {
                                       );
                                     })}
                                   </CommandGroup>
-                                  <div className="border-t p-2">
+                                  <div className="border-t border-border/60 p-2">
                                     <Button
                                       size="sm"
-                                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white"
+                                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                                       onClick={() => handleSavePostTags(post.id)}
                                     >
                                       Save Changes
@@ -396,7 +389,7 @@ export default function AdminPosts() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleApprovePost(post.id)}
-                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
                               >
                                 <CheckCircle className="h-4 w-4" />
                               </Button>
@@ -407,7 +400,7 @@ export default function AdminPosts() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleFlagPost(post.id)}
-                                className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                className="h-8 w-8 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
                               >
                                 <Flag className="h-4 w-4" />
                               </Button>
@@ -417,7 +410,7 @@ export default function AdminPosts() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDeletePost(post.id)}
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -435,7 +428,7 @@ export default function AdminPosts() {
               <span>Showing {posts.length} posts</span>
               <div className="flex items-center gap-2">
                 <span>Rows per page:</span>
-                <select className="w-16 h-8 px-2 border rounded text-sm">
+                <select className="w-16 h-8 px-2 border border-border/80 bg-surface-elevated text-foreground rounded text-sm">
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>

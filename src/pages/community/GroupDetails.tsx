@@ -202,31 +202,31 @@ export default function GroupDetails() {
 
   return (
     <AppLayout>
-      <div className="h-screen bg-yellow-50 flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b border-yellow-200 p-4">
+        <div className="bg-card border-b border-border/80 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/community')}>
+              <Button variant="ghost" size="sm" className="hover:bg-surface-elevated" onClick={() => navigate('/community')}>
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{group.name}</h1>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Users className="w-4 h-4" />
+                <h1 className="font-display text-xl font-bold text-foreground">{group.name}</h1>
+                <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                  <Users className="w-3.5 h-3.5 text-primary" />
                   <span>{group.members} members</span>
                   <span>•</span>
-                  <span>{group.status}</span>
+                  <span className="text-primary">{group.status}</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Share2 className="w-4 h-4 mr-1" />
+              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
+                <Share2 className="w-4 h-4 mr-1.5" />
                 Share
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
-                <Settings className="w-4 h-4 mr-1" />
+              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover" onClick={() => setShowSettings(!showSettings)}>
+                <Settings className="w-4 h-4 mr-1.5" />
                 Settings
               </Button>
             </div>
@@ -240,18 +240,18 @@ export default function GroupDetails() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatMessages.map((message) => (
                 <div key={message.id} className="flex gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                  <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs flex-shrink-0">
                     {message.userAvatar}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm text-gray-900">{message.userName}</span>
-                      {message.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                      {message.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
-                      <span className="text-xs text-gray-500">{message.timestamp}</span>
+                      <span className="font-semibold text-sm text-foreground">{message.userName}</span>
+                      {message.isAdmin && <Crown className="w-3.5 h-3.5 text-primary" />}
+                      {message.isModerator && <Shield className="w-3.5 h-3.5 text-primary/80" />}
+                      <span className="text-xs font-mono text-muted-foreground">{message.timestamp}</span>
                     </div>
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-yellow-200">
-                      <p className="text-sm text-gray-800">{message.message}</p>
+                    <div className="bg-card rounded-xl p-3 shadow-noir border border-border/80">
+                      <p className="text-sm text-foreground/90">{message.message}</p>
                     </div>
                   </div>
                 </div>
@@ -260,7 +260,7 @@ export default function GroupDetails() {
             </div>
 
             {/* Message Input */}
-            <div className="bg-white border-t border-yellow-200 p-4">
+            <div className="bg-card border-t border-border/80 p-4">
               <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <Input
@@ -268,18 +268,18 @@ export default function GroupDetails() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
-                    className="pr-20"
+                    className="pr-20 bg-surface-elevated border-border/80"
                   />
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Paperclip className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Paperclip className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Smile className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Smile className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </div>
-                <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white" onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleSendMessage} disabled={!newMessage.trim()}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
@@ -287,31 +287,31 @@ export default function GroupDetails() {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 bg-white border-l border-yellow-200 overflow-y-auto">
+          <div className="w-80 bg-card border-l border-border/80 overflow-y-auto hidden lg:block">
             <div className="p-4 space-y-6">
               {/* Group Info */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Information</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Information</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Description</p>
-                    <p className="text-sm text-gray-800">{group.description}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Description</p>
+                    <p className="text-sm text-foreground/90">{group.description}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Category</p>
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Category</p>
+                    <Badge variant="secondary" className="bg-surface-elevated text-foreground border border-border/80">
                       {group.category}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Created</p>
-                    <p className="text-sm text-gray-800">{group.createdDate}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Created</p>
+                    <p className="text-sm font-mono text-foreground">{group.createdDate}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Tags</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Tags</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {group.tags.map((tag, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
+                        <Badge key={index} variant="outline" className="text-xs bg-primary/10 text-primary border-primary/25 font-mono">
                           #{tag}
                         </Badge>
                       ))}
@@ -323,32 +323,32 @@ export default function GroupDetails() {
               {/* Members */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">Members ({members.length})</h3>
-                  <Button variant="outline" size="sm" className="h-7 text-xs">
+                  <h3 className="font-display font-semibold text-foreground">Members (<span className="font-mono">{members.length}</span>)</h3>
+                  <Button variant="outline" size="sm" className="h-7 text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover">
                     <UserPlus className="w-3 h-3 mr-1" />
                     Invite
                   </Button>
                 </div>
                 <div className="space-y-2">
                   {members.map((member) => (
-                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-yellow-50">
+                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-elevated transition-colors">
                       <div className="relative">
-                        <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                        <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs">
                           {member.avatar}
                         </div>
                         {member.online && (
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card"></div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
-                          {member.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                          {member.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
+                          <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                          {member.isAdmin && <Crown className="w-3 h-3 text-primary" />}
+                          {member.isModerator && <Shield className="w-3 h-3 text-primary/80" />}
                         </div>
-                        <p className="text-xs text-gray-600">{member.role}</p>
+                        <p className="text-xs text-muted-foreground">{member.role}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground">
                         <MoreHorizontal className="w-3 h-3" />
                       </Button>
                     </div>
@@ -358,12 +358,12 @@ export default function GroupDetails() {
 
               {/* Group Rules */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Rules</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Rules</h3>
                 <div className="space-y-2">
                   {group.rules.map((rule, index) => (
                     <div key={index} className="flex items-start gap-2">
-                      <span className="text-purple-600 mt-1">•</span>
-                      <p className="text-sm text-gray-700">{rule}</p>
+                      <span className="text-primary mt-0.5">•</span>
+                      <p className="text-sm text-muted-foreground">{rule}</p>
                     </div>
                   ))}
                 </div>
@@ -371,12 +371,12 @@ export default function GroupDetails() {
 
               {/* Recent Activity */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Activity</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Recent Activity</h3>
                 <div className="space-y-2">
                   {group.recentActivity.map((activity, index) => (
-                    <div key={index} className="text-sm">
-                      <p className="text-gray-800">{activity.action}</p>
-                      <p className="text-gray-600 text-xs">{activity.user} • {activity.time}</p>
+                    <div key={index} className="text-sm p-2 rounded-lg bg-surface-elevated border border-border/60">
+                      <p className="text-foreground text-xs font-medium">{activity.action}</p>
+                      <p className="text-muted-foreground font-mono text-[11px]">{activity.user} • {activity.time}</p>
                     </div>
                   ))}
                 </div>
@@ -387,11 +387,11 @@ export default function GroupDetails() {
 
         {/* Settings Popup */}
         {showSettings && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border/80 shadow-noir rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">Group Settings</h2>
+                <div className="flex items-center justify-between mb-6 border-b border-border/60 pb-3">
+                  <h2 className="font-display text-xl font-bold text-foreground">Group Settings</h2>
                   <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)}>
                     <X className="w-4 h-4" />
                   </Button>
@@ -400,25 +400,25 @@ export default function GroupDetails() {
                 <div className="space-y-6">
                   {/* Basic Information */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Info className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Info className="w-4 h-4 text-primary" />
                       Basic Information
                     </h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Group Name</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Group Name</label>
                         <Input
                           value={groupSettings.name}
                           onChange={(e) => setGroupSettings(prev => ({ ...prev, name: e.target.value }))}
-                          className="w-full"
+                          className="w-full bg-surface-elevated border-border/80"
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Description</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Description</label>
                         <textarea
                           value={groupSettings.description}
                           onChange={(e) => setGroupSettings(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full px-3 py-2 border border-yellow-200 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 text-sm"
+                          className="w-full px-3 py-2 bg-surface-elevated border border-border/80 rounded-lg text-foreground text-sm"
                           rows={3}
                         />
                       </div>
@@ -427,37 +427,37 @@ export default function GroupDetails() {
 
                   {/* Privacy Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Lock className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-primary" />
                       Privacy Settings
                     </h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Group Visibility</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Group Visibility</label>
                         <div className="flex gap-4">
-                          <label className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
                               name="privacy"
                               value="private"
                               checked={groupSettings.privacy === "private"}
                               onChange={(e) => setGroupSettings(prev => ({ ...prev, privacy: e.target.value }))}
-                              className="text-purple-600"
+                              className="text-primary"
                             />
-                            <Lock className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">Private</span>
+                            <Lock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">Private</span>
                           </label>
-                          <label className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
                               name="privacy"
                               value="public"
                               checked={groupSettings.privacy === "public"}
                               onChange={(e) => setGroupSettings(prev => ({ ...prev, privacy: e.target.value }))}
-                              className="text-purple-600"
+                              className="text-primary"
                             />
-                            <Globe className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">Public</span>
+                            <Globe className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">Public</span>
                           </label>
                         </div>
                       </div>
@@ -466,15 +466,15 @@ export default function GroupDetails() {
 
                   {/* Member Permissions */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <UserCheck className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-primary" />
                       Member Permissions
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Allow members to invite others</p>
-                          <p className="text-xs text-gray-500">Members can invite new people to join the group</p>
+                          <p className="text-sm font-medium text-foreground">Allow members to invite others</p>
+                          <p className="text-xs text-muted-foreground">Members can invite new people to join the group</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -483,13 +483,13 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, allowMemberInvites: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Allow members to post messages</p>
-                          <p className="text-xs text-gray-500">Members can send messages in the group chat</p>
+                          <p className="text-sm font-medium text-foreground">Allow members to post messages</p>
+                          <p className="text-xs text-muted-foreground">Members can send messages in the group chat</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -498,13 +498,13 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, allowMemberPosts: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Require approval for new members</p>
-                          <p className="text-xs text-gray-500">New member requests need admin approval</p>
+                          <p className="text-sm font-medium text-foreground">Require approval for new members</p>
+                          <p className="text-xs text-muted-foreground">New member requests need admin approval</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -513,7 +513,7 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, requireApproval: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                     </div>
@@ -521,15 +521,15 @@ export default function GroupDetails() {
 
                   {/* Notification Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Bell className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-primary" />
                       Notification Settings
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Enable notifications</p>
-                          <p className="text-xs text-gray-500">Receive notifications for group activities</p>
+                          <p className="text-sm font-medium text-foreground">Enable notifications</p>
+                          <p className="text-xs text-muted-foreground">Receive notifications for group activities</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -538,7 +538,7 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, notifications: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                     </div>
@@ -546,15 +546,15 @@ export default function GroupDetails() {
 
                   {/* Message Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-primary" />
                       Message Settings
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Auto-delete old messages</p>
-                          <p className="text-xs text-gray-500">Automatically delete messages older than specified days</p>
+                          <p className="text-sm font-medium text-foreground">Auto-delete old messages</p>
+                          <p className="text-xs text-muted-foreground">Automatically delete messages older than specified days</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -563,17 +563,17 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, autoDeleteMessages: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       {groupSettings.autoDeleteMessages && (
                         <div>
-                          <label className="text-sm font-medium text-gray-700 mb-2 block">Message retention (days)</label>
+                          <label className="text-sm font-medium text-foreground mb-2 block">Message retention (days)</label>
                           <Input
                             type="number"
                             value={groupSettings.messageRetentionDays}
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, messageRetentionDays: parseInt(e.target.value) || 30 }))}
-                            className="w-32"
+                            className="w-32 bg-surface-elevated border-border/80 font-mono"
                             min="1"
                             max="365"
                           />
@@ -583,16 +583,16 @@ export default function GroupDetails() {
                   </div>
 
                   {/* Danger Zone */}
-                  <div className="border-t border-yellow-200 pt-6">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-red-600">
+                  <div className="border-t border-border/60 pt-6">
+                    <h3 className="font-semibold mb-4 flex items-center gap-2 text-destructive">
                       <AlertTriangle className="w-4 h-4" />
                       Danger Zone
                     </h3>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-center justify-between p-4 bg-destructive/10 rounded-xl border border-destructive/30">
                         <div>
-                          <p className="text-sm font-medium text-red-800">Delete Group</p>
-                          <p className="text-xs text-red-600">Permanently delete this group and all its data</p>
+                          <p className="text-sm font-medium text-destructive">Delete Group</p>
+                          <p className="text-xs text-muted-foreground">Permanently delete this group and all its data</p>
                         </div>
                         <Button variant="destructive" size="sm">
                           <Trash2 className="w-4 h-4 mr-1" />
@@ -603,11 +603,10 @@ export default function GroupDetails() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-yellow-200">
+                  <div className="flex gap-3 pt-4 border-t border-border/60">
                     <Button 
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                      className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover"
                       onClick={() => {
-                        // Save settings logic here
                         console.log("Saving settings:", groupSettings);
                         setShowSettings(false);
                       }}
@@ -615,7 +614,7 @@ export default function GroupDetails() {
                       <Save className="w-4 h-4 mr-2" />
                       Save Changes
                     </Button>
-                    <Button variant="outline" onClick={() => setShowSettings(false)}>
+                    <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setShowSettings(false)}>
                       Cancel
                     </Button>
                   </div>

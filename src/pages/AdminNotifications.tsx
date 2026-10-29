@@ -30,7 +30,7 @@ export default function AdminNotifications() {
       time: "10 minutes ago",
       isUnread: true,
       icon: Users,
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       id: 2,
@@ -40,7 +40,7 @@ export default function AdminNotifications() {
       time: "30 minutes ago",
       isUnread: true,
       icon: AlertTriangle,
-      color: "text-yellow-600"
+      color: "text-amber-400"
     },
     {
       id: 3,
@@ -50,7 +50,7 @@ export default function AdminNotifications() {
       time: "2 hours ago",
       isUnread: false,
       icon: CheckCircle2,
-      color: "text-green-600"
+      color: "text-emerald-400"
     }
   ];
 
@@ -70,13 +70,14 @@ export default function AdminNotifications() {
         {/* Page Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Notifications</h1>
+            <span className="noir-eyebrow">System Feed</span>
+            <h1 className="font-display text-3xl font-bold text-foreground mt-0.5">Notifications</h1>
             <p className="text-muted-foreground mt-1">View and manage your notifications</p>
           </div>
           <Button
             variant="outline"
             size="sm"
-            className="text-yellow-600 border-yellow-200 hover:bg-yellow-50"
+            className="text-primary border-primary/30 bg-surface-elevated hover:bg-primary/10"
             onClick={() => console.log("Mark all as read")}
           >
             Mark all read
@@ -84,68 +85,70 @@ export default function AdminNotifications() {
         </div>
 
         {/* Main Content Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-2xl flex items-center gap-2">
-                <Bell className="h-5 w-5 text-yellow-600" />
+        <Card className="noir-card border-border/80 bg-card">
+          <CardHeader className="border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <CardTitle className="font-display text-2xl flex items-center gap-2.5 text-foreground">
+                <Bell className="h-5 w-5 text-primary" />
                 All Notifications
               </CardTitle>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[150px] bg-surface-elevated border-border/80">
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border/80">
                     <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="user">User</SelectItem>
                     <SelectItem value="content">Content</SelectItem>
                     <SelectItem value="system">System</SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="relative w-[200px]">
+                <div className="relative w-[220px]">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     placeholder="Search notifications..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 bg-surface-elevated border-border/80"
                   />
                 </div>
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
               {filteredNotifications.map((notification) => {
                 const NotificationIcon = notification.icon;
                 return (
                   <div
                     key={notification.id}
                     className={cn(
-                      "flex items-start gap-4 p-4 rounded-lg border transition-colors",
+                      "flex items-start gap-4 p-4 rounded-xl border transition-colors",
                       notification.isUnread
-                        ? "bg-yellow-50/50 border-yellow-100"
-                        : "bg-white border-gray-200",
-                      "hover:border-yellow-200"
+                        ? "bg-primary/[0.05] border-primary/30 border-l-4 border-l-primary"
+                        : "bg-surface-elevated/60 border-border/70",
+                      "hover:border-primary/40"
                     )}
                   >
                     <div className={cn(
-                      "p-2 rounded-full",
-                      notification.isUnread ? "bg-yellow-100" : "bg-gray-100"
+                      "p-2.5 rounded-lg border",
+                      notification.isUnread
+                        ? "bg-primary/15 border-primary/30"
+                        : "bg-surface-elevated border-border/60"
                     )}>
                       <NotificationIcon className={cn(
                         "h-5 w-5",
-                        notification.isUnread ? "text-yellow-600" : "text-gray-600"
+                        notification.isUnread ? "text-primary" : "text-muted-foreground"
                       )} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                             {notification.title}
                             {notification.isUnread && (
-                              <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                              <span className="h-2 w-2 rounded-full bg-primary" />
                             )}
                           </h4>
                           <p className="text-sm text-muted-foreground mt-1">
@@ -153,7 +156,7 @@ export default function AdminNotifications() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                          <span className="text-xs font-mono text-muted-foreground whitespace-nowrap flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {notification.time}
                           </span>

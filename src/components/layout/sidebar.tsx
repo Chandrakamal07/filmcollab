@@ -1,15 +1,12 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Home,
   Briefcase,
-  Users,
   FolderOpen,
-  Share2,
   UserCheck,
   Calendar,
   Search,
@@ -17,13 +14,12 @@ import {
   Heart,
   ChevronLeft,
   ChevronRight,
-  LogOut,
   Moon,
   Sun,
-  Monitor,
   Building2,
   MapPin,
-  Megaphone
+  Megaphone,
+  Film,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "next-themes";
@@ -38,9 +34,7 @@ interface SidebarProps {
 const navigationItems = [
   {
     section: "MAIN",
-    items: [
-      { name: "Dashboard", icon: Home, href: "/dashboard" }
-    ]
+    items: [{ name: "Dashboard", icon: Home, href: "/dashboard" }],
   },
   {
     section: "CONTENT",
@@ -48,8 +42,8 @@ const navigationItems = [
       { name: "Talent Hub", icon: Search, href: "/discover" },
       { name: "Talent Directory", icon: UserCheck, href: "/directory" },
       { name: "Companies Directory", icon: Building2, href: "/studios" },
-      { name: "Shooting Locations", icon: MapPin, href: "/locations" }
-    ]
+      { name: "Shooting Locations", icon: MapPin, href: "/locations" },
+    ],
   },
   {
     section: "OPPORTUNITIES",
@@ -57,20 +51,20 @@ const navigationItems = [
       { name: "Casting Calls", icon: Megaphone, href: "/casting-calls" },
       { name: "Jobs", icon: Briefcase, href: "/jobs" },
       { name: "Industry Hub", icon: Calendar, href: "/industry-hub" },
-      { name: "Projects", icon: FolderOpen, href: "/projects" }
-    ]
+      { name: "Projects", icon: FolderOpen, href: "/projects" },
+    ],
   },
   {
     section: "NETWORKING",
     items: [
       { name: "Messages", icon: MessageCircle, href: "/messages" },
-      { name: "Connections", icon: Heart, href: "/connections" }
-    ]
-  }
+      { name: "Connections", icon: Heart, href: "/connections" },
+    ],
+  },
 ];
 
 export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarProps) {
-  const { signOut, profile } = useAuth();
+  const { profile } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,27 +73,27 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
   useEffect(() => {
     const handleScroll = (e: Event) => {
       const target = e.target as HTMLElement;
-      sessionStorage.setItem('sidebarScrollPos', target.scrollTop.toString());
+      sessionStorage.setItem("sidebarScrollPos", target.scrollTop.toString());
     };
-    
+
     let viewport: Element | null = null;
     if (scrollRef.current) {
       setTimeout(() => {
         if (!scrollRef.current) return;
-        viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        viewport = scrollRef.current.querySelector("[data-radix-scroll-area-viewport]");
         if (viewport) {
-          const savedScroll = sessionStorage.getItem('sidebarScrollPos');
+          const savedScroll = sessionStorage.getItem("sidebarScrollPos");
           if (savedScroll) {
             viewport.scrollTop = parseInt(savedScroll, 10);
           }
-          viewport.addEventListener('scroll', handleScroll);
+          viewport.addEventListener("scroll", handleScroll);
         }
       }, 50);
     }
-    
+
     return () => {
       if (viewport) {
-        viewport.removeEventListener('scroll', handleScroll);
+        viewport.removeEventListener("scroll", handleScroll);
       }
     };
   }, []);
@@ -108,17 +102,8 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
     navigate(href);
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate("/");
-    } catch (error) {
-      console.error('Error during sign out:', error);
-    }
-  };
-
   const isActive = (href: string) => {
-    return location.pathname === href;
+    return location.pathname === href || (href !== "/dashboard" && location.pathname.startsWith(`${href}/`));
   };
 
   const [unreadCount, setUnreadCount] = useState<number>(0);
@@ -126,12 +111,14 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!profile?.id) {
-        // Fallback to local storage for guest
         try {
           const saved = localStorage.getItem("chat_conversations");
           if (saved) {
             const conversations = JSON.parse(saved);
-            const total = conversations.reduce((acc: number, c: { unread?: number }) => acc + (c.unread || 0), 0);
+            const total = conversations.reduce(
+              (acc: number, c: { unread?: number }) => acc + (c.unread || 0),
+              0,
+            );
             setUnreadCount(total);
           }
         } catch (e) {
@@ -140,20 +127,21 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
         return;
       }
 
-        try {
-          const { data: unreadMsgs, error } = await supabase
-            .from("messages")
-            .select("sender_id, created_at")
-            .eq("receiver_id", profile.id)
-            .eq("is_read", false);
-  
-          if (!error && unreadMsgs) {
-            // Use local storage to parse actual read timestamps and bypass RLS failure
-            const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
-            const actualUnread = unreadMsgs.filter(m => new Date(m.created_at).getTime() > (readConvs[m.sender_id] || 0)).length;
-            setUnreadCount(actualUnread);
-          }
-        } catch (err) {
+      try {
+        const { data: unreadMsgs, error } = await supabase
+          .from("messages")
+          .select("sender_id, created_at")
+          .eq("receiver_id", profile.id)
+          .eq("is_read", false);
+
+        if (!error && unreadMsgs) {
+          const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+          const actualUnread = unreadMsgs.filter(
+            (m) => new Date(m.created_at).getTime() > (readConvs[m.sender_id] || 0),
+          ).length;
+          setUnreadCount(actualUnread);
+        }
+      } catch (err) {
         console.error("Error fetching unread count:", err);
       }
     };
@@ -163,16 +151,38 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
     return () => clearInterval(interval);
   }, [profile?.id]);
 
+  const isDarkActive =
+    theme === "dark" ||
+    (theme === "system" &&
+      typeof document !== "undefined" &&
+      document.documentElement.classList.contains("dark"));
+
   return (
-    <div className={cn("flex h-full w-64 flex-col bg-white dark:bg-background border-r border-yellow-200 dark:border-yellow-900/40", isCollapsed && "w-16", className)}>
+    <div
+      className={cn(
+        "flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200 ease-noir relative",
+        isCollapsed && "w-16",
+        className,
+      )}
+    >
       {/* Logo */}
-      <div className={cn("flex h-16 items-center border-b border-yellow-200 dark:border-yellow-900/40 relative", isCollapsed ? "justify-center" : "justify-between px-6")}>
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center flex-shrink-0">
-            <div className="h-4 w-4 bg-white rounded-sm opacity-90"></div>
+      <div
+        className={cn(
+          "flex h-16 items-center border-b border-sidebar-border relative",
+          isCollapsed ? "justify-center" : "justify-between px-5",
+        )}
+      >
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => navigate("/dashboard")}
+        >
+          <div className="h-8 w-8 rounded-lg border border-primary/40 bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Film className="h-4 w-4" />
           </div>
           {!isCollapsed && (
-            <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">FilmCollab</span>
+            <span className="font-display text-xl font-semibold tracking-tight text-foreground whitespace-nowrap">
+              FilmCollab
+            </span>
           )}
         </div>
         {onToggle && (
@@ -180,9 +190,12 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
             variant="ghost"
             size="sm"
             onClick={onToggle}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "h-8 w-8 p-0 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white flex-shrink-0",
-              isCollapsed ? "absolute -right-4 top-4 bg-white dark:bg-background border border-gray-200 dark:border-gray-800 rounded-full shadow-sm z-50 hover:bg-gray-50 dark:hover:bg-gray-800" : "hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              "h-8 w-8 p-0 text-muted-foreground hover:text-foreground flex-shrink-0",
+              isCollapsed
+                ? "absolute -right-3.5 top-4 bg-card border border-border rounded-full shadow-soft z-50 hover:bg-surface-hover"
+                : "hover:bg-surface-hover",
             )}
           >
             {isCollapsed ? (
@@ -195,46 +208,62 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
       </div>
 
       {/* Navigation */}
-      <ScrollArea ref={scrollRef} className="flex-1 px-3 py-4">
-        <div className="space-y-8">
+      <ScrollArea ref={scrollRef} className="flex-1 px-3 py-5">
+        <div className="space-y-7">
           {navigationItems.map((section) => (
             <div key={section.section}>
               {!isCollapsed && (
-                <h3 className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <h3 className="mb-2.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                   {section.section}
                 </h3>
               )}
               <div className="space-y-1">
-                {section.items.map((item) => (
-                  <Button
-                    key={item.name}
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start h-10 px-3 text-gray-700 dark:text-gray-300 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 hover:text-gray-900 dark:hover:text-yellow-400 transition-colors relative",
-                      isActive(item.href) && "bg-yellow-500 text-white hover:bg-yellow-600 dark:bg-yellow-600 dark:text-white",
-                      isCollapsed && "justify-center px-2"
-                    )}
-                    onClick={() => handleNavigation(item.href)}
-                  >
-                    <div className="relative flex items-center">
-                      <item.icon className={cn("h-4 w-4", !isCollapsed && "mr-3")} />
-                      {isCollapsed && item.name === "Messages" && unreadCount > 0 && (
-                        <span className="absolute -top-1.5 -right-1.5 bg-yellow-600 text-white text-[8px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center">
+                {section.items.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <Button
+                      key={item.name}
+                      variant="ghost"
+                      title={isCollapsed ? item.name : undefined}
+                      className={cn(
+                        "w-full justify-start h-10 px-3 rounded-lg text-sm font-medium transition-all duration-150 ease-noir relative group",
+                        active
+                          ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:text-primary-foreground"
+                          : "text-sidebar-foreground/80 hover:bg-surface-hover hover:text-foreground",
+                        isCollapsed && "justify-center px-2",
+                      )}
+                      onClick={() => handleNavigation(item.href)}
+                    >
+                      <div className="relative flex items-center">
+                        <item.icon
+                          className={cn(
+                            "h-4 w-4 transition-transform duration-150",
+                            !isCollapsed && "mr-3",
+                            active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary",
+                          )}
+                        />
+                        {isCollapsed && item.name === "Messages" && unreadCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[9px] font-bold rounded-full h-4 min-w-[16px] px-0.5 flex items-center justify-center ring-2 ring-sidebar">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      {!isCollapsed && <span className="truncate">{item.name}</span>}
+                      {!isCollapsed && item.name === "Messages" && unreadCount > 0 && (
+                        <span
+                          className={cn(
+                            "ml-auto text-[11px] font-semibold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center",
+                            active
+                              ? "bg-primary-foreground text-primary"
+                              : "bg-primary/20 text-primary border border-primary/35",
+                          )}
+                        >
                           {unreadCount}
                         </span>
                       )}
-                    </div>
-                    {!isCollapsed && <span>{item.name}</span>}
-                    {!isCollapsed && item.name === "Messages" && unreadCount > 0 && (
-                      <span className={cn(
-                        "ml-auto bg-yellow-600 text-white text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center",
-                        isActive(item.href) && "bg-white text-yellow-650"
-                      )}>
-                        {unreadCount}
-                      </span>
-                    )}
-                  </Button>
-                ))}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -242,31 +271,56 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
       </ScrollArea>
 
       {/* Theme section */}
-      <div className="border-t border-yellow-200 dark:border-yellow-900/40 p-4">
+      <div className="border-t border-sidebar-border p-3.5">
         {!isCollapsed && (
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 px-3">Theme</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80 mb-2.5 px-2">
+            Appearance
+          </p>
         )}
-        
-        <div 
+
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Toggle color theme"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setTheme(isDarkActive ? "light" : "dark");
+            }
+          }}
           className={cn(
-            "flex items-center rounded-full p-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 cursor-pointer relative",
-            isCollapsed ? "flex-col h-16 w-8 mx-auto" : "w-full h-8"
+            "flex items-center rounded-full p-1 bg-surface-elevated border border-border/80 cursor-pointer relative transition-colors",
+            isCollapsed ? "flex-col h-16 w-8 mx-auto" : "w-full h-9",
           )}
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => setTheme(isDarkActive ? "light" : "dark")}
         >
-          <div 
+          <div
             className={cn(
-              "absolute bg-white dark:bg-gray-600 rounded-full shadow-sm transition-all duration-200 ease-in-out",
-              isCollapsed 
-                ? cn("w-6 h-[28px] left-[3px]", theme === "dark" || (theme === "system" && document.documentElement.classList.contains("dark")) ? "top-[33px]" : "top-[3px]")
-                : cn("h-6 w-[calc(50%-4px)] top-1", theme === "dark" || (theme === "system" && document.documentElement.classList.contains("dark")) ? "left-[calc(50%+2px)]" : "left-1")
-            )} 
+              "absolute bg-primary rounded-full shadow-sm transition-all duration-200 ease-noir",
+              isCollapsed
+                ? cn("w-6 h-[28px] left-[3px]", isDarkActive ? "top-[31px]" : "top-[3px]")
+                : cn("h-7 w-[calc(50%-4px)] top-[3px]", isDarkActive ? "left-[calc(50%+1px)]" : "left-1"),
+            )}
           />
-          <div className={cn("relative z-10 flex items-center justify-center transition-colors", isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full", theme === 'light' || (theme === 'system' && !document.documentElement.classList.contains('dark')) ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400')}>
-            <Sun className="h-4 w-4" />
+          <div
+            className={cn(
+              "relative z-10 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+              isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full",
+              !isDarkActive ? "text-primary-foreground" : "text-muted-foreground",
+            )}
+          >
+            <Sun className="h-3.5 w-3.5" />
+            {!isCollapsed && <span>Light</span>}
           </div>
-          <div className={cn("relative z-10 flex items-center justify-center transition-colors", isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full", theme === 'dark' || (theme === 'system' && document.documentElement.classList.contains('dark')) ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400')}>
-            <Moon className="h-4 w-4" />
+          <div
+            className={cn(
+              "relative z-10 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+              isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full",
+              isDarkActive ? "text-primary-foreground" : "text-muted-foreground",
+            )}
+          >
+            <Moon className="h-3.5 w-3.5" />
+            {!isCollapsed && <span>Noir</span>}
           </div>
         </div>
       </div>

@@ -199,35 +199,35 @@ export default function JoinedGroupDetails() {
 
   return (
     <AppLayout>
-      <div className="h-screen bg-yellow-50 flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b border-yellow-200 p-4">
+        <div className="bg-card border-b border-border/80 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/community')}>
+              <Button variant="ghost" size="sm" className="hover:bg-surface-elevated" onClick={() => navigate('/community')}>
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{group.name}</h1>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Users className="w-4 h-4" />
+                <h1 className="font-display text-xl font-bold text-foreground">{group.name}</h1>
+                <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                  <Users className="w-3.5 h-3.5 text-primary" />
                   <span>{group.members} members</span>
                   <span>•</span>
-                  <span>{group.status}</span>
+                  <span className="text-primary">{group.status}</span>
                   <span>•</span>
-                  <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
+                  <Badge variant="outline" className="text-[10px] bg-primary/15 text-primary border-primary/30 uppercase">
                     {group.userRole}
                   </Badge>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Share2 className="w-4 h-4 mr-1" />
+              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
+                <Share2 className="w-4 h-4 mr-1.5" />
                 Share
               </Button>
-              <Button variant="outline" size="sm" onClick={handleLeaveGroup} className="text-red-600 border-red-300 hover:bg-red-50">
-                <LogOut className="w-4 h-4 mr-1" />
+              <Button variant="outline" size="sm" onClick={handleLeaveGroup} className="text-destructive border-destructive/30 bg-destructive/10 hover:bg-destructive/20">
+                <LogOut className="w-4 h-4 mr-1.5" />
                 Leave Group
               </Button>
             </div>
@@ -241,18 +241,18 @@ export default function JoinedGroupDetails() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatMessages.map((message) => (
                 <div key={message.id} className="flex gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                  <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs flex-shrink-0">
                     {message.userAvatar}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm text-gray-900">{message.userName}</span>
-                      {message.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                      {message.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
-                      <span className="text-xs text-gray-500">{message.timestamp}</span>
+                      <span className="font-semibold text-sm text-foreground">{message.userName}</span>
+                      {message.isAdmin && <Crown className="w-3.5 h-3.5 text-primary" />}
+                      {message.isModerator && <Shield className="w-3.5 h-3.5 text-primary/80" />}
+                      <span className="text-xs font-mono text-muted-foreground">{message.timestamp}</span>
                     </div>
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-yellow-200">
-                      <p className="text-sm text-gray-800">{message.message}</p>
+                    <div className="bg-card rounded-xl p-3 shadow-noir border border-border/80">
+                      <p className="text-sm text-foreground/90">{message.message}</p>
                     </div>
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export default function JoinedGroupDetails() {
             </div>
 
             {/* Message Input */}
-            <div className="bg-white border-t border-yellow-200 p-4">
+            <div className="bg-card border-t border-border/80 p-4">
               <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <Input
@@ -269,18 +269,18 @@ export default function JoinedGroupDetails() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
-                    className="pr-20"
+                    className="pr-20 bg-surface-elevated border-border/80"
                   />
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Paperclip className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Paperclip className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Smile className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Smile className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </div>
-                <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white" onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleSendMessage} disabled={!newMessage.trim()}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
@@ -288,45 +288,45 @@ export default function JoinedGroupDetails() {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 bg-white border-l border-yellow-200 overflow-y-auto">
+          <div className="w-80 bg-card border-l border-border/80 overflow-y-auto hidden lg:block">
             <div className="p-4 space-y-6">
               {/* Group Info */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Information</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Information</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Description</p>
-                    <p className="text-sm text-gray-800">{group.description}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Description</p>
+                    <p className="text-sm text-foreground/90">{group.description}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Category</p>
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Category</p>
+                    <Badge variant="secondary" className="bg-surface-elevated text-foreground border border-border/80">
                       {group.category}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Created By</p>
-                    <p className="text-sm text-gray-800">{group.createdBy}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Created By</p>
+                    <p className="text-sm text-foreground">{group.createdBy}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Created</p>
-                    <p className="text-sm text-gray-800">{group.createdDate}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Created</p>
+                    <p className="text-sm font-mono text-foreground">{group.createdDate}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">You Joined</p>
-                    <p className="text-sm text-gray-800">{group.joinedDate}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">You Joined</p>
+                    <p className="text-sm font-mono text-foreground">{group.joinedDate}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Your Role</p>
-                    <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Your Role</p>
+                    <Badge variant="outline" className="text-[10px] bg-primary/15 text-primary border-primary/30 uppercase font-mono">
                       {group.userRole}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Tags</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Tags</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {group.tags.map((tag, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
+                        <Badge key={index} variant="outline" className="text-xs bg-primary/10 text-primary border-primary/25 font-mono">
                           #{tag}
                         </Badge>
                       ))}
@@ -338,28 +338,28 @@ export default function JoinedGroupDetails() {
               {/* Members */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">Members ({members.length})</h3>
+                  <h3 className="font-display font-semibold text-foreground">Members (<span className="font-mono">{members.length}</span>)</h3>
                 </div>
                 <div className="space-y-2">
                   {members.map((member) => (
-                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-yellow-50">
+                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-elevated transition-colors">
                       <div className="relative">
-                        <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                        <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs">
                           {member.avatar}
                         </div>
                         {member.online && (
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card"></div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
-                          {member.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                          {member.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
+                          <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                          {member.isAdmin && <Crown className="w-3 h-3 text-primary" />}
+                          {member.isModerator && <Shield className="w-3 h-3 text-primary/80" />}
                         </div>
-                        <p className="text-xs text-gray-600">{member.role}</p>
+                        <p className="text-xs text-muted-foreground">{member.role}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground">
                         <MoreHorizontal className="w-3 h-3" />
                       </Button>
                     </div>
@@ -369,12 +369,12 @@ export default function JoinedGroupDetails() {
 
               {/* Group Rules */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Rules</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Rules</h3>
                 <div className="space-y-2">
                   {group.rules.map((rule, index) => (
                     <div key={index} className="flex items-start gap-2">
-                      <span className="text-purple-600 mt-1">•</span>
-                      <p className="text-sm text-gray-700">{rule}</p>
+                      <span className="text-primary mt-0.5">•</span>
+                      <p className="text-sm text-muted-foreground">{rule}</p>
                     </div>
                   ))}
                 </div>
@@ -382,12 +382,12 @@ export default function JoinedGroupDetails() {
 
               {/* Recent Activity */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Activity</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Recent Activity</h3>
                 <div className="space-y-2">
                   {group.recentActivity.map((activity, index) => (
-                    <div key={index} className="text-sm">
-                      <p className="text-gray-800">{activity.action}</p>
-                      <p className="text-gray-600 text-xs">{activity.user} • {activity.time}</p>
+                    <div key={index} className="text-sm p-2 rounded-lg bg-surface-elevated border border-border/60">
+                      <p className="text-foreground text-xs font-medium">{activity.action}</p>
+                      <p className="text-muted-foreground font-mono text-[11px]">{activity.user} • {activity.time}</p>
                     </div>
                   ))}
                 </div>

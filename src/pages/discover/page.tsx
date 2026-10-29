@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,9 +16,7 @@ import {
   Search,
   Filter,
   MapPin,
-  Calendar,
   User as UserIcon,
-  MessageCircle,
   UserPlus,
   Star,
   Award,
@@ -30,23 +28,22 @@ import {
   MoreVertical,
   Bookmark,
   Share2,
-  ChevronDown,
   X,
   Check,
   Clock,
   UserCheck,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
+import { FadeInSection, StaggerItem } from "@/components/ui/motion-primitives";
 
 interface User {
   id: string;
+  user_id?: string;
   full_name: string;
   username?: string;
   email?: string;
@@ -81,27 +78,6 @@ interface User {
 
 type FilterType = "all" | "verified" | "new" | "popular";
 type SortType = "recent" | "popular" | "alphabetical";
-type CategoryFilter = "all" | 
-  // Film & Media Projects
-  "Short Films" | "Feature Films" | "Web Series" | "Documentaries" | "Music Videos" | "Advertisements / Commercials" | "Corporate Videos" | "Theatre / Stage Plays" |
-  // Direction & Production
-  "Director" | "Assistant Director" | "Producer" | "Executive Producer" | "Line Producer" | "Production Manager" | "Production Assistant" |
-  // Cinematography & Camera
-  "Cinematographer / DOP" | "Assistant Cameraman" | "Camera Operator" | "Steadicam Operator" | "Drone Operator" | "Gaffer" | "Lighting Technician" |
-  // Actors & Performers
-  "Lead Actor / Actress" | "Supporting Actor / Actress" | "Child Artist" | "Theatre Artist" | "Voice Over Artist" | "Dancer" | "Stunt Artist" |
-  // Writing & Creative
-  "Script Writer" | "Screenplay Writer" | "Dialogue Writer" | "Lyricist" | "Storyboard Artist" |
-  // Music & Sound
-  "Music Director" | "Background Score Composer" | "Singer / Vocalist" | "Instrumentalist" | "Sound Engineer" | "Foley Artist" | "Dubbing / Voice Artist" |
-  // Art & Design
-  "Art Director" | "Set Designer" | "Costume Designer" | "Fashion Stylist" | "Makeup Artist" | "Hair Stylist" | "Graphic Designer" | "Poster Designer" |
-  // Editing & Post Production
-  "Video Editor" | "VFX Artist" | "Motion Graphics Designer" | "Colorist" | "DI Supervisor" | "Sound Editor" |
-  // Marketing & Distribution
-  "Digital Marketer" | "Public Relations (PR)" | "Social Media Manager" | "Film Distributor" |
-  // Film Community & Support
-  "Film Festivals" | "Workshops & Training" | "Casting Calls" | "Location Scouts" | "Film Equipment Rentals";
 
 export default function DiscoverPage() {
   const navigate = useNavigate();
@@ -133,7 +109,7 @@ export default function DiscoverPage() {
 
       let likedUserIds: string[] = [];
       let savedUserIds: string[] = [];
-      
+
       interface DBConnection {
         id: string;
         user_id: string;
@@ -151,7 +127,7 @@ export default function DiscoverPage() {
           .eq("user_id", profile.id);
 
         if (likesData) {
-          likedUserIds = likesData.map(l => l.liked_user_id);
+          likedUserIds = likesData.map((l) => l.liked_user_id);
         }
 
         const { data: savesData } = await supabase
@@ -160,7 +136,7 @@ export default function DiscoverPage() {
           .eq("user_id", profile.id);
 
         if (savesData) {
-          savedUserIds = savesData.map(s => s.saved_user_id);
+          savedUserIds = savesData.map((s) => s.saved_user_id);
         }
 
         const { data: connData } = await supabase
@@ -200,29 +176,27 @@ export default function DiscoverPage() {
         price_per_day?: number | null;
         price_per_hour?: number | null;
         price_negotiable?: boolean | null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         settings?: any[];
       }
 
       const mappedUsers: User[] = ((profilesData as DBProfile[]) || [])
         .filter((p: DBProfile) => {
-          // Exclude logged-in user profile from discover list
           if (profile?.id && p.id === profile.id) return false;
           if (user?.id && p.user_id === user.id) return false;
-          // Exclude admins
           const roleLower = (p.role || "").toLowerCase();
           if (roleLower === "admin") return false;
-          // Check profile visibility from settings
-          const settingsObj = Array.isArray(p.settings) 
-            ? (p.settings.length > 0 ? p.settings[0] : null)
+          const settingsObj = Array.isArray(p.settings)
+            ? p.settings.length > 0
+              ? p.settings[0]
+              : null
             : p.settings;
           const privacySettings = settingsObj?.privacy_settings;
-          const visibility = privacySettings?.profileVisibility || 'public';
-          if (visibility !== 'public') return false;
+          const visibility = privacySettings?.profileVisibility || "public";
+          if (visibility !== "public") return false;
 
-          // Restrict by category if specified
-          const visibleToCategories = settingsObj?.visible_to_categories || ['all'];
-          if (!visibleToCategories.includes('all')) {
-            // Current viewing user's category
+          const visibleToCategories = settingsObj?.visible_to_categories || ["all"];
+          if (!visibleToCategories.includes("all")) {
             const viewerCategory = profile?.category || profile?.role;
             if (!viewerCategory || !visibleToCategories.includes(viewerCategory)) {
               return false;
@@ -231,9 +205,10 @@ export default function DiscoverPage() {
           return true;
         })
         .map((p: DBProfile) => {
-          const conn = connectionsData.find(c => 
-            (c.user_id === profile?.id && c.connected_user_id === p.id) || 
-            (c.user_id === p.id && c.connected_user_id === profile?.id)
+          const conn = connectionsData.find(
+            (c) =>
+              (c.user_id === profile?.id && c.connected_user_id === p.id) ||
+              (c.user_id === p.id && c.connected_user_id === profile?.id),
           );
           return {
             id: p.id,
@@ -241,7 +216,9 @@ export default function DiscoverPage() {
             full_name: p.full_name || p.username || "Anonymous",
             username: p.username || "",
             email: p.email || "",
-            avatar_url: p.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
+            avatar_url:
+              p.avatar_url ||
+              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
             bio: p.bio || "",
             location: p.location || "",
             role: p.category || p.role || "Creator",
@@ -262,13 +239,18 @@ export default function DiscoverPage() {
             is_saved: savedUserIds.includes(p.id),
             connection_status: conn?.status || null,
             connection_initiator: conn?.user_id || null,
-            total_experience: p.total_experience || null,
-            price_per_day: p.price_per_day || null,
-            price_per_hour: p.price_per_hour || null,
-            price_negotiable: p.price_negotiable || null,
-            allow_connections_from: Array.isArray(p.settings) 
-              ? (p.settings.length > 0 ? p.settings[0].privacy_settings?.allowConnectionRequests : null)
-              : (p.settings ? (p.settings as any).privacy_settings?.allowConnectionRequests : null),
+            total_experience: p.total_experience || undefined,
+            price_per_day: p.price_per_day || undefined,
+            price_per_hour: p.price_per_hour || undefined,
+            price_negotiable: p.price_negotiable || undefined,
+            allow_connections_from: Array.isArray(p.settings)
+              ? p.settings.length > 0
+                ? p.settings[0].privacy_settings?.allowConnectionRequests
+                : null
+              : p.settings
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ? (p.settings as any).privacy_settings?.allowConnectionRequests
+                : null,
           };
         });
 
@@ -291,9 +273,7 @@ export default function DiscoverPage() {
 
   const handleToggleCategory = (category: string) => {
     setCategoryFilters((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
     );
     resetPaging();
   };
@@ -301,34 +281,31 @@ export default function DiscoverPage() {
   const filtered = useMemo(() => {
     let filteredUsers = [...users];
 
-    // Filter out logged-in user profile from discover list
     if (profile?.id) {
       filteredUsers = filteredUsers.filter((u) => u.id !== profile.id);
     } else if (user?.id) {
       filteredUsers = filteredUsers.filter((u) => u.user_id !== user.id);
     }
 
-    // Filter by tab
     if (currentTab === "liked") {
       filteredUsers = filteredUsers.filter((u) => u.is_liked);
     } else if (currentTab === "saved") {
       filteredUsers = filteredUsers.filter((u) => u.is_saved);
     }
 
-    // Filter by search query
     if (query.trim()) {
       const searchTerm = query.toLowerCase();
-      filteredUsers = filteredUsers.filter((u) =>
-        u.full_name.toLowerCase().includes(searchTerm) ||
-        u.username?.toLowerCase().includes(searchTerm) ||
-        u.role?.toLowerCase().includes(searchTerm) ||
-        u.bio?.toLowerCase().includes(searchTerm) ||
-        u.skills?.some(skill => skill.toLowerCase().includes(searchTerm)) ||
-        u.location?.toLowerCase().includes(searchTerm)
+      filteredUsers = filteredUsers.filter(
+        (u) =>
+          u.full_name.toLowerCase().includes(searchTerm) ||
+          u.username?.toLowerCase().includes(searchTerm) ||
+          u.role?.toLowerCase().includes(searchTerm) ||
+          u.bio?.toLowerCase().includes(searchTerm) ||
+          u.skills?.some((skill) => skill.toLowerCase().includes(searchTerm)) ||
+          u.location?.toLowerCase().includes(searchTerm),
       );
     }
 
-    // Filter by type
     if (filterType !== "all") {
       filteredUsers = filteredUsers.filter((u) => {
         switch (filterType) {
@@ -347,25 +324,21 @@ export default function DiscoverPage() {
       });
     }
 
-    // Filter by category (multi-select)
     if (categoryFilters.length > 0) {
-      filteredUsers = filteredUsers.filter((u) => u.category && categoryFilters.includes(u.category));
-    }
-
-    // Filter by location
-    if (locationFilter.trim()) {
-      const loc = locationFilter.toLowerCase();
-      filteredUsers = filteredUsers.filter((u) =>
-        u.location?.toLowerCase().includes(loc)
+      filteredUsers = filteredUsers.filter(
+        (u) => u.category && categoryFilters.includes(u.category),
       );
     }
 
-    // Filter by likes (slider)
+    if (locationFilter.trim()) {
+      const loc = locationFilter.toLowerCase();
+      filteredUsers = filteredUsers.filter((u) => u.location?.toLowerCase().includes(loc));
+    }
+
     if (minLikes > 0) {
       filteredUsers = filteredUsers.filter((u) => (u.likes_count || 0) >= minLikes);
     }
 
-    // Sort users
     filteredUsers.sort((a, b) => {
       switch (sortType) {
         case "popular":
@@ -379,7 +352,18 @@ export default function DiscoverPage() {
     });
 
     return filteredUsers;
-  }, [users, currentTab, query, filterType, sortType, categoryFilters, locationFilter, minLikes, profile?.id, user?.id]);
+  }, [
+    users,
+    currentTab,
+    query,
+    filterType,
+    sortType,
+    categoryFilters,
+    locationFilter,
+    minLikes,
+    profile?.id,
+    user?.id,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -388,8 +372,12 @@ export default function DiscoverPage() {
     setPage(1);
   }
 
-  // Handle connect with user
-  const handleConnect = async (userId: string, userName: string, currentStatus?: string | null, initiatorId?: string | null) => {
+  const handleConnect = async (
+    userId: string,
+    userName: string,
+    currentStatus?: string | null,
+    initiatorId?: string | null,
+  ) => {
     try {
       if (!user?.id) {
         toast({
@@ -419,7 +407,6 @@ export default function DiscoverPage() {
 
       if (currentStatus === "pending") {
         if (initiatorId && initiatorId !== profile.id) {
-          // Accept connection request!
           const { error: updateError } = await supabase
             .from("connections")
             .update({ status: "accepted" })
@@ -431,17 +418,16 @@ export default function DiscoverPage() {
             title: "Connection Request Accepted",
             description: `You are now connected with ${userName}!`,
           });
-          
-          // Insert notification for the initiator
+
           await supabase.from("notifications").insert({
             user_id: initiatorId,
             title: "Connection Accepted",
-            description: `${profile.full_name || profile.username || 'Someone'} accepted your connection request.`,
+            description: `${profile.full_name || profile.username || "Someone"} accepted your connection request.`,
             type: "connection",
-            action_url: `/profile/${profile.id}`
+            action_url: `/profile/${profile.id}`,
           });
-          
-          fetchUsers(); // Refresh users
+
+          fetchUsers();
           return;
         } else {
           toast({
@@ -452,11 +438,12 @@ export default function DiscoverPage() {
         }
       }
 
-      // Check if connection already exists in DB
       const { data: existingConnection, error: checkError } = await supabase
         .from("connections")
         .select("*")
-        .or(`and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`)
+        .or(
+          `and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`,
+        )
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -470,14 +457,11 @@ export default function DiscoverPage() {
         return;
       }
 
-      // Create a pending connection request
-      const { error: insertError } = await supabase
-        .from("connections")
-        .insert({
-          user_id: profile.id,
-          connected_user_id: userId,
-          status: "pending",
-        });
+      const { error: insertError } = await supabase.from("connections").insert({
+        user_id: profile.id,
+        connected_user_id: userId,
+        status: "pending",
+      });
 
       if (insertError) throw insertError;
 
@@ -485,19 +469,18 @@ export default function DiscoverPage() {
         title: "Connection Request Sent",
         description: `Connection request sent to ${userName}`,
       });
-      
-      // Insert notification for the recipient
+
       await supabase.from("notifications").insert({
         user_id: userId,
         title: "New Connection Request",
-        description: `${profile.full_name || profile.username || 'Someone'} sent you a connection request.`,
+        description: `${profile.full_name || profile.username || "Someone"} sent you a connection request.`,
         type: "connection",
-        action_url: `/profile/${profile.id}`
+        action_url: `/profile/${profile.id}`,
       });
-      
-      fetchUsers(); // Refresh to update UI state
+
+      fetchUsers();
     } catch (error) {
-      console.error('Error in handleConnect:', error);
+      console.error("Error in handleConnect:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -506,26 +489,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle message user
-  const handleMessage = async (userId: string, userName: string) => {
-    try {
-      // In production, implement messaging logic
-      // Navigate to messages or open chat
-      toast({
-        title: "Opening Chat",
-        description: `Starting conversation with ${userName}`,
-      });
-    } catch (error) {
-      console.error('Error opening chat:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to open chat. Please try again.",
-      });
-    }
-  };
-
-  // Handle like user
   const handleLike = async (userId: string, userName: string) => {
     try {
       if (!user?.id) {
@@ -546,19 +509,17 @@ export default function DiscoverPage() {
         return;
       }
 
-      const currentUserItem = users.find(u => u.id === userId);
+      const currentUserItem = users.find((u) => u.id === userId);
       const isCurrentlyLiked = currentUserItem?.is_liked || false;
 
       if (isCurrentlyLiked) {
-        // Remove notification if unliked
         await supabase
           .from("notifications")
           .delete()
           .eq("user_id", userId)
           .eq("action_url", `/profile/${profile.id}`)
           .eq("type", "profile");
-        
-        // Unliking
+
         const { error: deleteError } = await supabase
           .from("user_likes")
           .delete()
@@ -569,68 +530,56 @@ export default function DiscoverPage() {
 
         const currentLikesCount = currentUserItem?.likes_count || 0;
         const newLikesCount = Math.max(0, currentLikesCount - 1);
-        
-        // Update DB
+
         await supabase
           .from("profiles")
           .update({ likes_count: newLikesCount })
           .eq("id", userId);
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_liked: false, likes_count: newLikesCount }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.id === userId ? { ...u, is_liked: false, likes_count: newLikesCount } : u,
+          ),
         );
       } else {
-        // Liking
-        const { error: insertError } = await supabase
-          .from("user_likes")
-          .insert({
-            user_id: profile.id,
-            liked_user_id: userId,
-          });
+        const { error: insertError } = await supabase.from("user_likes").insert({
+          user_id: profile.id,
+          liked_user_id: userId,
+        });
 
         if (insertError) throw insertError;
-        
-        // Add notification for the user
+
         await supabase.from("notifications").insert({
           user_id: userId,
           title: "New Profile Like",
-          description: `${profile.full_name || profile.username || 'Someone'} liked your profile.`,
+          description: `${profile.full_name || profile.username || "Someone"} liked your profile.`,
           type: "profile",
-          action_url: `/profile/${profile.id}`
+          action_url: `/profile/${profile.id}`,
         });
 
         const currentLikesCount = currentUserItem?.likes_count || 0;
         const newLikesCount = currentLikesCount + 1;
 
-        // Update DB
         await supabase
           .from("profiles")
           .update({ likes_count: newLikesCount })
           .eq("id", userId);
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_liked: true, likes_count: newLikesCount }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.id === userId ? { ...u, is_liked: true, likes_count: newLikesCount } : u,
+          ),
         );
       }
 
       toast({
         title: isCurrentlyLiked ? "User Unliked" : "User Liked",
-        description: isCurrentlyLiked 
+        description: isCurrentlyLiked
           ? `You unliked ${userName}'s profile`
           : `You liked ${userName}'s profile`,
       });
     } catch (error) {
-      console.error('Error liking user:', error);
+      console.error("Error liking user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -639,7 +588,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle save user
   const handleSave = async (userId: string, userName: string) => {
     try {
       if (!user?.id) {
@@ -660,11 +608,10 @@ export default function DiscoverPage() {
         return;
       }
 
-      const currentUserItem = users.find(u => u.id === userId);
+      const currentUserItem = users.find((u) => u.id === userId);
       const isCurrentlySaved = currentUserItem?.is_saved || false;
 
       if (isCurrentlySaved) {
-        // Unsaving
         const { error: deleteError } = await supabase
           .from("user_saves")
           .delete()
@@ -673,43 +620,30 @@ export default function DiscoverPage() {
 
         if (deleteError) throw deleteError;
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_saved: false }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: false } : u)),
         );
       } else {
-        // Saving
-        const { error: insertError } = await supabase
-          .from("user_saves")
-          .insert({
-            user_id: profile.id,
-            saved_user_id: userId,
-          });
+        const { error: insertError } = await supabase.from("user_saves").insert({
+          user_id: profile.id,
+          saved_user_id: userId,
+        });
 
         if (insertError) throw insertError;
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_saved: true }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: true } : u)),
         );
       }
 
       toast({
         title: isCurrentlySaved ? "User Unsaved" : "User Saved",
-        description: isCurrentlySaved 
+        description: isCurrentlySaved
           ? `You unsaved ${userName}'s profile`
           : `You saved ${userName}'s profile`,
       });
     } catch (error) {
-      console.error('Error saving user:', error);
+      console.error("Error saving user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -718,7 +652,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle share user
   const handleShare = async (userId: string, userName: string) => {
     try {
       if (navigator.share) {
@@ -728,7 +661,6 @@ export default function DiscoverPage() {
           url: `${window.location.origin}/profile/${userId}`,
         });
       } else {
-        // Fallback: copy to clipboard
         await navigator.clipboard.writeText(`${window.location.origin}/profile/${userId}`);
         toast({
           title: "Link Copied",
@@ -736,7 +668,7 @@ export default function DiscoverPage() {
         });
       }
     } catch (error) {
-      console.error('Error sharing user:', error);
+      console.error("Error sharing user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -745,117 +677,59 @@ export default function DiscoverPage() {
     }
   };
 
-  const getExperienceColor = (level?: string) => {
-    switch (level) {
-      case "Senior":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "Mid":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "Entry":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  const getCategoryIcon = (category?: string) => {
-    if (!category) return <Briefcase className="w-4 h-4" />;
-    
-    // Film & Media Projects
-    if (category.includes("Film") || category.includes("Series") || category.includes("Documentaries")) {
-        return <Award className="w-4 h-4" />;
-    }
-    
-    // Direction & Production
-    if (category.includes("Director") || category.includes("Producer")) {
-        return <UserIcon className="w-4 h-4" />;
-    }
-    
-    // Cinematography & Camera
-    if (category.includes("Cinematographer") || category.includes("Camera") || category.includes("Gaffer")) {
-        return <Heart className="w-4 h-4" />;
-    }
-    
-    // Actors & Performers
-    if (category.includes("Actor") || category.includes("Artist") || category.includes("Dancer")) {
-      return <Star className="w-4 h-4" />;
-    }
-    
-    // Writing & Creative
-    if (category.includes("Writer") || category.includes("Lyricist")) {
-        return <GraduationCap className="w-4 h-4" />;
-    }
-    
-    // Music & Sound
-    if (category.includes("Music") || category.includes("Sound") || category.includes("Singer")) {
-      return <GraduationCap className="w-4 h-4" />;
-    }
-    
-    // Art & Design
-    if (category.includes("Designer") || category.includes("Stylist") || category.includes("Artist")) {
-      return <Heart className="w-4 h-4" />;
-    }
-    
-    // Editing & Post Production
-    if (category.includes("Editor") || category.includes("VFX") || category.includes("Graphics")) {
-      return <Globe className="w-4 h-4" />;
-    }
-    
-    // Marketing & Distribution
-    if (category.includes("Marketer") || category.includes("PR") || category.includes("Social")) {
-        return <Briefcase className="w-4 h-4" />;
-    }
-    
-    // Film Community & Support
-    if (category.includes("Festival") || category.includes("Workshop") || category.includes("Casting")) {
-      return <Users className="w-4 h-4" />;
-    }
-    
-    return <Briefcase className="w-4 h-4" />;
-  };
-
   return (
-    <AppLayout>
-      <div className="space-y-6 bg-yellow-50/50 dark:bg-background min-h-screen p-6 -m-6 transition-colors duration-200">
+    <AppLayout pageTitle="Talent Hub">
+      <div className="space-y-6 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white dark:bg-background p-6 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <FadeInSection className="bg-card p-6 rounded-xl shadow-soft border border-border/80">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 font-sans tracking-tight">Discover Creators</h1>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">
+              <h1 className="noir-heading-workspace mb-1">Discover Creators</h1>
+              <p className="text-muted-foreground text-sm">
                 Connect with talented filmmakers, artists, and creative professionals
               </p>
             </div>
-            <div className="flex items-center gap-4 w-full lg:w-auto">
+            <div className="flex items-center gap-3 w-full lg:w-auto">
               <div className="relative w-full max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="Search by name, skills, or location..."
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); resetPaging(); }}
-                  className="pl-10 h-11 border-yellow-200 dark:border-yellow-900/40 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 bg-white dark:bg-background dark:text-white"
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    resetPaging();
+                  }}
+                  className="pl-10 h-10"
                 />
               </div>
-              
+
               {/* Filter Sheet (Right Sidebar) */}
               <Sheet open={showFilters} onOpenChange={setShowFilters}>
                 <SheetTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="h-11 px-4 border-yellow-200 dark:border-yellow-900/40 hover:!bg-yellow-50 dark:hover:!bg-yellow-950/25 hover:!text-yellow-600 dark:hover:!text-yellow-400 text-gray-700 dark:text-gray-300 bg-white dark:bg-background relative shrink-0 animate-fade-in"
-                  >
-                    <Filter className="w-4 h-4 mr-2" />
+                  <Button variant="outline" className="h-10 px-4 relative shrink-0">
+                    <Filter className="w-4 h-4 mr-2 text-primary" />
                     Filters
-                    {(filterType !== "all" || categoryFilters.length > 0 || locationFilter || minLikes > 0 || sortType !== "recent") && (
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3 rounded-full bg-yellow-500 ring-2 ring-white dark:ring-gray-900 animate-pulse" />
-                    )}
+                    {(filterType !== "all" ||
+                      categoryFilters.length > 0 ||
+                      locationFilter ||
+                      minLikes > 0 ||
+                      sortType !== "recent") && (
+                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />
+                      )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-full sm:max-w-md flex flex-col h-full bg-white dark:bg-background border-l border-yellow-200 dark:border-yellow-900/40 p-0">
-                  <div className="p-6 border-b border-yellow-100 dark:border-yellow-900/20 flex items-center justify-between">
+                <SheetContent
+                  side="right"
+                  className="w-full sm:max-w-md flex flex-col h-full bg-card border-l border-border/80 p-0"
+                >
+                  <div className="p-6 border-b border-border/70 flex items-center justify-between pr-12">
                     <div>
-                      <SheetTitle className="text-lg font-bold text-gray-900 dark:text-white">Filter Creators</SheetTitle>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Refine your creative connections</p>
+                      <SheetTitle className="text-lg font-semibold text-foreground">
+                        Filter Creators
+                      </SheetTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Refine your creative connections
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
@@ -868,22 +742,30 @@ export default function DiscoverPage() {
                         setSortType("recent");
                         resetPaging();
                       }}
-                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 font-medium"
+                      className="text-xs text-muted-foreground hover:text-primary"
                     >
                       Reset All
                     </Button>
                   </div>
-                  
+
                   <ScrollArea className="flex-1 p-6">
                     <div className="space-y-6 pb-8">
                       {/* Filter by Type */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Filter by Type</label>
-                        <Select value={filterType} onValueChange={(value) => { setFilterType(value as FilterType); resetPaging(); }}>
-                          <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm">
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Filter by Type
+                        </label>
+                        <Select
+                          value={filterType}
+                          onValueChange={(value) => {
+                            setFilterType(value as FilterType);
+                            resetPaging();
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-background border-yellow-100 dark:border-yellow-900/40 text-gray-900 dark:text-white">
+                          <SelectContent>
                             <SelectItem value="all">All Users</SelectItem>
                             <SelectItem value="verified">Verified Only</SelectItem>
                             <SelectItem value="new">New Users (30 days)</SelectItem>
@@ -894,12 +776,20 @@ export default function DiscoverPage() {
 
                       {/* Sort by */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Sort by</label>
-                        <Select value={sortType} onValueChange={(value) => { setSortType(value as SortType); resetPaging(); }}>
-                          <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm">
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Sort by
+                        </label>
+                        <Select
+                          value={sortType}
+                          onValueChange={(value) => {
+                            setSortType(value as SortType);
+                            resetPaging();
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select sort" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-background border-yellow-100 dark:border-yellow-900/40 text-gray-900 dark:text-white">
+                          <SelectContent>
                             <SelectItem value="recent">Most Recent</SelectItem>
                             <SelectItem value="popular">Most Popular</SelectItem>
                             <SelectItem value="alphabetical">Alphabetical</SelectItem>
@@ -909,14 +799,19 @@ export default function DiscoverPage() {
 
                       {/* Location Filter */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Location</label>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Location
+                        </label>
                         <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                           <Input
                             placeholder="e.g. Austin, Toronto, Delhi..."
                             value={locationFilter}
-                            onChange={(e) => { setLocationFilter(e.target.value); resetPaging(); }}
-                            className="pl-9 border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm h-10"
+                            onChange={(e) => {
+                              setLocationFilter(e.target.value);
+                              resetPaging();
+                            }}
+                            className="pl-9 h-10"
                           />
                         </div>
                       </div>
@@ -924,19 +819,24 @@ export default function DiscoverPage() {
                       {/* Likes Count Slider */}
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Minimum Likes</label>
-                          <span className="text-xs font-bold bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-400 px-2.5 py-0.5 rounded-full border border-yellow-200 dark:border-yellow-900/30">
+                          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                            Minimum Likes
+                          </label>
+                          <Badge variant="outline" className="text-xs border-primary/30 text-primary">
                             {minLikes}+ Likes
-                          </span>
+                          </Badge>
                         </div>
                         <Slider
                           value={[minLikes]}
-                          onValueChange={(val) => { setMinLikes(val[0]); resetPaging(); }}
+                          onValueChange={(val) => {
+                            setMinLikes(val[0]);
+                            resetPaging();
+                          }}
                           max={250}
                           step={5}
-                          className="py-2 animate-pulse-slow"
+                          className="py-2"
                         />
-                        <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                           <span>0</span>
                           <span>125</span>
                           <span>250</span>
@@ -945,20 +845,26 @@ export default function DiscoverPage() {
 
                       {/* Categories Filter */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Categories</label>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Categories
+                        </label>
                         <CategoryDropdown
                           multiple
                           value={categoryFilters}
                           onChange={(vals) => setCategoryFilters(vals)}
-                          placeholder={categoryFilters.length === 0 ? "Select Categories..." : `${categoryFilters.length} Selected`}
+                          placeholder={
+                            categoryFilters.length === 0
+                              ? "Select Categories..."
+                              : `${categoryFilters.length} Selected`
+                          }
                         />
-                         {categoryFilters.length > 0 && (
-                          <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto mt-2 p-1.5 border border-dashed border-yellow-200 dark:border-yellow-900/40 rounded-md bg-yellow-50/30 dark:bg-yellow-950/20">
+                        {categoryFilters.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto mt-2 p-2 border border-dashed border-border/80 rounded-lg bg-surface-elevated/50">
                             {categoryFilters.map((cat) => (
                               <Badge
                                 key={cat}
                                 variant="secondary"
-                                className="text-[10px] bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30 pr-1 flex items-center gap-1"
+                                className="text-[11px] pr-1 flex items-center gap-1"
                               >
                                 {cat}
                                 <button
@@ -967,9 +873,9 @@ export default function DiscoverPage() {
                                     e.stopPropagation();
                                     handleToggleCategory(cat);
                                   }}
-                                  className="rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-900/40 p-0.5"
+                                  className="rounded-full hover:bg-surface-hover p-0.5"
                                 >
-                                  <X className="w-2.5 h-2.5 text-yellow-700 dark:text-yellow-400" />
+                                  <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
                                 </button>
                               </Badge>
                             ))}
@@ -982,248 +888,316 @@ export default function DiscoverPage() {
               </Sheet>
             </div>
           </div>
-        </div>
+        </FadeInSection>
 
         {/* Tabs Bar */}
-        <div className="flex justify-between items-center bg-white dark:bg-background p-2 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
-          <Tabs value={currentTab} onValueChange={(val) => { setCurrentTab(val as "discover" | "liked" | "saved"); resetPaging(); }} className="w-full sm:w-auto">
-            <TabsList className="bg-yellow-50/50 dark:bg-background border border-yellow-100 dark:border-yellow-900/40 p-1">
-              <TabsTrigger 
-                value="discover" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
+        <div className="flex justify-between items-center bg-card p-2.5 rounded-xl shadow-soft border border-border/80">
+          <Tabs
+            value={currentTab}
+            onValueChange={(val) => {
+              setCurrentTab(val as "discover" | "liked" | "saved");
+              resetPaging();
+            }}
+            className="w-full sm:w-auto"
+          >
+            <TabsList>
+              <TabsTrigger value="discover">
                 <Users className="w-4 h-4 mr-2" />
                 Discover
               </TabsTrigger>
-              <TabsTrigger 
-                value="liked" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
+              <TabsTrigger value="liked">
                 <Heart className="w-4 h-4 mr-2" />
                 Liked
               </TabsTrigger>
-              <TabsTrigger 
-                value="saved" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
+              <TabsTrigger value="saved">
                 <Bookmark className="w-4 h-4 mr-2" />
                 Saved
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mr-2 hidden sm:block font-mono">
-            {filtered.length} {filtered.length === 1 ? 'Creator' : 'Creators'} found
+
+          <div className="text-xs text-muted-foreground font-medium mr-2 hidden sm:block font-mono">
+            {filtered.length} {filtered.length === 1 ? "Creator" : "Creators"} found
           </div>
         </div>
 
         {/* Users Grid */}
-        <div className="bg-white dark:bg-background rounded-lg shadow-sm p-6 border border-yellow-100 dark:border-yellow-900/40">
+        <div>
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">Loading creators...</p>
+            <div className="text-center py-16 bg-card rounded-xl border border-border/80">
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+              <p className="text-muted-foreground text-sm">Loading creators...</p>
             </div>
           ) : pageItems.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">No creators found</h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">Try adjusting your search or filters to find more creators.</p>
+            <div className="text-center py-16 bg-card rounded-xl border border-border/80">
+              <Users className="w-12 h-12 text-muted-foreground/60 mx-auto mb-3" />
+              <h3 className="text-lg font-semibold mb-1.5 text-foreground">No creators found</h3>
+              <p className="text-muted-foreground text-sm">
+                Try adjusting your search or filters to find more creators.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pageItems.map((userItem) => (
-                <Card key={userItem.id} className="hover:shadow-lg transition-all duration-200 bg-white dark:bg-background border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden flex flex-col justify-between">
-                  <div>
-                    <CardHeader className="pb-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-12 w-12 border border-yellow-100 dark:border-yellow-900/40">
-                            <AvatarImage src={userItem.avatar_url} alt={userItem.full_name} />
-                            <AvatarFallback className="bg-yellow-100 dark:bg-yellow-950 text-yellow-600 dark:text-yellow-400 font-semibold text-sm">
-                              {userItem.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                              <span className="truncate">{userItem.full_name}</span>
-                              {userItem.tags?.map(skill => {
-                                const tagConfig = [
-                                  { label: "Verified", color: "bg-blue-50 text-blue-700 border-blue-200" },
-                                  { label: "Popular", color: "bg-green-50 text-green-700 border-green-200" },
-                                  { label: "Featured", color: "bg-purple-50 text-purple-700 border-purple-200" },
-                                  { label: "Trending", color: "bg-orange-50 text-orange-700 border-orange-200" },
-                                  { label: "Expert", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-                                  { label: "Mentor", color: "bg-pink-50 text-pink-700 border-pink-200" },
-                                  { label: "Influencer", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-                                  { label: "Rising Star", color: "bg-amber-50 text-amber-700 border-amber-200" }
-                                ].find(t => t.label === skill);
-                                if (!tagConfig) return null;
-                                return (
-                                  <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] px-2 py-0.5 rounded-full font-medium h-fit leading-tight`}>
-                                    {skill}
+              {pageItems.map((userItem, idx) => (
+                <StaggerItem key={userItem.id} index={idx} liftOnHover>
+                  <Card className="h-full border-border/80 bg-card hover:border-primary/40 hover:shadow-noir overflow-hidden flex flex-col justify-between group">
+                    <div>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <Avatar className="h-14 w-14 border border-primary/30 ring-2 ring-surface-elevated flex-shrink-0">
+                              <AvatarImage
+                                src={userItem.avatar_url}
+                                alt={userItem.full_name}
+                                className="object-cover"
+                              />
+                              <AvatarFallback className="bg-primary/15 text-primary font-semibold text-sm">
+                                {userItem.full_name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                                <span className="truncate">{userItem.full_name}</span>
+                                {userItem.is_verified && (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-primary/40 bg-primary/10 text-primary text-[10px] px-2 py-0"
+                                  >
+                                    Verified
                                   </Badge>
-                                );
-                              })}
-                            </CardTitle>
-                            <div className="mt-1 flex flex-col">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium flex-wrap">
-                                <span className="text-yellow-600 dark:text-yellow-500 font-semibold flex items-center gap-1.5">
-                                  @{userItem.username || userItem.full_name.toLowerCase().replace(/\s+/g, "")}
-                                </span>
-                                <span className="text-gray-300 dark:text-gray-700">•</span>
-                                <span className="text-gray-600 dark:text-gray-300 truncate">{userItem.role}</span>
-                              </div>
-                              {userItem.location && (
-                                <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center mt-0.5 truncate">
-                                  <MapPin className="w-3 h-3 mr-0.5 text-gray-300 dark:text-gray-600" />
-                                  {userItem.location}
+                                )}
+                                {userItem.tags?.map((skill) => {
+                                  const supportedLabels = [
+                                    "Verified",
+                                    "Popular",
+                                    "Featured",
+                                    "Trending",
+                                    "Expert",
+                                    "Mentor",
+                                    "Influencer",
+                                    "Rising Star",
+                                  ];
+                                  if (!supportedLabels.includes(skill)) return null;
+                                  return (
+                                    <Badge
+                                      key={skill}
+                                      variant="secondary"
+                                      className="text-[10px] px-2 py-0.5 rounded-full font-medium h-fit leading-tight"
+                                    >
+                                      {skill}
+                                    </Badge>
+                                  );
+                                })}
+                              </CardTitle>
+                              <div className="mt-1 flex flex-col">
+                                <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap">
+                                  <span className="text-primary font-semibold">
+                                    @
+                                    {userItem.username ||
+                                      userItem.full_name.toLowerCase().replace(/\s+/g, "")}
+                                  </span>
+                                  <span className="text-border">•</span>
+                                  <span className="text-muted-foreground truncate">
+                                    {userItem.role}
+                                  </span>
                                 </div>
-                              )}
+                                {userItem.location && (
+                                  <div className="text-xs text-muted-foreground/80 flex items-center mt-0.5 truncate">
+                                    <MapPin className="w-3 h-3 mr-1 text-primary/70 flex-shrink-0" />
+                                    {userItem.location}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {/* Like Button */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleLike(userItem.id, userItem.full_name)}
-                            className={`h-8 w-8 p-0 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-full transition-colors ${userItem.is_liked ? 'text-red-500 hover:text-red-600' : 'text-gray-400 dark:text-gray-500 hover:text-red-500'}`}
-                          >
-                            <Heart className={`w-4 h-4 ${userItem.is_liked ? 'fill-current animate-bounce-short' : ''}`} />
-                          </Button>
-                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 font-mono">{userItem.likes_count || 0}</span>
-                          
-                          {/* 3 Dots Menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-background border border-gray-100 dark:border-gray-800 shadow-md text-gray-900 dark:text-white">
-                              <DropdownMenuItem 
-                                onClick={() => handleSave(userItem.id, userItem.full_name)}
-                                className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
-                              >
-                                <Bookmark className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                {userItem.is_saved ? 'Unsave' : 'Save'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleShare(userItem.id, userItem.full_name)}
-                                className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
-                              >
-                                <Share2 className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                Share
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      {/* Bio */}
-                      {userItem.bio && (
-                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 leading-relaxed">{userItem.bio}</p>
-                      )}
-                      
-                      {/* Pricing and Experience */}
-                      {(userItem.total_experience || userItem.price_per_day || userItem.price_per_hour) && (
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {userItem.total_experience && (
-                            <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                              <Briefcase className="w-3 h-3 text-gray-500" />
-                              {userItem.total_experience}
-                            </span>
-                          )}
-                          {(userItem.price_per_day || userItem.price_per_hour) && (
-                            <span className="flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-500 px-2 py-1 rounded-md border border-yellow-200 dark:border-yellow-800/50">
-                              <Award className="w-3 h-3" />
-                              {userItem.price_per_hour ? `₹${userItem.price_per_hour}/hr` : ''}
-                              {userItem.price_per_hour && userItem.price_per_day ? ' • ' : ''}
-                              {userItem.price_per_day ? `₹${userItem.price_per_day}/day` : ''}
-                              {userItem.price_negotiable ? ' (Neg.)' : ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Skills - Only show 2 skills */}
-                      {userItem.skills && userItem.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {userItem.skills.slice(0, 2).map((skill, index) => (
-                            <Badge key={index} variant="outline" className="text-[10px] bg-yellow-50/40 dark:bg-yellow-950/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30">
-                              {skill}
-                            </Badge>
-                          ))}
-                          {userItem.skills.length > 2 && (
-                            <Badge variant="outline" className="text-[10px] bg-gray-50 dark:bg-background text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800">
-                              +{userItem.skills.length - 2} more
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </div>
-                  
-                  <CardContent className="pt-0 pb-4">
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 pt-2">
-                      {userItem.id !== user?.id && (
-                        userItem.connection_status === "accepted" ? (
-                          <Button
-                            className="flex-1 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/40 hover:bg-green-100 dark:hover:bg-green-950/30 font-medium text-xs h-9 transition-all cursor-default"
-                            size="sm"
-                          >
-                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                            Connected
-                          </Button>
-                        ) : userItem.connection_status === "pending" ? (
-                          userItem.connection_initiator === profile?.id ? (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Like Button */}
                             <Button
-                              className="flex-1 bg-gray-100 dark:bg-background text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-800 font-medium text-xs h-9 cursor-not-allowed"
+                              variant="ghost"
                               size="sm"
-                              disabled
+                              aria-label={userItem.is_liked ? "Unlike profile" : "Like profile"}
+                              onClick={() => handleLike(userItem.id, userItem.full_name)}
+                              className={`h-8 w-8 p-0 rounded-full ${userItem.is_liked
+                                  ? "text-primary hover:text-primary-hover"
+                                  : "text-muted-foreground hover:text-primary"
+                                }`}
                             >
-                              <Clock className="w-3.5 h-3.5 mr-1.5 text-gray-400 dark:text-gray-500" />
-                              Request Sent
+                              <Heart
+                                className={`w-4 h-4 ${userItem.is_liked ? "fill-current" : ""}`}
+                              />
                             </Button>
+                            <span className="text-xs font-semibold text-muted-foreground font-mono">
+                              {userItem.likes_count || 0}
+                            </span>
+
+                            {/* 3 Dots Menu */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label="More options"
+                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground rounded-full"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem
+                                  onClick={() => handleSave(userItem.id, userItem.full_name)}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Bookmark className="w-4 h-4 text-muted-foreground" />
+                                  {userItem.is_saved ? "Unsave" : "Save"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleShare(userItem.id, userItem.full_name)}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                                  Share
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="space-y-3.5">
+                        {/* Bio */}
+                        {userItem.bio && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                            {userItem.bio}
+                          </p>
+                        )}
+
+                        {/* Pricing and Experience */}
+                        {(userItem.total_experience ||
+                          userItem.price_per_day ||
+                          userItem.price_per_hour) && (
+                            <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                              {userItem.total_experience && (
+                                <span className="flex items-center gap-1 bg-surface-elevated border border-border/70 text-foreground/90 px-2.5 py-1 rounded-md">
+                                  <Briefcase className="w-3 h-3 text-muted-foreground" />
+                                  {userItem.total_experience}
+                                </span>
+                              )}
+                              {(userItem.price_per_day || userItem.price_per_hour) && (
+                                <span className="flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-1 rounded-md border border-primary/30">
+                                  <Award className="w-3 h-3" />
+                                  {userItem.price_per_hour ? `₹${userItem.price_per_hour}/hr` : ""}
+                                  {userItem.price_per_hour && userItem.price_per_day ? " • " : ""}
+                                  {userItem.price_per_day ? `₹${userItem.price_per_day}/day` : ""}
+                                  {userItem.price_negotiable ? " (Neg.)" : ""}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                        {/* Skills */}
+                        {userItem.skills && userItem.skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {userItem.skills.slice(0, 2).map((skill, index) => (
+                              <Badge
+                                key={index}
+                                variant="outline"
+                                className="text-[10px] border-border/80 bg-surface-elevated/60 text-foreground/90"
+                              >
+                                {skill}
+                              </Badge>
+                            ))}
+                            {userItem.skills.length > 2 && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-border/60 text-muted-foreground"
+                              >
+                                +{userItem.skills.length - 2} more
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </div>
+
+                    <CardContent className="pt-0 pb-4">
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-3 border-t border-border/60">
+                        {userItem.id !== user?.id &&
+                          (userItem.connection_status === "accepted" ? (
+                            <Button
+                              variant="secondary"
+                              className="flex-1 text-xs h-9 border-success/40 bg-success/15 text-success hover:bg-success/20 cursor-default"
+                              size="sm"
+                            >
+                              <Check className="w-3.5 h-3.5 mr-1.5" />
+                              Connected
+                            </Button>
+                          ) : userItem.connection_status === "pending" ? (
+                            userItem.connection_initiator === profile?.id ? (
+                              <Button
+                                variant="secondary"
+                                className="flex-1 text-xs h-9 cursor-not-allowed"
+                                size="sm"
+                                disabled
+                              >
+                                <Clock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                                Request Sent
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={() =>
+                                  handleConnect(
+                                    userItem.id,
+                                    userItem.full_name,
+                                    userItem.connection_status,
+                                    userItem.connection_initiator,
+                                  )
+                                }
+                                className="flex-1 text-xs h-9"
+                                size="sm"
+                              >
+                                <UserCheck className="w-3.5 h-3.5 mr-1.5" />
+                                Accept Request
+                              </Button>
+                            )
                           ) : (
                             <Button
-                              onClick={() => handleConnect(userItem.id, userItem.full_name, userItem.connection_status, userItem.connection_initiator)}
-                              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium text-xs transition-all h-9"
+                              onClick={() =>
+                                handleConnect(
+                                  userItem.id,
+                                  userItem.full_name,
+                                  userItem.connection_status,
+                                  userItem.connection_initiator,
+                                )
+                              }
+                              className="flex-1 text-xs h-9"
                               size="sm"
+                              disabled={
+                                userItem.allow_connections_from === "none" ||
+                                userItem.allow_connections_from === "connections"
+                              }
                             >
-                              <UserCheck className="w-3.5 h-3.5 mr-1.5" />
-                              Accept Request
+                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                              Connect
                             </Button>
-                          )
-                        ) : (
-                          <Button
-                            onClick={() => handleConnect(userItem.id, userItem.full_name, userItem.connection_status, userItem.connection_initiator)}
-                            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium text-xs transition-all h-9 disabled:opacity-50"
-                            size="sm"
-                            disabled={userItem.allow_connections_from === 'none' || userItem.allow_connections_from === 'connections'}
-                          >
-                            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                            Connect
-                          </Button>
-                        )
-                      )}
-                      <Button
-                        onClick={() => navigate(`/profile/${userItem.id}`)}
-                        variant="outline"
-                        className={`${userItem.id === user?.id ? "w-full" : "flex-1"} border-gray-300 dark:border-gray-700 bg-white dark:bg-background text-gray-700 dark:text-gray-200 hover:!bg-yellow-50 hover:!text-yellow-700 hover:!border-yellow-300 dark:hover:!bg-yellow-950/30 dark:hover:!text-yellow-400 dark:hover:!border-yellow-900/40 font-medium text-xs h-9 transition-all`}
-                        size="sm"
-                      >
-                        <UserIcon className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
-                        View Profile
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                          ))}
+                        <Button
+                          onClick={() => navigate(`/profile/${userItem.id}`)}
+                          variant="outline"
+                          className={`${userItem.id === user?.id ? "w-full" : "flex-1"} text-xs h-9`}
+                          size="sm"
+                        >
+                          <UserIcon className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                          View Profile
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </StaggerItem>
               ))}
             </div>
           )}
@@ -1231,30 +1205,31 @@ export default function DiscoverPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="bg-white dark:bg-background p-4 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
+          <div className="bg-card p-4 rounded-xl shadow-soft border border-border/80">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium font-mono">
-                Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} creators
+              <span className="text-xs text-muted-foreground font-medium font-mono">
+                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)}{" "}
+                of {filtered.length} creators
               </span>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={page <= 1} 
-                  onClick={() => setPage((p) => Math.max(1, p - 1))} 
-                  className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-background hover:bg-gray-50 dark:hover:bg-gray-800 text-xs h-8"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="text-xs h-8"
                 >
                   Previous
                 </Button>
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-bold px-3 font-mono">
+                <span className="text-xs text-foreground font-semibold px-3 font-mono">
                   Page {page} of {totalPages}
                 </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={page >= totalPages} 
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))} 
-                  className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-background hover:bg-gray-50 dark:hover:bg-gray-800 text-xs h-8"
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="text-xs h-8"
                 >
                   Next
                 </Button>

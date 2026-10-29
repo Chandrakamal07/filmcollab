@@ -58,12 +58,12 @@ export default function AdminDashboard() {
         if (profilesErr) throw profilesErr;
 
         // 2. Fetch jobs count
-        const { count: jobsCount, error: jobsErr } = await supabase
+        const { count: jobsCount } = await supabase
           .from("jobs")
           .select("id", { count: "exact", head: true });
         
         // 3. Fetch projects count
-        const { count: projectsCount, error: projectsErr } = await supabase
+        const { count: projectsCount } = await supabase
           .from("projects")
           .select("id", { count: "exact", head: true });
 
@@ -160,42 +160,42 @@ export default function AdminDashboard() {
       value: loading ? "..." : stats.totalUsers,
       icon: Users,
       description: "Active members in platform",
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       title: "Total Jobs",
       value: loading ? "..." : stats.totalJobs,
       icon: FileText,
       description: "Career opportunities",
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       title: "Total Projects",
       value: loading ? "..." : stats.totalProjects,
       icon: FileText,
       description: "Film & creative listings",
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       title: "Total Tickets",
       value: loading ? "..." : stats.totalTickets,
       icon: Shield,
       description: "Pending support requests",
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       title: "Total Team Members",
       value: loading ? "..." : stats.totalTeamMembers,
       icon: Users,
       description: "Authorized administrators",
-      color: "text-yellow-600"
+      color: "text-primary"
     },
     {
       title: "Total Categories",
       value: loading ? "..." : stats.totalCategories,
       icon: FileText,
       description: "Creative industry sectors",
-      color: "text-yellow-600"
+      color: "text-primary"
     }
   ];
 
@@ -203,12 +203,13 @@ export default function AdminDashboard() {
     <AdminLayout pageTitle="Admin Dashboard">
       <div className="space-y-8">
         {/* Welcome Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
+            <p className="noir-eyebrow mb-1">Executive Command</p>
+            <h1 className="text-3xl font-display font-bold text-foreground tracking-tight">
               Welcome back, {profile?.first_name || profile?.full_name || 'Admin'}!
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-muted-foreground mt-2 text-sm">
               Here is your live system overview, user registration growth, and category distributions.
             </p>
           </div>
@@ -217,15 +218,17 @@ export default function AdminDashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {adminStats.map((stat, index) => (
-            <Card key={index} className="hover:shadow-soft transition-shadow border-border/50">
+            <Card key={index} className="noir-card border-border/80 bg-card hover:border-primary/30 transition-colors">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
                 </CardTitle>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center">
+                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+                <div className="text-2xl font-bold font-mono text-foreground">{stat.value}</div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stat.description}
                 </p>
@@ -237,55 +240,55 @@ export default function AdminDashboard() {
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* User Registration Trend Graph */}
-          <Card className="hover:shadow-soft transition-shadow border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                <TrendingUp className="h-5 w-5 text-yellow-600" />
+          <Card className="noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="flex items-center gap-2 text-xl font-display font-bold">
+                <TrendingUp className="h-5 w-5 text-primary" />
                 User Registration Trend
               </CardTitle>
               <CardDescription>
                 Growth of creative users on the platform
               </CardDescription>
             </CardHeader>
-            <CardContent className="h-[300px]">
+            <CardContent className="h-[300px] pt-6">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats.userTrendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="userGrowthGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#E9B457" stopOpacity={0.35}/>
+                      <stop offset="95%" stopColor="#E9B457" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
                   <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: "rgba(255, 255, 255, 0.95)", 
-                      border: "1px solid #e2e8f0",
+                      backgroundColor: "hsl(var(--card))", 
+                      border: "1px solid hsl(var(--border))",
                       borderRadius: "8px",
-                      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                      color: "hsl(var(--foreground))"
                     }}
-                    labelClassName="font-semibold text-gray-800"
+                    labelClassName="font-semibold text-foreground"
                   />
-                  <Area type="monotone" dataKey="users" stroke="#eab308" strokeWidth={2} fillOpacity={1} fill="url(#userGrowthGrad)" />
+                  <Area type="monotone" dataKey="users" stroke="#E9B457" strokeWidth={2} fillOpacity={1} fill="url(#userGrowthGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
           {/* Users by Category Distribution Graph */}
-          <Card className="hover:shadow-soft transition-shadow border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl font-bold">
-                <BarChart3 className="h-5 w-5 text-yellow-600" />
+          <Card className="noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="flex items-center gap-2 text-xl font-display font-bold">
+                <BarChart3 className="h-5 w-5 text-primary" />
                 Users by Category
               </CardTitle>
               <CardDescription>
                 Distribution of creative skills across registered users
               </CardDescription>
             </CardHeader>
-            <CardContent className="h-[300px]">
+            <CardContent className="h-[300px] pt-6">
               {stats.categoryData.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   No categories recorded yet
@@ -293,19 +296,19 @@ export default function AdminDashboard() {
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.categoryData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
                     <XAxis dataKey="name" stroke="#888888" fontSize={10} tickLine={false} axisLine={false} />
                     <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ 
-                        backgroundColor: "rgba(255, 255, 255, 0.95)", 
-                        border: "1px solid #e2e8f0",
+                        backgroundColor: "hsl(var(--card))", 
+                        border: "1px solid hsl(var(--border))",
                         borderRadius: "8px",
-                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                        color: "hsl(var(--foreground))"
                       }}
-                      labelClassName="font-semibold text-gray-800"
+                      labelClassName="font-semibold text-foreground"
                     />
-                    <Bar dataKey="value" name="Users" fill="#eab308" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="value" name="Users" fill="#E9B457" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

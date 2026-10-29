@@ -2,17 +2,18 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Film, Eye, EyeOff, ArrowLeft, Shield } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FadeInSection } from "@/components/ui/motion-primitives";
 
 const adminSignInSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters")
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 type AdminSignInFormData = z.infer<typeof adminSignInSchema>;
@@ -20,19 +21,18 @@ type AdminSignInFormData = z.infer<typeof adminSignInSchema>;
 export default function AdminSignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, user, profile, userRole, loading: authLoading, isAdmin, signInAsGuest } = useAuth();
+  const { signIn, user, userRole, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   // Handle role-based redirect after successful sign in
   useEffect(() => {
     if (user && !authLoading && userRole) {
-      console.log('Admin signin - checking role:', userRole);
+      console.log("Admin signin - checking role:", userRole);
       if (isAdmin()) {
-        console.log('Redirecting to admin dashboard');
+        console.log("Redirecting to admin dashboard");
         navigate("/admin-dashboard");
       } else {
-        console.log('Not admin, redirecting to user dashboard');
-        // If user is not admin, redirect to regular dashboard with error
+        console.log("Not admin, redirecting to user dashboard");
         navigate("/dashboard");
       }
     }
@@ -42,21 +42,19 @@ export default function AdminSignIn() {
     resolver: zodResolver(adminSignInSchema),
     defaultValues: {
       email: "",
-      password: ""
-    }
+      password: "",
+    },
   });
 
   const onSubmit = async (data: AdminSignInFormData) => {
     setLoading(true);
     try {
-      // Use Supabase authentication - no hardcoded credentials
       const { error } = await signIn(data.email, data.password);
-      
+
       if (error) {
         console.error("Admin sign in error:", error);
       } else {
-        // Navigation will be handled by the useEffect above after role check
-        console.log('Sign in successful, checking admin role...');
+        console.log("Sign in successful, checking admin role...");
       }
     } catch (error) {
       console.error("Admin sign in error:", error);
@@ -66,32 +64,34 @@ export default function AdminSignIn() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-yellow-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-background text-foreground noir-backdrop film-grain flex items-center justify-center p-6 relative">
+      <FadeInSection className="w-full max-w-md relative z-10">
         {/* Back button */}
         <Button
           variant="ghost"
-          className="mb-4 text-gray-600 hover:text-yellow-600"
+          className="mb-4 text-muted-foreground hover:text-foreground"
           onClick={() => navigate("/")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Home
         </Button>
 
-        <Card className="shadow-elegant border-yellow-200 bg-white">
-          <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-white" />
+        <Card className="shadow-noir-lg border-border/80 bg-card/95 backdrop-blur-md">
+          <CardHeader className="text-center pb-4">
+            <div className="flex items-center justify-center gap-2.5 mb-4">
+              <div className="h-10 w-10 rounded-xl border border-primary/40 bg-primary/15 text-primary flex items-center justify-center">
+                <Shield className="h-5 w-5" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
                 Admin Portal
               </h1>
             </div>
-            <CardTitle className="text-gray-900">Administrator Sign In</CardTitle>
-            <CardDescription className="text-gray-600">Access the admin dashboard</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Administrator Sign In</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Access the admin dashboard
+            </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -100,14 +100,9 @@ export default function AdminSignIn() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-gray-700">Admin Email</FormLabel>
+                      <FormLabel className="text-foreground/90">Admin Email</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="admin@gmail.com"
-                          className="border-yellow-200 focus:border-yellow-500"
-                          {...field}
-                        />
+                        <Input type="email" placeholder="admin@gmail.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -119,26 +114,27 @@ export default function AdminSignIn() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-gray-700">Password</FormLabel>
+                      <FormLabel className="text-foreground/90">Password</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
                             placeholder="Enter admin password"
-                            className="border-yellow-200 focus:border-yellow-500"
+                            className="pr-10"
                             {...field}
                           />
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
                             onClick={() => setShowPassword(!showPassword)}
                           >
                             {showPassword ? (
-                              <EyeOff className="h-4 w-4 text-gray-500" />
+                              <EyeOff className="h-4 w-4" />
                             ) : (
-                              <Eye className="h-4 w-4 text-gray-500" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
@@ -148,38 +144,32 @@ export default function AdminSignIn() {
                   )}
                 />
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                  disabled={loading}
-                >
+                <Button type="submit" className="w-full h-11 font-semibold" disabled={loading}>
                   {loading ? "Signing in..." : "Sign In as Admin"}
                 </Button>
               </form>
             </Form>
 
-
-
             <div className="mt-6 text-center space-y-4">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Use demo credentials or{" "}
                 <Button
                   variant="link"
-                  className="p-0 h-auto text-yellow-600 hover:text-yellow-700"
+                  className="p-0 h-auto text-primary hover:text-primary-hover font-medium"
                   onClick={() => navigate("/admin-signup")}
                 >
                   create admin account
                 </Button>
               </div>
-              
-              <div className="text-xs text-gray-500 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                <Shield className="h-3 w-3 inline mr-1 text-yellow-600" />
+
+              <div className="text-xs text-muted-foreground bg-surface-elevated p-3 rounded-lg border border-border/80">
+                <Shield className="h-3.5 w-3.5 inline mr-1.5 text-primary" />
                 Admin accounts must be created with admin role in database
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
+      </FadeInSection>
     </div>
   );
 }

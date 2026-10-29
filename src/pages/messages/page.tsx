@@ -835,12 +835,12 @@ export default function MessagesPage() {
         />
 
         {/* Left column: Directory Sidebar */}
-        <Card id="messages-sidebar" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-sm border border-border ${
+        <Card id="messages-sidebar" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 ${
           isMobileChatOpen ? "hidden lg:flex" : "flex"
         }`}>
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b border-border/80 bg-surface-elevated/30">
             <div className="flex items-center justify-between mb-2">
-              <h1 className="text-xl font-bold tracking-tight text-foreground">Messages</h1>
+              <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Messages</h1>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
               Chat with connected film professionals
@@ -851,7 +851,7 @@ export default function MessagesPage() {
                 placeholder="Search messages..."
                 value={convSearch}
                 onChange={(e) => setConvSearch(e.target.value)}
-                className="pl-9 h-9 border-border bg-background text-foreground rounded-lg focus-visible:ring-yellow-500 text-sm"
+                className="pl-9 h-9 border-border/80 bg-surface-elevated/60 text-foreground rounded-lg focus-visible:ring-primary text-sm"
               />
             </div>
           </div>
@@ -859,7 +859,7 @@ export default function MessagesPage() {
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin text-yellow-500 mb-2" />
+                <Loader2 className="w-6 h-6 animate-spin text-primary mb-2" />
                 <span className="text-xs">Loading conversations...</span>
               </div>
             ) : (
@@ -874,8 +874,8 @@ export default function MessagesPage() {
                       key={c.id}
                       className={`group w-full rounded-xl p-3 flex items-start gap-3 transition-all relative ${
                         isActive 
-                          ? "bg-yellow-500/10 border-l-4 border-yellow-500" 
-                          : "hover:bg-muted/40 border-l-4 border-transparent"
+                          ? "bg-primary/10 border-l-4 border-primary" 
+                          : "hover:bg-surface-hover border-l-4 border-transparent"
                       }`}
                     >
                       <button
@@ -886,7 +886,7 @@ export default function MessagesPage() {
                           {c.avatarUrl ? (
                             <img src={c.avatarUrl} alt={c.username} className="w-11 h-11 rounded-full object-cover border border-border" />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
+                            <div className="w-11 h-11 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center justify-center text-sm font-semibold shadow-sm">
                               {c.avatar}
                             </div>
                           )}
@@ -894,7 +894,7 @@ export default function MessagesPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="font-semibold text-foreground text-sm truncate">{c.username}</span>
-                            <span className="text-[10px] text-muted-foreground font-medium">
+                            <span className="font-mono text-[10px] text-muted-foreground font-medium">
                               {lastTs ? formatTime(lastTs) : ""}
                             </span>
                           </div>
@@ -903,7 +903,7 @@ export default function MessagesPage() {
                               {last}
                             </p>
                             {c.unread > 0 && (
-                              <span className="bg-yellow-600 text-white text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center flex-shrink-0">
+                              <span className="bg-primary text-primary-foreground font-mono text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center flex-shrink-0">
                                 {c.unread}
                               </span>
                             )}
@@ -926,13 +926,13 @@ export default function MessagesPage() {
         </Card>
 
         {/* Right column: Chat Window */}
-        <Card id="messages-chat-window" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-sm border border-border ${
+        <Card id="messages-chat-window" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 ${
           isMobileChatOpen ? "flex" : "hidden lg:flex"
         }`}>
           {activeConv ? (
             <>
               {/* Chat Header */}
-              <div className="border-b border-border p-4 flex items-center justify-between bg-card z-10 shadow-xs">
+              <div className="border-b border-border/80 p-4 flex items-center justify-between bg-surface-elevated/30 z-10 shadow-xs">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setIsMobileChatOpen(false)}
@@ -947,15 +947,15 @@ export default function MessagesPage() {
                   >
                     <div className="relative">
                       {activeConv.avatarUrl ? (
-                        <img src={activeConv.avatarUrl} alt={activeConv.username} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 group-hover:ring-yellow-500 transition-all" />
+                        <img src={activeConv.avatarUrl} alt={activeConv.username} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 group-hover:ring-primary transition-all" />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm group-hover:ring-2 group-hover:ring-yellow-500 transition-all">
+                        <div className="w-10 h-10 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center justify-center text-sm font-semibold shadow-sm group-hover:ring-2 group-hover:ring-primary transition-all">
                           {activeConv.avatar}
                         </div>
                       )}
                     </div>
                     <div>
-                      <h2 className="font-bold text-foreground leading-tight text-sm md:text-base group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition-colors">{activeConv.username}</h2>
+                      <h2 className="font-bold text-foreground leading-tight text-sm md:text-base group-hover:text-primary transition-colors">{activeConv.username}</h2>
                     </div>
                   </div>
                 </div>
@@ -991,14 +991,14 @@ export default function MessagesPage() {
               </div>
 
               {/* Chat Body messages stream */}
-              <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
+              <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/60">
                 <div className="text-center pb-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={loadOlder}
                     disabled={loadingOlder}
-                    className="border-border text-foreground hover:bg-card hover:border-yellow-500 text-xs h-7 rounded-lg transition-colors"
+                    className="border-border/80 text-foreground hover:bg-surface-hover hover:border-primary/40 text-xs h-7 rounded-lg transition-colors"
                   >
                     {loadingOlder ? (
                       <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
@@ -1021,7 +1021,7 @@ export default function MessagesPage() {
                       <React.Fragment key={m.id}>
                         {showDateHeader && (
                           <div className="flex justify-center my-4">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-card border border-border rounded-full px-2.5 py-1 shadow-2xs">
+                            <span className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-surface-elevated border border-border/80 rounded-full px-3 py-1 shadow-2xs">
                               {dateStr}
                             </span>
                           </div>
@@ -1032,8 +1032,8 @@ export default function MessagesPage() {
                             <div
                               className={`rounded-2xl px-4 py-2.5 text-sm shadow-2xs border ${
                                 isMe
-                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-transparent rounded-tr-none"
-                                  : "bg-card text-card-foreground border-border rounded-tl-none"
+                                  ? "bg-primary text-primary-foreground border-transparent rounded-tr-none"
+                                  : "bg-surface-elevated text-foreground border-border/70 rounded-tl-none"
                               }`}
                             >
                               {m.type === "text" && <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>}
@@ -1063,7 +1063,7 @@ export default function MessagesPage() {
 
                               {m.type === "document" && (
                                 <div className="flex items-center gap-3 py-1">
-                                  <div className="p-2 bg-yellow-100 rounded-lg text-yellow-700">
+                                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                                     <FileText className="w-5 h-5" />
                                   </div>
                                   <div className="min-w-0 text-left">
@@ -1093,16 +1093,16 @@ export default function MessagesPage() {
                               )}
 
                               <div className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] ${
-                                isMe ? "text-yellow-100" : "text-muted-foreground"
+                                isMe ? "text-primary-foreground/80 font-mono" : "text-muted-foreground font-mono"
                               }`}>
                                 <span>{formatTime(m.timestamp)}</span>
                                 {isMe && (
                                   m.id.startsWith('msg_temp_') ? (
-                                    <Check className="w-3.5 h-3.5 text-yellow-200/70" />
+                                    <Check className="w-3.5 h-3.5 text-primary-foreground/70" />
                                   ) : m.read ? (
-                                    <CheckCheck className="w-3.5 h-3.5 text-yellow-100" />
+                                    <CheckCheck className="w-3.5 h-3.5 text-primary-foreground" />
                                   ) : (
-                                    <CheckCheck className="w-3.5 h-3.5 text-yellow-200/70" />
+                                    <CheckCheck className="w-3.5 h-3.5 text-primary-foreground/70" />
                                   )
                                 )}
                               </div>
@@ -1119,9 +1119,9 @@ export default function MessagesPage() {
                   <div className="flex justify-start">
                     <div className="bg-card border border-border rounded-2xl rounded-tl-none px-4 py-2 text-xs text-muted-foreground flex items-center gap-1.5 shadow-2xs">
                       <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
                       </div>
                       <span>{activeConv.username} is typing...</span>
                     </div>
@@ -1141,7 +1141,7 @@ export default function MessagesPage() {
                     
                     <button
                       onClick={() => triggerAttachmentSelection("image")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <ImageIcon className="w-4 h-4 text-blue-500" />
                       Image File
@@ -1149,7 +1149,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("video")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <VideoIcon className="w-4 h-4 text-red-500" />
                       Video File
@@ -1157,7 +1157,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("document")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <FileText className="w-4 h-4 text-green-500" />
                       Document
@@ -1165,7 +1165,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("audio")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <Music className="w-4 h-4 text-purple-500" />
                       Audio File
@@ -1180,8 +1180,8 @@ export default function MessagesPage() {
                     onClick={() => setAttachMenuOpen((s) => !s)}
                     className={`h-10 w-10 rounded-xl flex-shrink-0 transition-all ${
                       attachMenuOpen
-                        ? "bg-yellow-50 border-yellow-300 text-yellow-600"
-                        : "border-border text-muted-foreground hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60"
+                        ? "bg-primary/15 border-primary/40 text-primary"
+                        : "border-border/80 text-muted-foreground hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
                     }`}
                   >
                     {attachMenuOpen ? <X className="w-4 h-4" /> : <Paperclip className="w-4 h-4" />}
@@ -1196,13 +1196,13 @@ export default function MessagesPage() {
                       }
                     }}
                     placeholder={`Message ${activeConv.username}...`}
-                    className="flex-1 h-10 border-border bg-background text-foreground rounded-xl focus-visible:ring-yellow-500 text-sm px-4"
+                    className="flex-1 h-10 border-border/80 bg-surface-elevated/60 text-foreground rounded-xl focus-visible:ring-primary text-sm px-4"
                   />
 
                   <Button
                     onClick={() => sendMessage()}
                     disabled={!input.trim()}
-                    className="h-10 px-5 rounded-xl bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all"
+                    className="h-10 px-5 rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline text-xs font-semibold">Send</span>
@@ -1212,9 +1212,9 @@ export default function MessagesPage() {
             </>
           ) : (
             // Empty State
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-muted/20">
-              <div className="max-w-md p-6 bg-card border border-border rounded-2xl shadow-xs">
-                <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-background/60">
+              <div className="max-w-md p-6 bg-card border border-border/80 rounded-2xl shadow-noir">
+                <div className="w-12 h-12 bg-primary/15 text-primary border border-primary/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-6 h-6" />
                 </div>
                 <h3 className="text-base font-bold text-foreground mb-1">Start a Conversation</h3>
@@ -1257,7 +1257,7 @@ export default function MessagesPage() {
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
                   placeholder="Provide specific details about harassment, spam, or inappropriate behavior..."
-                  className="w-full min-h-[100px] p-3 text-sm border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-background text-foreground"
+                  className="w-full min-h-[100px] p-3 text-sm border border-border/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-surface-elevated/50 text-foreground"
                 />
               </div>
             </div>

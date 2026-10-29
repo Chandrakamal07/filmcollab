@@ -1,12 +1,11 @@
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -18,15 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Eye, 
   Trash2,
   CheckCircle,
-  X,
   Clock,
   Play,
   Search,
   Tags,
-  User,
   Check,
   MoreVertical,
   Bell,
@@ -99,7 +95,7 @@ export default function AdminProjects() {
       const { data, error } = await supabase.from("global_tags").select("name").order("name");
       if (error && error.code !== '42P01') throw error;
       if (data) {
-        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-gray-100 text-gray-800" })));
+        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-surface-elevated text-foreground border border-border/80" })));
       }
     } catch (error) {
       console.error("Error fetching global tags:", error);
@@ -114,7 +110,6 @@ export default function AdminProjects() {
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case "Active":
-        return "secondary";
       case "Pending":
         return "secondary";
       case "Rejected":
@@ -138,7 +133,6 @@ export default function AdminProjects() {
         return Clock;
     }
   };
-
 
   const handleUpdateStatus = async (projectId: string, newStatus: string) => {
     try {
@@ -231,8 +225,8 @@ export default function AdminProjects() {
     });
   };
 
-  const getTagBadgeStyle = (tag: string): string => {
-    return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+  const getTagBadgeStyle = (_tag: string): string => {
+    return "bg-surface-elevated text-foreground border border-border/80";
   };
 
   const handleOpenNotify = (project: any, creator: any) => {
@@ -316,10 +310,11 @@ export default function AdminProjects() {
     <AdminLayout pageTitle="Projects Management" pageName="Projects">
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Projects Management</h1>
-            <p className="text-muted-foreground mt-1">Approve or reject project listings</p>
+            <p className="noir-eyebrow mb-1">Production Registry</p>
+            <h1 className="text-3xl font-display font-bold text-foreground">Projects Management</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Approve or reject project listings</p>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -329,13 +324,13 @@ export default function AdminProjects() {
                 placeholder="Search projects..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-9"
+                className="pl-9 h-9 bg-surface-elevated border-border/80"
               />
             </div>
             
             <div className="flex items-center gap-2">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[130px] h-9">
+                <SelectTrigger className="w-[140px] h-9 bg-surface-elevated border-border/80">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -349,7 +344,7 @@ export default function AdminProjects() {
               </Select>
               
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[110px] h-9">
+                <SelectTrigger className="w-[120px] h-9 bg-surface-elevated border-border/80">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -363,13 +358,13 @@ export default function AdminProjects() {
         </div>
 
         {/* Main Content Card */}
-        <Card>
+        <Card className="noir-card border-border/80 bg-card">
           <CardContent className="space-y-6 pt-6">
             {/* Projects Table */}
-            <div className="border rounded-lg">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Project ID</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Project Type</TableHead>
@@ -384,13 +379,13 @@ export default function AdminProjects() {
                   {loading ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto"></div>
-                        <p className="mt-2 text-sm text-gray-500">Loading projects...</p>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                        <p className="mt-2 text-sm text-muted-foreground">Loading projects...</p>
                       </TableCell>
                     </TableRow>
                   ) : filteredProjects.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No projects found matching your criteria.
                       </TableCell>
                     </TableRow>
@@ -400,15 +395,15 @@ export default function AdminProjects() {
                     const creator = profiles.find((p: any) => p.id === project.created_by);
                     
                     return (
-                      <TableRow key={project.id}>
-                        <TableCell className="font-medium text-muted-foreground whitespace-nowrap">
+                      <TableRow key={project.id} className="border-border/60 hover:bg-surface-hover/50">
+                        <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                           {generateProjectId(project.id)}
                         </TableCell>
                         <TableCell>
-                          <span className="font-medium">{project.title}</span>
+                          <span className="font-medium text-foreground">{project.title}</span>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 hover:bg-yellow-100 whitespace-nowrap">
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 whitespace-nowrap">
                             {project.project_type || project.category || "Uncategorized"}
                           </Badge>
                         </TableCell>
@@ -419,7 +414,7 @@ export default function AdminProjects() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm font-medium whitespace-nowrap">
+                          <span className="text-sm font-mono font-medium text-foreground whitespace-nowrap">
                             {project.budget_min || project.budget_max 
                               ? `${project.budget_currency || '₹'} ${project.budget_min || 0} - ${project.budget_max || 0}`
                               : 'Not Specified'}
@@ -430,12 +425,12 @@ export default function AdminProjects() {
                             <div className="flex items-center gap-2">
                               <Avatar className="h-8 w-8">
                                 <AvatarImage src={creator.avatar_url || ""} />
-                                <AvatarFallback className="bg-yellow-100 text-yellow-700 text-xs">
+                                <AvatarFallback className="bg-primary/15 text-primary text-xs">
                                   {creator.username?.substring(0, 2).toUpperCase() || "U"}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex flex-col">
-                                <span className="text-sm font-medium">{creator.full_name || creator.username}</span>
+                                <span className="text-sm font-medium text-foreground">{creator.full_name || creator.username}</span>
                               </div>
                             </div>
                           ) : (
@@ -458,11 +453,11 @@ export default function AdminProjects() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 rounded-full hover:bg-yellow-50 shrink-0"
+                              className="h-7 w-7 rounded-full hover:bg-primary/10 shrink-0"
                               title="Edit Tags"
                               onClick={() => handleEditTags(project.id, Array.isArray(project.project_tags) ? project.project_tags : [])}
                             >
-                              <Tags className="h-3.5 w-3.5 text-yellow-600" />
+                              <Tags className="h-3.5 w-3.5 text-primary" />
                             </Button>
                           </div>
                         </TableCell>
@@ -471,30 +466,30 @@ export default function AdminProjects() {
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
                                 <span className="sr-only">Open menu</span>
-                                <MoreVertical className="h-4 w-4 text-gray-500" />
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-card border-border/80">
                               <DropdownMenuItem onClick={() => handleOpenNotify(project, creator)}>
-                                <Bell className="mr-2 h-4 w-4 text-blue-500" />
+                                <Bell className="mr-2 h-4 w-4 text-primary" />
                                 Notify Creator
                               </DropdownMenuItem>
                               
                               {status !== 'blocked' ? (
                                 <DropdownMenuItem onClick={() => handleUpdateStatus(project.id, 'blocked')}>
-                                  <Ban className="mr-2 h-4 w-4 text-orange-500" />
+                                  <Ban className="mr-2 h-4 w-4 text-amber-500" />
                                   Block Project
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem onClick={() => handleUpdateStatus(project.id, 'open')}>
-                                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                  <CheckCircle className="mr-2 h-4 w-4 text-emerald-500" />
                                   Unblock Project
                                 </DropdownMenuItem>
                               )}
                               
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteProject(project.id)}
-                                className="text-red-600 focus:text-red-700"
+                                className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete Project
@@ -514,7 +509,7 @@ export default function AdminProjects() {
               <span>Showing {projects.length} projects</span>
               <div className="flex items-center gap-2">
                 <span>Rows per page:</span>
-                <select className="w-16 h-8 px-2 border rounded text-sm">
+                <select className="w-16 h-8 px-2 border border-border/80 bg-surface-elevated text-foreground rounded text-sm">
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
@@ -527,29 +522,30 @@ export default function AdminProjects() {
         
         {/* Notify Dialog */}
         <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
             <DialogHeader>
-              <DialogTitle>Send Notification</DialogTitle>
+              <DialogTitle className="font-display">Send Notification</DialogTitle>
               <DialogDescription>
                 Send a direct notification to {notifyUser?.full_name || notifyUser?.username || 'the creator'}.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Title</label>
+                <label className="text-sm font-medium text-foreground">Title</label>
                 <Input
                   placeholder="Notification title..."
                   value={notificationTitle}
                   onChange={(e) => setNotificationTitle(e.target.value)}
+                  className="bg-surface-elevated border-border/80"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Message</label>
+                <label className="text-sm font-medium text-foreground">Message</label>
                 <Textarea
                   placeholder="Type your message here..."
                   value={notificationMessage}
                   onChange={(e) => setNotificationMessage(e.target.value)}
-                  className="min-h-[100px]"
+                  className="min-h-[100px] bg-surface-elevated border-border/80"
                 />
               </div>
             </div>
@@ -558,7 +554,7 @@ export default function AdminProjects() {
                 Cancel
               </Button>
               <Button 
-                className="bg-yellow-500 hover:bg-yellow-600" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                 onClick={handleSendNotification}
                 disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}
               >
@@ -570,15 +566,15 @@ export default function AdminProjects() {
 
         {/* Edit Tags Dialog */}
         <Dialog open={editingTags !== null} onOpenChange={(open) => !open && setEditingTags(null)}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
             <DialogHeader>
-              <DialogTitle>Edit Project Tags</DialogTitle>
+              <DialogTitle className="font-display">Edit Project Tags</DialogTitle>
               <DialogDescription>
                 Assign or remove global tags for this project.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
-              <Command className="border rounded-md">
+              <Command className="border border-border/80 rounded-md bg-surface-elevated">
                 <CommandInput placeholder="Search tags..." />
                 <CommandEmpty>No tags found.</CommandEmpty>
                 <CommandGroup className="max-h-[200px] overflow-y-auto">
@@ -592,9 +588,9 @@ export default function AdminProjects() {
                       >
                         <div className={cn(
                           "flex h-4 w-4 items-center justify-center rounded border",
-                          isSelected ? "bg-yellow-500 border-yellow-500" : "border-gray-200"
+                          isSelected ? "bg-primary border-primary" : "border-border"
                         )}>
-                          {isSelected && <Check className="h-3 w-3 text-white" />}
+                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                         </div>
                         <Badge 
                           variant="secondary"
@@ -613,7 +609,7 @@ export default function AdminProjects() {
                 Cancel
               </Button>
               <Button 
-                className="bg-yellow-500 hover:bg-yellow-600 text-white" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                 onClick={() => {
                   if (editingTags) {
                     handleSaveProjectTags(editingTags.id);

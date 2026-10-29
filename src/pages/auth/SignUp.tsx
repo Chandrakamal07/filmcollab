@@ -10,18 +10,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
+import { FadeInSection } from "@/components/ui/motion-primitives";
 
-const signUpSchema = z.object({
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  role: z.string().min(1, "Please select a role"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string()
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
+const signUpSchema = z
+  .object({
+    firstName: z.string().min(2, "First name must be at least 2 characters"),
+    lastName: z.string().min(2, "Last name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email address"),
+    role: z.string().min(1, "Please select a role"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 type SignUpFormData = z.infer<typeof signUpSchema>;
 
@@ -40,14 +43,20 @@ export default function SignUp() {
       email: "",
       role: "",
       password: "",
-      confirmPassword: ""
-    }
+      confirmPassword: "",
+    },
   });
 
   const onSubmit = async (data: SignUpFormData) => {
     setLoading(true);
     try {
-      const { error } = await signUp(data.email, data.password, data.firstName, data.lastName, data.role);
+      const { error } = await signUp(
+        data.email,
+        data.password,
+        data.firstName,
+        data.lastName,
+        data.role,
+      );
       if (!error) {
         navigate("/dashboard");
       }
@@ -59,32 +68,34 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-white to-yellow-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-background text-foreground noir-backdrop film-grain flex items-center justify-center p-6 relative">
+      <FadeInSection className="w-full max-w-md relative z-10">
         {/* Back button */}
         <Button
           variant="ghost"
-          className="mb-4 text-gray-600 hover:text-yellow-600"
+          className="mb-4 text-muted-foreground hover:text-foreground"
           onClick={() => navigate("/")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Home
         </Button>
 
-        <Card className="shadow-elegant border-yellow-200 bg-white">
-          <CardHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center">
-                <Film className="h-5 w-5 text-white" />
+        <Card className="shadow-noir-lg border-border/80 bg-card/95 backdrop-blur-md">
+          <CardHeader className="text-center pb-4">
+            <div className="flex items-center justify-center gap-2.5 mb-4">
+              <div className="h-10 w-10 rounded-xl border border-primary/40 bg-primary/15 text-primary flex items-center justify-center">
+                <Film className="h-5 w-5" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
                 FilmCollab
               </h1>
             </div>
-            <CardTitle className="text-gray-900">Create Your Account</CardTitle>
-            <CardDescription className="text-gray-600">Join the film industry community</CardDescription>
+            <CardTitle className="text-2xl text-foreground">Create Your Account</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Join the film industry community
+            </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -94,9 +105,9 @@ export default function SignUp() {
                     name="firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-700">First Name</FormLabel>
+                        <FormLabel className="text-foreground/90">First Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="John" className="border-yellow-200 focus:border-yellow-500" {...field} />
+                          <Input placeholder="John" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -108,9 +119,9 @@ export default function SignUp() {
                     name="lastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-gray-700">Last Name</FormLabel>
+                        <FormLabel className="text-foreground/90">Last Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Doe" className="border-yellow-200 focus:border-yellow-500" {...field} />
+                          <Input placeholder="Doe" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -123,14 +134,9 @@ export default function SignUp() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-gray-700">Email</FormLabel>
+                      <FormLabel className="text-foreground/90">Email</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="john@example.com"
-                          className="border-yellow-200 focus:border-yellow-500"
-                          {...field}
-                        />
+                        <Input type="email" placeholder="john@example.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -142,11 +148,10 @@ export default function SignUp() {
                   name="role"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel className="text-gray-700">Role</FormLabel>
+                      <FormLabel className="text-foreground/90">Role</FormLabel>
                       <CategoryDropdown
                         value={field.value}
                         onChange={field.onChange}
-                        className="border-yellow-200 hover:border-yellow-500"
                       />
                       <FormMessage />
                     </FormItem>
@@ -158,26 +163,27 @@ export default function SignUp() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-gray-700">Password</FormLabel>
+                      <FormLabel className="text-foreground/90">Password</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             type={showPassword ? "text" : "password"}
                             placeholder="Create a password"
-                            className="border-yellow-200 focus:border-yellow-500"
+                            className="pr-10"
                             {...field}
                           />
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
                             onClick={() => setShowPassword(!showPassword)}
                           >
                             {showPassword ? (
-                              <EyeOff className="h-4 w-4 text-gray-500" />
+                              <EyeOff className="h-4 w-4" />
                             ) : (
-                              <Eye className="h-4 w-4 text-gray-500" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
@@ -192,26 +198,27 @@ export default function SignUp() {
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-gray-700">Confirm Password</FormLabel>
+                      <FormLabel className="text-foreground/90">Confirm Password</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
                             type={showConfirmPassword ? "text" : "password"}
                             placeholder="Confirm your password"
-                            className="border-yellow-200 focus:border-yellow-500"
+                            className="pr-10"
                             {...field}
                           />
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground"
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           >
                             {showConfirmPassword ? (
-                              <EyeOff className="h-4 w-4 text-gray-500" />
+                              <EyeOff className="h-4 w-4" />
                             ) : (
-                              <Eye className="h-4 w-4 text-gray-500" />
+                              <Eye className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
@@ -221,22 +228,18 @@ export default function SignUp() {
                   )}
                 />
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                  disabled={loading}
-                >
+                <Button type="submit" className="w-full h-11 font-semibold" disabled={loading}>
                   {loading ? "Creating account..." : "Create Account"}
                 </Button>
               </form>
             </Form>
 
             <div className="mt-6 text-center">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Already have an account?{" "}
                 <Button
                   variant="link"
-                  className="p-0 h-auto text-yellow-600 hover:text-yellow-700"
+                  className="p-0 h-auto text-primary hover:text-primary-hover font-medium"
                   onClick={() => navigate("/auth/signin")}
                 >
                   Sign in
@@ -245,7 +248,7 @@ export default function SignUp() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </FadeInSection>
     </div>
   );
 }

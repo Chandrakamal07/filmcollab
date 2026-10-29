@@ -738,40 +738,41 @@ export default function IndustryHubPage() {
       <div className="space-y-4 bg-background min-h-screen p-4 -m-4 text-foreground">
         {/* Header */}
         {!isViewingAnyDetail && (
-          <div className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border border-yellow-200 dark:border-yellow-900/40">
+          <div className="bg-card text-card-foreground p-6 rounded-xl shadow-noir border border-border/80">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-foreground mb-1">Industry Hub</h1>
+                <p className="noir-eyebrow mb-1">Editorial & Academy</p>
+                <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-1">Industry Hub</h1>
                 <p className="text-muted-foreground text-sm">
                   Stay updated with industry news, events, and educational opportunities
                 </p>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                 <div className="relative w-full sm:max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
                     placeholder={`Search ${activeTab === "news" ? "news" : activeTab === "events" ? "events" : "courses"}...`}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-9 border-yellow-200 dark:border-yellow-900/40 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 text-sm bg-card text-card-foreground text-foreground"
+                    className="pl-9 h-9 border-border/80 rounded-lg focus:border-primary text-sm bg-surface-elevated text-foreground"
                   />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <Select value={selectedPostType} onValueChange={setSelectedPostType}>
-                    <SelectTrigger className="w-full sm:w-32 h-9 border-yellow-200 dark:border-yellow-900/40 rounded-lg text-sm focus:border-yellow-500 bg-card text-card-foreground text-foreground">
+                    <SelectTrigger className="w-full sm:w-32 h-9 border-border/80 rounded-lg text-sm bg-surface-elevated text-foreground">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-card border-border/80">
                       <SelectItem value="news">News</SelectItem>
                       <SelectItem value="events">Events</SelectItem>
                       <SelectItem value="courses">Courses</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={() => navigate(`/industry-hub/new?type=${selectedPostType}`)}
-                    className="h-9 px-3 border-yellow-200 dark:border-yellow-900/40 text-foreground hover:border-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 hover:bg-yellow-50 dark:hover:bg-yellow-950/40 rounded-lg text-sm bg-card transition-colors"
+                    className="h-9 px-3.5 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg text-sm font-semibold shadow-sm transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Post
@@ -784,9 +785,9 @@ export default function IndustryHubPage() {
 
         {/* If viewing a detail, show the detail page. Otherwise, show Tabs + Tab Content */}
         {isViewingNewsDetail && selectedNews ? (
-          <div className="bg-card text-card-foreground rounded-lg shadow-sm p-6 border border-border space-y-6">
+          <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* News Detail Header */}
-            <div className="flex items-center justify-between gap-4 border-b pb-4">
+            <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-4">
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -794,7 +795,7 @@ export default function IndustryHubPage() {
                   setShowNewsDetail(false);
                   setSelectedNews(null);
                 }} 
-                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors"
+                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
                 <span className="hidden sm:inline">Back to Industry Hub</span>
@@ -805,7 +806,7 @@ export default function IndustryHubPage() {
                   size="sm" 
                   onClick={handlePrevNews} 
                   disabled={!hasPrevNews}
-                  className="flex items-center gap-1 border-border dark:border-border/80 hover:border-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-400 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/40 text-foreground transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground transition-colors disabled:opacity-50"
                 >
                   <MoveLeft className="w-4 h-4 sm:mr-1" />
                   <span className="hidden sm:inline">Previous News</span>
@@ -815,7 +816,7 @@ export default function IndustryHubPage() {
                   size="sm" 
                   onClick={handleNextNews} 
                   disabled={!hasNextNews}
-                  className="flex items-center gap-1 border-border dark:border-border/80 hover:border-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-400 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/40 text-foreground transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground transition-colors disabled:opacity-50"
                 >
                   <span className="hidden sm:inline">Next News</span>
                   <MoveRight className="w-4 h-4 sm:ml-1" />
@@ -826,14 +827,14 @@ export default function IndustryHubPage() {
             {/* News Details */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50">
+                <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">
                   {selectedNews.category}
                 </Badge>
-                <span className="text-xs text-muted-foreground">{selectedNews.createdDate}</span>
+                <span className="text-xs font-mono text-muted-foreground">{selectedNews.createdDate}</span>
               </div>
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h1 className="text-3xl font-extrabold text-foreground leading-tight tracking-tight flex-1">
+                <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground leading-tight tracking-tight flex-1">
                   {selectedNews.title}
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
@@ -842,7 +843,7 @@ export default function IndustryHubPage() {
                       navigator.clipboard.writeText(window.location.href);
                       toast({ title: "Link copied!", description: "Industry Hub link copied to clipboard." });
                     }}
-                    className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm font-medium"
                   >
                     <Share2 className="w-4 h-4 mr-2" />
                     Share News
@@ -850,7 +851,7 @@ export default function IndustryHubPage() {
                   <Button 
                     variant="outline" 
                     onClick={() => toast({ title: "Saved to bookmarks!", description: "You can find saved insights in your profile." })}
-                    className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground shadow-sm transition-colors"
+                    className="border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground shadow-sm transition-colors"
                   >
                     <Bookmark className="w-4 h-4 mr-2" />
                     Save to Bookmarks
@@ -858,12 +859,12 @@ export default function IndustryHubPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border">
-                <UserPlus className="w-4 h-4 text-yellow-500" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-surface-elevated p-3.5 rounded-lg border border-border/80">
+                <UserPlus className="w-4 h-4 text-primary" />
                 <span>Written by <span className="font-semibold text-foreground">{selectedNews.createdBy}</span></span>
                 <span className="mx-2">•</span>
-                <Calendar className="w-4 h-4 text-yellow-500" />
-                <span>Published on {selectedNews.createdDate}</span>
+                <Calendar className="w-4 h-4 text-primary" />
+                <span>Published on <span className="font-mono">{selectedNews.createdDate}</span></span>
               </div>
 
               <div className="prose max-w-none dark:prose-invert text-foreground/90 text-base leading-relaxed whitespace-pre-line pt-2">
@@ -873,14 +874,14 @@ export default function IndustryHubPage() {
             
             {/* News Actions */}
             {user && selectedNews.user_id === user.id && (
-              <div className="flex justify-end gap-2 border-t pt-6">
+              <div className="flex justify-end gap-2 border-t border-border/60 pt-6">
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     handleEditClick(selectedNews, "news");
                     setShowNewsDetail(false);
                   }}
-                  className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 text-foreground"
+                  className="border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground"
                 >
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
@@ -891,7 +892,7 @@ export default function IndustryHubPage() {
                     handleDelete(selectedNews.id, "news");
                     setShowNewsDetail(false);
                   }}
-                  className="text-red-600 border-red-200 hover:border-red-500 hover:bg-red-50"
+                  className="text-destructive border-destructive/30 hover:border-destructive hover:bg-destructive/10"
                 >
                   <X className="w-4 h-4 mr-1" />
                   Delete
@@ -900,9 +901,9 @@ export default function IndustryHubPage() {
             )}
           </div>
         ) : isViewingEventDetail && selectedEvent ? (
-          <div className="bg-card text-card-foreground rounded-lg shadow-sm p-6 border border-border space-y-6">
+          <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* Event Detail Header */}
-            <div className="flex items-center justify-between border-b pb-4">
+            <div className="flex items-center justify-between border-b border-border/60 pb-4">
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -910,7 +911,7 @@ export default function IndustryHubPage() {
                   setShowEventDetail(false);
                   setSelectedEvent(null);
                 }} 
-                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors"
+                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
                 <span className="hidden sm:inline">Back to Industry Hub</span>
@@ -924,7 +925,7 @@ export default function IndustryHubPage() {
                       handleEditClick(selectedEvent, "events");
                       setShowEventDetail(false);
                     }}
-                    className="h-9 px-3 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 text-foreground text-sm"
+                    className="h-9 px-3 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground text-sm"
                   >
                     <Edit className="w-4 h-4 mr-1" />
                     Edit
@@ -936,7 +937,7 @@ export default function IndustryHubPage() {
                       handleDelete(selectedEvent.id, "events");
                       setShowEventDetail(false);
                     }}
-                    className="h-9 px-3 text-red-600 border-red-200 hover:border-red-500 hover:bg-red-50 text-sm"
+                    className="h-9 px-3 text-destructive border-destructive/30 hover:border-destructive hover:bg-destructive/10 text-sm"
                   >
                     <X className="w-4 h-4 mr-1" />
                     Delete
@@ -948,16 +949,16 @@ export default function IndustryHubPage() {
             {/* Event Details */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Badge variant={selectedEvent.isOnline ? "default" : "secondary"}>
+                <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">
                   {selectedEvent.isOnline ? "Online" : "In-Person"}
                 </Badge>
-                <Badge variant="outline" className="border-border text-foreground">
+                <Badge variant="outline" className="border-border/80 bg-surface-elevated text-foreground font-mono">
                   {selectedEvent.price}
                 </Badge>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h1 className="text-3xl font-extrabold text-foreground leading-tight tracking-tight flex-1">
+                <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground leading-tight tracking-tight flex-1">
                   {selectedEvent.title}
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
@@ -966,7 +967,7 @@ export default function IndustryHubPage() {
                       href={selectedEvent.registrationLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-2 h-9 px-4 shadow-sm transition-all"
+                      className="bg-primary text-primary-foreground hover:bg-primary-hover font-semibold rounded-lg text-sm flex items-center justify-center gap-2 h-9 px-4 shadow-sm transition-all"
                     >
                       <Calendar className="w-4 h-4" />
                       Register Now
@@ -974,7 +975,7 @@ export default function IndustryHubPage() {
                   ) : (
                     <Button 
                       onClick={() => toast({ title: "Booking successful!", description: `You have successfully booked a spot for: ${selectedEvent.title}` })}
-                      className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
+                      className="bg-primary text-primary-foreground hover:bg-primary-hover h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
                     >
                       <Calendar className="w-4 h-4 mr-2" />
                       Book Now
@@ -987,7 +988,7 @@ export default function IndustryHubPage() {
                       navigator.clipboard.writeText(window.location.href);
                       toast({ title: "Link copied!", description: "Event link copied to clipboard." });
                     }}
-                    className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 h-9 px-4 text-foreground shadow-sm"
+                    className="border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary h-9 px-4 text-foreground shadow-sm"
                   >
                     <Share2 className="w-4 h-4 mr-2" />
                     Share Event
@@ -995,52 +996,52 @@ export default function IndustryHubPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-muted/40 p-4 rounded-xl border border-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-surface-elevated p-4 rounded-xl border border-border/80">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <Calendar className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Date & Time</p>
-                    <p className="text-sm font-semibold">{selectedEvent.date}</p>
+                    <p className="text-sm font-mono font-semibold text-foreground">{selectedEvent.date}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <MapPin className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="text-sm font-semibold truncate max-w-[150px]">{selectedEvent.location}</p>
+                    <p className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedEvent.location}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <Users className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Attendees</p>
-                    <p className="text-sm font-semibold">{selectedEvent.attendees} attending</p>
+                    <p className="text-sm font-mono font-semibold text-foreground">{selectedEvent.attendees} attending</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <UserPlus className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Organizer</p>
-                    <p className="text-sm font-semibold truncate max-w-[150px]">{selectedEvent.createdBy}</p>
+                    <p className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedEvent.createdBy}</p>
                   </div>
                 </div>
               </div>
 
               {/* Links Display Panel */}
               {(selectedEvent.googleMapsLink || selectedEvent.meetingLink || selectedEvent.registrationLink) && (
-                <div className="p-5 bg-yellow-50/50 dark:bg-yellow-950/10 border border-yellow-100 dark:border-yellow-900/30 rounded-xl space-y-3">
-                  <h4 className="text-xs font-bold text-yellow-800 dark:text-yellow-400 uppercase tracking-wider">Event Resource Links</h4>
+                <div className="p-5 bg-primary/10 border border-primary/30 rounded-xl space-y-3">
+                  <h4 className="text-xs font-mono font-bold text-primary uppercase tracking-wider">Event Resource Links</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                     {!selectedEvent.isOnline && selectedEvent.googleMapsLink && (
-                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border rounded-lg">
+                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">Google Maps Directions:</span>
                         <a 
                           href={selectedEvent.googleMapsLink} 
@@ -1054,7 +1055,7 @@ export default function IndustryHubPage() {
                       </div>
                     )}
                     {selectedEvent.isOnline && selectedEvent.meetingLink && (
-                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border rounded-lg">
+                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">Virtual Meeting Room:</span>
                         <a 
                           href={selectedEvent.meetingLink} 
@@ -1068,7 +1069,7 @@ export default function IndustryHubPage() {
                       </div>
                     )}
                     {selectedEvent.registrationLink && (
-                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border rounded-lg">
+                      <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">External Registration Form:</span>
                         <a 
                           href={selectedEvent.registrationLink} 
@@ -1091,9 +1092,9 @@ export default function IndustryHubPage() {
             </div>
           </div>
         ) : isViewingCourseDetail && selectedCourse ? (
-          <div className="bg-card text-card-foreground rounded-lg shadow-sm p-6 border border-border space-y-6">
+          <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* Course Detail Header */}
-            <div className="flex items-center justify-between border-b pb-4">
+            <div className="flex items-center justify-between border-b border-border/60 pb-4">
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -1101,7 +1102,7 @@ export default function IndustryHubPage() {
                   setShowCourseDetail(false);
                   setSelectedCourse(null);
                 }} 
-                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 transition-colors"
+                className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
                 <span className="hidden sm:inline">Back to Industry Hub</span>
@@ -1115,7 +1116,7 @@ export default function IndustryHubPage() {
                       handleEditClick(selectedCourse, "courses");
                       setShowCourseDetail(false);
                     }}
-                    className="h-9 px-3 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 text-foreground text-sm"
+                    className="h-9 px-3 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground text-sm"
                   >
                     <Edit className="w-4 h-4 mr-1" />
                     Edit
@@ -1127,7 +1128,7 @@ export default function IndustryHubPage() {
                       handleDelete(selectedCourse.id, "courses");
                       setShowCourseDetail(false);
                     }}
-                    className="h-9 px-3 text-red-600 border-red-200 hover:border-red-500 hover:bg-red-50 text-sm"
+                    className="h-9 px-3 text-destructive border-destructive/30 hover:border-destructive hover:bg-destructive/10 text-sm"
                   >
                     <X className="w-4 h-4 mr-1" />
                     Delete
@@ -1139,19 +1140,19 @@ export default function IndustryHubPage() {
             {/* Course Details */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-border text-foreground">{selectedCourse.level}</Badge>
-                <Badge variant="secondary" className="bg-muted text-foreground">{selectedCourse.category}</Badge>
-                <Badge variant="outline" className="text-primary font-bold">{selectedCourse.price}</Badge>
+                <Badge variant="outline" className="border-border/80 bg-surface-elevated text-foreground">{selectedCourse.level}</Badge>
+                <Badge variant="secondary" className="bg-primary/15 text-primary border border-primary/30">{selectedCourse.category}</Badge>
+                <Badge variant="outline" className="text-primary border-primary/30 font-mono font-bold">{selectedCourse.price}</Badge>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h1 className="text-3xl font-extrabold text-foreground leading-tight tracking-tight flex-1">
+                <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground leading-tight tracking-tight flex-1">
                   {selectedCourse.title}
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button 
                     onClick={() => toast({ title: "Registration successful!", description: `You have successfully enrolled in: ${selectedCourse.title}` })}
-                    className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary-hover h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
                   >
                     <Bookmark className="w-4 h-4 mr-2" />
                     Register Now
@@ -1163,7 +1164,7 @@ export default function IndustryHubPage() {
                       navigator.clipboard.writeText(window.location.href);
                       toast({ title: "Link copied!", description: "Course link copied to clipboard." });
                     }}
-                    className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 h-9 px-4 text-foreground shadow-sm"
+                    className="border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary h-9 px-4 text-foreground shadow-sm"
                   >
                     <Share2 className="w-4 h-4 mr-2" />
                     Share Course
@@ -1171,41 +1172,41 @@ export default function IndustryHubPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-muted/40 p-4 rounded-xl border border-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-surface-elevated p-4 rounded-xl border border-border/80">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Duration</p>
-                    <p className="text-sm font-semibold">{selectedCourse.duration}</p>
+                    <p className="text-sm font-mono font-semibold text-foreground">{selectedCourse.duration}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <Users className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Students</p>
-                    <p className="text-sm font-semibold">{selectedCourse.enrolled} enrolled</p>
+                    <p className="text-sm font-mono font-semibold text-foreground">{selectedCourse.enrolled} enrolled</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <UserPlus className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Provider</p>
-                    <p className="text-sm font-semibold truncate max-w-[150px]">{selectedCourse.createdBy}</p>
+                    <p className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedCourse.createdBy}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-950/50 rounded-lg text-yellow-600 dark:text-yellow-400">
+                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                     <UserPlus className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Instructor</p>
-                    <p className="text-sm font-semibold truncate max-w-[150px]">{selectedCourse.instructor}</p>
+                    <p className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedCourse.instructor}</p>
                   </div>
                 </div>
               </div>
@@ -1218,403 +1219,422 @@ export default function IndustryHubPage() {
         ) : (
           <>
             {/* Tabs */}
-            <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border">
-          <div className="flex w-full overflow-x-auto scrollbar-none border-b border-border px-4">
-            {[
-              { id: "news", label: "Industry News", count: filteredNews.length },
-              { id: "events", label: "Events", count: filteredEvents.length },
-              { id: "courses", label: "Courses", count: filteredCourses.length },
-              { id: "created", label: "Created By Me", count: totalMyItems }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 border-b-2 font-medium transition-colors relative flex items-center text-sm whitespace-nowrap shrink-0 ${
-                  activeTab === tab.id
-                    ? "border-yellow-500 text-yellow-600 dark:text-yellow-500"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {tab.label}
-                <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">
-                  {tab.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="bg-card text-card-foreground rounded-xl shadow-noir border border-border/80">
+              <div className="flex w-full overflow-x-auto scrollbar-none border-b border-border/60 px-4">
+                {[
+                  { id: "news", label: "Industry News", count: filteredNews.length },
+                  { id: "events", label: "Events", count: filteredEvents.length },
+                  { id: "courses", label: "Courses", count: filteredCourses.length },
+                  { id: "created", label: "Created By Me", count: totalMyItems }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-3.5 border-b-2 font-medium transition-colors relative flex items-center text-sm whitespace-nowrap shrink-0 ${
+                      activeTab === tab.id
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {tab.label}
+                    <span className={`ml-2 text-xs font-mono px-1.5 py-0.5 rounded-full ${
+                      activeTab === tab.id
+                        ? "bg-primary/15 text-primary"
+                        : "bg-surface-elevated text-muted-foreground"
+                    }`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Tab Content */}
-        <div className="bg-card text-card-foreground rounded-lg shadow-sm p-4 min-h-[500px] border border-border">
-          {loading && <div className="text-center py-8 text-sm text-yellow-600">Loading live updates...</div>}
+            {/* Tab Content */}
+            <div className="bg-card text-card-foreground rounded-xl shadow-noir p-5 min-h-[500px] border border-border/80">
+              {loading && <div className="text-center py-8 text-sm font-mono text-primary">Loading live updates...</div>}
 
-          {/* Industry News & Insights Tab */}
-          {activeTab === "news" && (
-            <div className="space-y-4">
-              {filteredNews.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredNews.map((news) => (
-                    <Card
-                      key={news.id}
-                      className="hover:shadow-lg transition-shadow bg-card text-card-foreground border-border rounded-lg cursor-pointer flex flex-col justify-between"
-                      onClick={() => {
-                        setSelectedNews(news);
-                        setShowNewsDetail(true);
-                      }}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="bg-muted text-foreground border-border rounded-md px-1.5 py-0.5 text-xs">
-                            {news.category}
-                          </Badge>
-                        </div>
-                        <CardTitle className="text-base font-semibold text-foreground line-clamp-2 leading-tight">
-                          {news.title}
-                        </CardTitle>
-                        <CardDescription className="text-xs text-muted-foreground line-clamp-3 mt-1">
-                          {news.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2 mt-2">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            <span>{news.createdDate}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <UserPlus className="w-3 h-3" />
-                            <span className="truncate max-w-[120px]">By {news.createdBy}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No news found</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {searchQuery ? "Try adjusting your search terms" : "Be the first to share industry insights and news"}
-                  </p>
-                  {!searchQuery && (
-                    <Button onClick={() => navigate('/industry-hub/new?type=news')}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create First News
-                    </Button>
+              {/* Industry News & Insights Tab */}
+              {activeTab === "news" && (
+                <div className="space-y-4">
+                  {filteredNews.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredNews.map((news) => (
+                        <Card
+                          key={news.id}
+                          className="bg-surface-elevated text-card-foreground border border-border/80 hover:border-primary/40 shadow-sm hover:shadow-noir transition-all rounded-xl cursor-pointer flex flex-col justify-between group"
+                          onClick={() => {
+                            setSelectedNews(news);
+                            setShowNewsDetail(true);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 rounded-md px-2 py-0.5 text-xs">
+                                {news.category}
+                              </Badge>
+                            </div>
+                            <CardTitle className="text-lg font-display font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2 leading-tight">
+                              {news.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-muted-foreground line-clamp-3 mt-1.5 leading-relaxed">
+                              {news.description}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/60 pt-3 mt-2">
+                              <div className="flex items-center gap-1 font-mono">
+                                <Calendar className="w-3 h-3 text-primary" />
+                                <span>{news.createdDate}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <UserPlus className="w-3 h-3 text-primary" />
+                                <span className="truncate max-w-[120px]">By {news.createdBy}</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-lg font-display font-semibold mb-2 text-foreground">No news found</h3>
+                      <p className="text-muted-foreground mb-4 text-sm">
+                        {searchQuery ? "Try adjusting your search terms" : "Be the first to share industry insights and news"}
+                      </p>
+                      {!searchQuery && (
+                        <Button
+                          onClick={() => navigate('/industry-hub/new?type=news')}
+                          className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create First News
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Events Tab */}
-          {activeTab === "events" && (
-            <div className="space-y-4">
-              {filteredEvents.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredEvents.map((event) => (
-                    <Card
-                      key={event.id}
-                      className="hover:shadow-lg transition-shadow bg-card text-card-foreground border border-border cursor-pointer flex flex-col justify-between"
-                      onClick={() => {
-                        setSelectedEvent(event);
-                        setShowEventDetail(true);
-                      }}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant={event.isOnline ? "default" : "secondary"}>
-                            {event.isOnline ? "Online" : "In-Person"}
-                          </Badge>
-                          <Badge variant="outline" className="border-border text-foreground">{event.price}</Badge>
-                        </div>
-                        <CardTitle className="text-base font-semibold text-foreground line-clamp-2">{event.title}</CardTitle>
-                        <CardDescription className="text-xs text-muted-foreground line-clamp-3">
-                          {event.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-1 border-t pt-2 mt-2">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              <span>{event.date}</span>
+              {/* Events Tab */}
+              {activeTab === "events" && (
+                <div className="space-y-4">
+                  {filteredEvents.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredEvents.map((event) => (
+                        <Card
+                          key={event.id}
+                          className="bg-surface-elevated text-card-foreground border border-border/80 hover:border-primary/40 shadow-sm hover:shadow-noir transition-all rounded-xl cursor-pointer flex flex-col justify-between group"
+                          onClick={() => {
+                            setSelectedEvent(event);
+                            setShowEventDetail(true);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="bg-primary/15 text-primary border-primary/30">
+                                {event.isOnline ? "Online" : "In-Person"}
+                              </Badge>
+                              <Badge variant="outline" className="border-border/80 bg-card text-foreground font-mono">
+                                {event.price}
+                              </Badge>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              <span>{event.attendees} attending</span>
+                            <CardTitle className="text-lg font-display font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                              {event.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-muted-foreground line-clamp-3 mt-1 leading-relaxed">
+                              {event.description}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-1.5 border-t border-border/60 pt-3 mt-2">
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1 font-mono">
+                                  <Calendar className="w-3 h-3 text-primary" />
+                                  <span>{event.date}</span>
+                                </div>
+                                <div className="flex items-center gap-1 font-mono">
+                                  <Users className="w-3 h-3 text-primary" />
+                                  <span>{event.attendees} attending</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-primary" />
+                                  <span className="truncate max-w-[110px]">{event.location}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <UserPlus className="w-3 h-3 text-primary" />
+                                  <span className="truncate max-w-[110px]">By {event.createdBy}</span>
+                                </div>
+                              </div>
+                              <div className="pt-2">
+                                {event.registrationLink ? (
+                                  <a
+                                    href={event.registrationLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-full text-xs h-8 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold rounded-md flex items-center justify-center gap-1 shadow-sm transition-all"
+                                  >
+                                    Register Now ↗
+                                  </a>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    className="w-full text-xs h-8 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toast({ title: "Booking successful!", description: `You have successfully booked a spot for: ${event.title}` });
+                                    }}
+                                  >
+                                    Book Now
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              <span className="truncate max-w-[100px]">{event.location}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Calendar className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-lg font-display font-semibold mb-2 text-foreground">No events found</h3>
+                      <p className="text-muted-foreground mb-4 text-sm">
+                        {searchQuery ? "Try adjusting your search terms" : "Be the first to create an industry event"}
+                      </p>
+                      {!searchQuery && (
+                        <Button
+                          onClick={() => navigate('/industry-hub/new?type=events')}
+                          className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create First Event
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Courses Tab */}
+              {activeTab === "courses" && (
+                <div className="space-y-4">
+                  {filteredCourses.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredCourses.map((course) => (
+                        <Card
+                          key={course.id}
+                          className="bg-surface-elevated text-card-foreground border border-border/80 hover:border-primary/40 shadow-sm hover:shadow-noir transition-all rounded-xl cursor-pointer flex flex-col justify-between group"
+                          onClick={() => {
+                            setSelectedCourse(course);
+                            setShowCourseDetail(true);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="border-border/80 bg-card text-foreground">{course.level}</Badge>
+                              <Badge variant="secondary" className="bg-primary/15 text-primary border border-primary/30">{course.category}</Badge>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <UserPlus className="w-3 h-3" />
-                              <span className="truncate max-w-[100px]">By {event.createdBy}</span>
-                            </div>
-                          </div>
-                          <div className="pt-2">
-                            {event.registrationLink ? (
-                              <a
-                                href={event.registrationLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-full text-xs h-7 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium rounded flex items-center justify-center gap-1 shadow-sm transition-all"
-                              >
-                                Register Now ↗
-                              </a>
-                            ) : (
-                              <Button
-                                size="sm"
-                                className="w-full text-xs h-7 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                            <CardTitle className="text-lg font-display font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                              {course.title}
+                            </CardTitle>
+                            <CardDescription className="text-xs text-muted-foreground line-clamp-3 mt-1 leading-relaxed">
+                              {course.description}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-1.5 border-t border-border/60 pt-3 mt-2">
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1 font-mono">
+                                  <Clock className="w-3 h-3 text-primary" />
+                                  <span>{course.duration}</span>
+                                </div>
+                                <div className="flex items-center gap-1 font-mono">
+                                  <Users className="w-3 h-3 text-primary" />
+                                  <span>{course.enrolled} enrolled</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <UserPlus className="w-3 h-3 text-primary" />
+                                  <span className="truncate max-w-[110px]">By {course.createdBy}</span>
+                                </div>
+                                <span className="font-mono font-semibold text-primary text-xs">{course.price}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
+                                <UserPlus className="w-3 h-3 text-primary" />
+                                <span className="truncate max-w-[180px]">Instructor: {course.instructor}</span>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                className="w-full mt-2 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toast({ title: "Booking successful!", description: `You have successfully booked a spot for: ${event.title}` });
+                                  toast({ title: "Registration successful!", description: `You have enrolled in: ${course.title}` });
                                 }}
                               >
-                                Book Now
+                                Register Now
                               </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2 text-foreground">No events found</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {searchQuery ? "Try adjusting your search terms" : "Be the first to create an industry event"}
-                  </p>
-                  {!searchQuery && (
-                    <Button onClick={() => navigate('/industry-hub/new?type=events')}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create First Event
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Courses Tab */}
-          {activeTab === "courses" && (
-            <div className="space-y-4">
-              {filteredCourses.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredCourses.map((course) => (
-                    <Card
-                      key={course.id}
-                      className="hover:shadow-lg transition-shadow bg-card text-card-foreground border border-border cursor-pointer flex flex-col justify-between"
-                      onClick={() => {
-                        setSelectedCourse(course);
-                        setShowCourseDetail(true);
-                      }}
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="border-border text-foreground">{course.level}</Badge>
-                          <Badge variant="secondary" className="bg-muted text-foreground">{course.category}</Badge>
-                        </div>
-                        <CardTitle className="text-base font-semibold text-foreground line-clamp-2">{course.title}</CardTitle>
-                        <CardDescription className="text-xs text-muted-foreground line-clamp-3">
-                          {course.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-1 border-t pt-2 mt-2">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{course.duration}</span>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              <span>{course.enrolled} enrolled</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <UserPlus className="w-3 h-3" />
-                              <span className="truncate max-w-[100px]">By {course.createdBy}</span>
-                            </div>
-                            <span className="font-semibold text-primary text-xs">{course.price}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1">
-                            <UserPlus className="w-3 h-3" />
-                            <span className="truncate max-w-[180px]">Instructor: {course.instructor}</span>
-                          </div>
-                          <Button 
-                            size="sm" 
-                            className="w-full mt-2 text-xs h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toast({ title: "Registration successful!", description: `You have enrolled in: ${course.title}` });
-                            }}
-                          >
-                            Register Now
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Bookmark className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2 text-foreground">No courses found</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {searchQuery ? "Try adjusting your search terms" : "Be the first to create an industry course"}
-                  </p>
-                  {!searchQuery && (
-                    <Button onClick={() => navigate('/industry-hub/new?type=courses')}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create First Course
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Created Tab */}
-          {activeTab === "created" && (
-            <div className="space-y-4">
-              {/* Filters */}
-              <div className="flex flex-wrap gap-4 items-center justify-between border-b pb-3 mb-2">
-                <div className="flex flex-wrap gap-4 items-center">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium">Filter by:</label>
-                    <Select value={createdFilter} onValueChange={setCreatedFilter}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="news">News</SelectItem>
-                        <SelectItem value="events">Events</SelectItem>
-                        <SelectItem value="courses">Courses</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium">Date Range:</label>
-                    <Input
-                      type="date"
-                      value={dateRange.from}
-                      onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
-                      className="w-40"
-                    />
-                    <span className="text-sm text-muted-foreground">to</span>
-                    <Input
-                      type="date"
-                      value={dateRange.to}
-                      onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
-                      className="w-40"
-                    />
-                  </div>
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => { setDateRange({ from: "", to: "" }); setCreatedFilter("all"); }}
-                  className="text-xs h-8 border-border"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-
-              {/* Table */}
-              <div className="border rounded-lg bg-card text-card-foreground">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-muted/40">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Title</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Created Date</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-card text-card-foreground divide-y divide-border">
-                      {filteredMyItems.length > 0 ? (
-                        filteredMyItems.map((item) => (
-                          <tr key={`${item.type}-${item.id}`} className="hover:bg-muted/40">
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <Badge variant="outline" className="bg-muted text-foreground border-border capitalize">
-                                {item.type}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-foreground max-w-xs truncate">
-                              {item.title}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                              {item.category}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                              {item.createdDate}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <Badge variant="default" className="bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-transparent">
-                                Active
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => handleEditClick(item, item.type)}
-                                  className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
-                                >
-                                  <Edit className="w-3 h-3 mr-1" />
-                                  Edit
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  onClick={() => handleDelete(item.id, item.type)}
-                                  className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-500 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-950/20"
-                                >
-                                  <X className="w-3 h-3 mr-1" />
-                                  Delete
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
-                            {user ? "You haven't posted any items yet." : "Please sign in to view and manage your posted items."}
-                          </td>
-                        </tr>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Bookmark className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-lg font-display font-semibold mb-2 text-foreground">No courses found</h3>
+                      <p className="text-muted-foreground mb-4 text-sm">
+                        {searchQuery ? "Try adjusting your search terms" : "Be the first to create an industry course"}
+                      </p>
+                      {!searchQuery && (
+                        <Button
+                          onClick={() => navigate('/industry-hub/new?type=courses')}
+                          className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create First Course
+                        </Button>
                       )}
-                    </tbody>
-                  </table>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Created Tab */}
+              {activeTab === "created" && (
+                <div className="space-y-4">
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-4 items-center justify-between border-b border-border/60 pb-3 mb-2">
+                    <div className="flex flex-wrap gap-4 items-center">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-foreground">Filter by:</label>
+                        <Select value={createdFilter} onValueChange={setCreatedFilter}>
+                          <SelectTrigger className="w-32 bg-surface-elevated border-border/80">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-card border-border/80">
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="news">News</SelectItem>
+                            <SelectItem value="events">Events</SelectItem>
+                            <SelectItem value="courses">Courses</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-foreground">Date Range:</label>
+                        <Input
+                          type="date"
+                          value={dateRange.from}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+                          className="w-40 bg-surface-elevated border-border/80 font-mono text-xs"
+                        />
+                        <span className="text-sm text-muted-foreground">to</span>
+                        <Input
+                          type="date"
+                          value={dateRange.to}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+                          className="w-40 bg-surface-elevated border-border/80 font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => { setDateRange({ from: "", to: "" }); setCreatedFilter("all"); }}
+                      className="text-xs h-8 border-border/80 bg-surface-elevated hover:border-primary/40"
+                    >
+                      Clear Filters
+                    </Button>
+                  </div>
+
+                  {/* Table */}
+                  <div className="border border-border/80 rounded-xl bg-surface-elevated text-card-foreground overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-card border-b border-border/80">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Title</th>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Category</th>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Created Date</th>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                            <th className="px-4 py-3 text-left text-xs font-mono font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {filteredMyItems.length > 0 ? (
+                            filteredMyItems.map((item) => (
+                              <tr key={`${item.type}-${item.id}`} className="hover:bg-card/60 transition-colors">
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <Badge variant="outline" className="bg-card text-foreground border-border/80 capitalize">
+                                    {item.type}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-foreground max-w-xs truncate">
+                                  {item.title}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                                  {item.category}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-muted-foreground">
+                                  {item.createdDate}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <Badge variant="default" className="bg-primary/15 text-primary border border-primary/30">
+                                    Active
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => handleEditClick(item, item.type)}
+                                      className="border-border/80 bg-card hover:border-primary/50 hover:text-primary"
+                                    >
+                                      <Edit className="w-3 h-3 mr-1" />
+                                      Edit
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      onClick={() => handleDelete(item.id, item.type)}
+                                      className="text-destructive hover:text-destructive border-destructive/30 hover:border-destructive hover:bg-destructive/10"
+                                    >
+                                      <X className="w-3 h-3 mr-1" />
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
+                                {user ? "You haven't posted any items yet." : "Please sign in to view and manage your posted items."}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </>
-    )}
+          </>
+        )}
 
         {/* Unified Create/Edit Popup */}
         {showCreatePopup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-xl w-full max-h-[85vh] overflow-y-auto border border-yellow-200 dark:border-yellow-900/40 shadow-xl">
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4 border-b pb-2">
-                  <h2 className="text-lg font-bold">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-card text-foreground rounded-xl max-w-xl w-full max-h-[85vh] overflow-y-auto border border-border/80 shadow-noir">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4 border-b border-border/60 pb-3">
+                  <h2 className="text-lg font-display font-bold text-foreground">
                     {editingItem ? "Edit" : "Create"} {selectedPostType === "news" ? "News & Insights" : selectedPostType === "events" ? "Event" : "Course"}
                   </h2>
                   <Button variant="ghost" size="sm" onClick={() => setShowCreatePopup(false)}>
@@ -1627,10 +1647,10 @@ export default function IndustryHubPage() {
                   <div className="mb-4">
                     <label className="text-sm font-medium mb-1 block text-foreground">Post Type</label>
                     <Select value={selectedPostType} onValueChange={setSelectedPostType}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full bg-surface-elevated border-border/80">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-card border-border/80">
                         <SelectItem value="news">News</SelectItem>
                         <SelectItem value="events">Events</SelectItem>
                         <SelectItem value="courses">Courses</SelectItem>
@@ -1648,12 +1668,13 @@ export default function IndustryHubPage() {
                         placeholder="Enter news title" 
                         value={formFields.newsTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, newsTitle: e.target.value }))}
+                        className="bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Category *</label>
                       <select 
-                        className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background h-10"
+                        className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                         value={formFields.newsCategory}
                         onChange={(e) => setFormFields(prev => ({ ...prev, newsCategory: e.target.value }))}
                       >
@@ -1667,22 +1688,22 @@ export default function IndustryHubPage() {
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Description *</label>
                       <textarea
-                        className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background min-h-[120px]"
+                        className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground min-h-[120px]"
                         placeholder="Enter news description..."
                         value={formFields.newsDescription}
                         onChange={(e) => setFormFields(prev => ({ ...prev, newsDescription: e.target.value }))}
                       />
                     </div>
 
-                    <div className="flex gap-2 pt-3 border-t">
+                    <div className="flex gap-2 pt-3 border-t border-border/60">
                       <Button 
                         disabled={loading}
                         onClick={handleSave}
-                        className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                       >
                         {loading ? "Saving..." : editingItem ? "Update News" : "Post News"}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-border/80 bg-surface-elevated hover:border-primary/40">
                         Cancel
                       </Button>
                     </div>
@@ -1697,6 +1718,7 @@ export default function IndustryHubPage() {
                         placeholder="Enter event title" 
                         value={formFields.eventTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, eventTitle: e.target.value }))}
+                        className="bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1706,6 +1728,7 @@ export default function IndustryHubPage() {
                           type="date" 
                           value={formFields.eventDate}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventDate: e.target.value }))}
+                          className="bg-surface-elevated border-border/80"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1714,13 +1737,14 @@ export default function IndustryHubPage() {
                           placeholder="e.g., ₹500" 
                           value={formFields.eventPrice}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventPrice: e.target.value }))}
+                          className="bg-surface-elevated border-border/80"
                         />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Event Type</label>
                       <select 
-                        className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background h-10"
+                        className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                         value={formFields.eventType}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -1744,6 +1768,7 @@ export default function IndustryHubPage() {
                             placeholder="Enter physical address or venue" 
                             value={formFields.eventLocation}
                             onChange={(e) => setFormFields(prev => ({ ...prev, eventLocation: e.target.value }))}
+                            className="bg-surface-elevated border-border/80"
                           />
                         </div>
                         <div className="space-y-1">
@@ -1752,6 +1777,7 @@ export default function IndustryHubPage() {
                             placeholder="https://maps.google.com/..." 
                             value={formFields.eventGoogleMapsLink}
                             onChange={(e) => setFormFields(prev => ({ ...prev, eventGoogleMapsLink: e.target.value }))}
+                            className="bg-surface-elevated border-border/80"
                           />
                         </div>
                       </>
@@ -1762,6 +1788,7 @@ export default function IndustryHubPage() {
                           placeholder="https://zoom.us/j/... or Google Meet link" 
                           value={formFields.eventMeetingLink}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventMeetingLink: e.target.value }))}
+                          className="bg-surface-elevated border-border/80"
                         />
                       </div>
                     )}
@@ -1772,28 +1799,29 @@ export default function IndustryHubPage() {
                         placeholder="https://example.com/register-event" 
                         value={formFields.eventRegistrationLink}
                         onChange={(e) => setFormFields(prev => ({ ...prev, eventRegistrationLink: e.target.value }))}
+                        className="bg-surface-elevated border-border/80"
                       />
                     </div>
 
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Description *</label>
                       <textarea
-                        className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background min-h-[100px]"
+                        className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground min-h-[100px]"
                         placeholder="Enter event description..."
                         value={formFields.eventDescription}
                         onChange={(e) => setFormFields(prev => ({ ...prev, eventDescription: e.target.value }))}
                       />
                     </div>
 
-                    <div className="flex gap-2 pt-3 border-t">
+                    <div className="flex gap-2 pt-3 border-t border-border/60">
                       <Button 
                         disabled={loading}
                         onClick={handleSave}
-                        className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                       >
                         {loading ? "Saving..." : editingItem ? "Update Event" : "Create Event"}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-border/80 bg-surface-elevated hover:border-primary/40">
                         Cancel
                       </Button>
                     </div>
@@ -1808,6 +1836,7 @@ export default function IndustryHubPage() {
                         placeholder="Enter course title" 
                         value={formFields.courseTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, courseTitle: e.target.value }))}
+                        className="bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1817,6 +1846,7 @@ export default function IndustryHubPage() {
                           placeholder="e.g., 8 weeks" 
                           value={formFields.courseDuration}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseDuration: e.target.value }))}
+                          className="bg-surface-elevated border-border/80"
                         />
                       </div>
                       <div className="space-y-1">
@@ -1825,6 +1855,7 @@ export default function IndustryHubPage() {
                           placeholder="e.g., ₹15,000" 
                           value={formFields.coursePrice}
                           onChange={(e) => setFormFields(prev => ({ ...prev, coursePrice: e.target.value }))}
+                          className="bg-surface-elevated border-border/80"
                         />
                       </div>
                     </div>
@@ -1832,7 +1863,7 @@ export default function IndustryHubPage() {
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Level *</label>
                         <select 
-                          className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background h-10"
+                          className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                           value={formFields.courseLevel}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseLevel: e.target.value }))}
                         >
@@ -1844,7 +1875,7 @@ export default function IndustryHubPage() {
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Category *</label>
                         <select 
-                          className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background h-10"
+                          className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                           value={formFields.courseCategory}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseCategory: e.target.value }))}
                         >
@@ -1862,234 +1893,33 @@ export default function IndustryHubPage() {
                         placeholder="Enter instructor name" 
                         value={formFields.courseInstructor}
                         onChange={(e) => setFormFields(prev => ({ ...prev, courseInstructor: e.target.value }))}
+                        className="bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Description *</label>
                       <textarea
-                        className="w-full px-3 py-2 border border-border rounded-md text-sm bg-background min-h-[100px]"
+                        className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground min-h-[100px]"
                         placeholder="Enter course description..."
                         value={formFields.courseDescription}
                         onChange={(e) => setFormFields(prev => ({ ...prev, courseDescription: e.target.value }))}
                       />
                     </div>
 
-                    <div className="flex gap-2 pt-3 border-t">
+                    <div className="flex gap-2 pt-3 border-t border-border/60">
                       <Button 
                         disabled={loading}
                         onClick={handleSave}
-                        className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                       >
                         {loading ? "Saving..." : editingItem ? "Update Course" : "Create Course"}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                      <Button variant="outline" onClick={() => setShowCreatePopup(false)} className="border-border/80 bg-surface-elevated hover:border-primary/40">
                         Cancel
                       </Button>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-
-
-        {/* Event Detail Popup Removed */}
-        {showNewsDetail === "NEVER_SHOW_MODAL_EVENT" && selectedEvent && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={selectedEvent.isOnline ? "default" : "secondary"}>
-                      {selectedEvent.isOnline ? "Online" : "In-Person"}
-                    </Badge>
-                    <Badge variant="outline">{selectedEvent.price}</Badge>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowEventDetail(false)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                <h1 className="text-2xl font-bold text-foreground mb-4">{selectedEvent.title}</h1>
-                
-                <div className="space-y-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{selectedEvent.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{selectedEvent.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{selectedEvent.attendees} attending</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">By {selectedEvent.createdBy}</span>
-                    </div>
-                  </div>
-
-                  {/* Event Links Display Panel */}
-                  {(selectedEvent.googleMapsLink || selectedEvent.meetingLink || selectedEvent.registrationLink) && (
-                    <div className="p-4 bg-yellow-50/50 dark:bg-yellow-950/20 border border-yellow-100 dark:border-yellow-900/30 rounded-lg space-y-2 mt-4">
-                      <h4 className="text-xs font-semibold text-yellow-800 dark:text-yellow-400 uppercase tracking-wider">Event Information Links</h4>
-                      <div className="grid grid-cols-1 gap-2.5">
-                        {!selectedEvent.isOnline && selectedEvent.googleMapsLink && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-semibold text-xs text-muted-foreground">Google Maps:</span>
-                            <a 
-                              href={selectedEvent.googleMapsLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-primary hover:underline flex items-center gap-1 font-medium text-xs sm:text-sm"
-                            >
-                              View on Google Maps
-                              <span className="text-xs">↗</span>
-                            </a>
-                          </div>
-                        )}
-                        {selectedEvent.isOnline && selectedEvent.meetingLink && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-semibold text-xs text-muted-foreground">Meeting Link:</span>
-                            <a 
-                              href={selectedEvent.meetingLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-primary hover:underline flex items-center gap-1 font-medium text-xs sm:text-sm"
-                            >
-                              Join Online Meeting
-                              <span className="text-xs">↗</span>
-                            </a>
-                          </div>
-                        )}
-                        {selectedEvent.registrationLink && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-semibold text-xs text-muted-foreground">Register:</span>
-                            <a 
-                              href={selectedEvent.registrationLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-primary hover:underline flex items-center gap-1 font-medium text-xs sm:text-sm"
-                            >
-                              Official Registration Page
-                              <span className="text-xs">↗</span>
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="prose max-w-none dark:prose-invert">
-                    <p className="text-foreground leading-relaxed">{selectedEvent.description}</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  {selectedEvent.registrationLink ? (
-                    <a 
-                      href={selectedEvent.registrationLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium rounded-md text-sm flex items-center justify-center gap-2 h-10 px-4 shadow-sm transition-all"
-                    >
-                      <Calendar className="w-4 h-4" />
-                      Register Now ↗
-                    </a>
-                  ) : (
-                    <Button 
-                      onClick={() => toast({ title: "Booking successful!", description: `You have successfully booked a spot for: ${selectedEvent.title}` })}
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white h-10"
-                    >
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Book Now
-                    </Button>
-                  )}
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      toast({ title: "Link copied!", description: "Event link copied to clipboard." });
-                    }}
-                    className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 h-10"
-                  >
-                    <Share2 className="w-4 h-4 mr-2" />
-                    Share
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Course Detail Popup Removed */}
-        {showNewsDetail === "NEVER_SHOW_MODAL_COURSE" && selectedCourse && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{selectedCourse.level}</Badge>
-                    <Badge variant="secondary">{selectedCourse.category}</Badge>
-                    <Badge variant="outline" className="text-primary">{selectedCourse.price}</Badge>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowCourseDetail(false)}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                <h1 className="text-2xl font-bold text-foreground mb-4">{selectedCourse.title}</h1>
-                
-                <div className="space-y-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedCourse.duration}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{selectedCourse.enrolled} enrolled</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">By {selectedCourse.createdBy}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Instructor: {selectedCourse.instructor}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="prose max-w-none dark:prose-invert">
-                    <p className="text-foreground leading-relaxed">{selectedCourse.description}</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <Button 
-                    onClick={() => toast({ title: "Registration successful!", description: `You have successfully enrolled in: ${selectedCourse.title}` })}
-                    className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                  >
-                    <Bookmark className="w-4 h-4 mr-2" />
-                    Register Now
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      toast({ title: "Link copied!", description: "Course link copied to clipboard." });
-                    }}
-                    className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
-                  >
-                    <Share2 className="w-4 h-4 mr-2" />
-                    Share
-                  </Button>
-                </div>
               </div>
             </div>
           </div>

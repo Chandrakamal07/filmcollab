@@ -240,7 +240,7 @@ export default function LocationDetails() {
     return (
       <AppLayout>
         <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-yellow-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </AppLayout>
     );
@@ -250,8 +250,8 @@ export default function LocationDetails() {
     return (
       <AppLayout>
         <div className="flex h-[60vh] flex-col items-center justify-center space-y-4">
-          <h2 className="text-2xl font-bold">Location not found</h2>
-          <Button onClick={() => navigate("/locations")}>Back to Locations</Button>
+          <h2 className="font-display text-2xl font-bold text-foreground">Location not found</h2>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={() => navigate("/locations")}>Back to Locations</Button>
         </div>
       </AppLayout>
     );
@@ -274,15 +274,15 @@ export default function LocationDetails() {
         
         {/* Top Navigation & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <Button variant="ghost" onClick={() => navigate("/locations")} className="w-fit -ml-4">
+          <Button variant="ghost" onClick={() => navigate("/locations")} className="w-fit -ml-4 text-muted-foreground hover:text-foreground hover:bg-surface-elevated">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Locations
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
               <Share2 className="mr-2 h-4 w-4" /> Share
             </Button>
             {(user?.id === location.created_by || user?.id === location.profile_id || user?.id === location.user_id) && (
-              <Button variant="outline" size="sm" onClick={() => navigate(`/locations/new?edit=${location.id}`)}>
+              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover" onClick={() => navigate(`/locations/new?edit=${location.id}`)}>
                 <Edit className="mr-2 h-4 w-4" /> Edit
               </Button>
             )}
@@ -290,33 +290,41 @@ export default function LocationDetails() {
             <Button 
               variant={isWishlisted ? "default" : "outline"}
               size="sm"
-              className={isWishlisted ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-700 dark:hover:text-red-300 border-red-200 dark:border-red-900/30" : ""}
+              className={cn(
+                isWishlisted
+                  ? "bg-destructive/15 text-destructive hover:bg-destructive/25 border border-destructive/30"
+                  : "border-border/80 bg-surface-elevated hover:bg-surface-hover"
+              )}
               onClick={toggleLike}
             >
-              <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? "fill-red-500 text-red-500" : ""}`} /> 
-              {isWishlisted ? "Liked" : "Like"} ({likesCount})
+              <Heart className={`mr-2 h-4 w-4 ${isWishlisted ? "fill-destructive text-destructive" : ""}`} /> 
+              {isWishlisted ? "Liked" : "Like"} (<span className="font-mono">{likesCount}</span>)
             </Button>
           </div>
         </div>
 
         {/* Title */}
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-none">{location.type}</Badge>
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+            <Badge className="bg-primary/15 text-primary hover:bg-primary/20 border border-primary/30 font-mono uppercase tracking-wider text-xs">
+              {location.type}
+            </Badge>
             {location.tags && location.tags.map((tag: string, idx: number) => (
-              <Badge key={idx} variant="secondary" className="bg-muted text-muted-foreground font-normal border-border">{tag}</Badge>
+              <Badge key={idx} variant="secondary" className="bg-surface-elevated text-muted-foreground font-normal border border-border/80">{tag}</Badge>
             ))}
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground">{location.name}</h1>
-          <p className="text-muted-foreground text-sm mt-1">Listed by <span className="font-medium text-muted-foreground">{creatorName || location.owner_name || 'Verified Owner'}</span></p>
-          <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
-            <span className="flex items-center"><MapPin className="h-4 w-4 mr-1 text-muted-foreground" /> {location.city}, {location.state}</span>
+          <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground">{location.name}</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Listed by <span className="font-medium text-foreground">{creatorName || location.owner_name || 'Verified Owner'}</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-4 mt-2.5 text-sm text-muted-foreground">
+            <span className="flex items-center"><MapPin className="h-4 w-4 mr-1.5 text-primary" /> {location.city}, {location.state}</span>
             {location.address && <span className="flex items-center text-muted-foreground">• {location.address} {location.landmark ? ` (Near ${location.landmark})` : ''}</span>}
             <a 
               href={mapUrl} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="flex items-center text-blue-600 hover:underline"
+              className="flex items-center text-primary hover:underline font-medium"
             >
               <ExternalLink className="h-4 w-4 mr-1" /> View on Google Maps
             </a>
@@ -324,17 +332,19 @@ export default function LocationDetails() {
         </div>
 
         {/* Image Gallery */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 rounded-2xl overflow-hidden h-[400px]">
-          <div className="md:col-span-2 h-full" onClick={() => openLightbox(0)}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 rounded-2xl overflow-hidden h-[400px] border border-border/80 shadow-noir bg-card">
+          <div className="md:col-span-2 h-full overflow-hidden" onClick={() => openLightbox(0)}>
             <img src={images[0]} alt="Main" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" />
           </div>
-          <div className="hidden md:flex flex-col gap-2 h-full">
-            <img src={images[1] || images[0]} alt="Gallery 1" className="w-full h-[calc(50%-4px)] object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" onClick={() => openLightbox(1)} />
-            <div className="relative w-full h-[calc(50%-4px)] group cursor-pointer" onClick={() => openLightbox(2)}>
+          <div className="hidden md:flex flex-col gap-2.5 h-full">
+            <div className="w-full h-[calc(50%-5px)] overflow-hidden">
+              <img src={images[1] || images[0]} alt="Gallery 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" onClick={() => openLightbox(1)} />
+            </div>
+            <div className="relative w-full h-[calc(50%-5px)] group cursor-pointer overflow-hidden" onClick={() => openLightbox(2)}>
               <img src={images[2] || images[0]} alt="Gallery 2" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               {images.length > 3 && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="text-white font-semibold text-lg">+{images.length - 3} More Photos</span>
+                <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+                  <span className="text-white font-mono font-semibold text-lg">+{images.length - 3} More Photos</span>
                 </div>
               )}
             </div>
@@ -348,50 +358,50 @@ export default function LocationDetails() {
             
             {/* Description */}
             <section>
-              <h2 className="text-2xl font-bold mb-3">About this location</h2>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-3">About this location</h2>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{location.description}</p>
             </section>
             
-            <hr />
+            <hr className="border-border/60" />
             
             <section>
-              <h2 className="text-2xl font-bold mb-3 flex items-center">
-                <MapPin className="mr-2 h-6 w-6 text-yellow-600" />
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-3 flex items-center">
+                <MapPin className="mr-2.5 h-5 w-5 text-primary" />
                 Location Details
               </h2>
-              <div className="bg-muted/50 rounded-xl p-5 border border-border space-y-3">
+              <div className="bg-surface-elevated rounded-xl p-5 border border-border/80 space-y-3">
                 {location.address && (
                   <div>
-                    <span className="text-muted-foreground block text-xs uppercase tracking-wider">Full Address</span>
+                    <span className="text-muted-foreground block text-xs font-mono uppercase tracking-wider">Full Address</span>
                     <span className="font-medium text-foreground">{location.address}</span>
                   </div>
                 )}
                 {location.landmark && (
                   <div>
-                    <span className="text-muted-foreground block text-xs uppercase tracking-wider">Nearest Landmark</span>
+                    <span className="text-muted-foreground block text-xs font-mono uppercase tracking-wider">Nearest Landmark</span>
                     <span className="font-medium text-foreground">{location.landmark}</span>
                   </div>
                 )}
                 {location.address && (
                   <div className="pt-2">
-                    <a href={location.map_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.address + ' ' + location.city)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center">
-                      <ExternalLink className="h-4 w-4 mr-1" /> Open in Google Maps
+                    <a href={location.map_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.address + ' ' + location.city)}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center text-sm font-medium">
+                      <ExternalLink className="h-4 w-4 mr-1.5" /> Open in Google Maps
                     </a>
                   </div>
                 )}
               </div>
             </section>
             
-            <hr />
+            <hr className="border-border/60" />
 
             {/* Availability Timings */}
             {location.timings && (
               <section>
-                <h2 className="text-2xl font-bold mb-3 flex items-center">
-                  <Clock className="mr-2 h-6 w-6 text-yellow-600" />
+                <h2 className="font-display text-2xl font-semibold text-foreground mb-3 flex items-center">
+                  <Clock className="mr-2.5 h-5 w-5 text-primary" />
                   Availability Timings
                 </h2>
-                <div className="flex items-start gap-3 bg-muted/50 p-6 rounded-xl border text-base">
+                <div className="flex items-start gap-3 bg-surface-elevated p-6 rounded-xl border border-border/80 text-base">
                   <div className="w-full">
                     <div className="text-muted-foreground space-y-4">
                       {(() => {
@@ -399,11 +409,11 @@ export default function LocationDetails() {
                           const timings = typeof location.timings === 'string' ? JSON.parse(location.timings) : location.timings;
                           if (Array.isArray(timings)) {
                             return timings.map((timing: any, i: number) => (
-                              <div key={i} className="flex flex-col gap-2 border-l-4 border-yellow-300 pl-4 py-1">
-                                <span className="font-semibold text-foreground text-lg">{timing.from} to {timing.to}</span>
+                              <div key={i} className="flex flex-col gap-2 border-l-4 border-primary pl-4 py-1">
+                                <span className="font-mono font-semibold text-foreground text-lg">{timing.from} to {timing.to}</span>
                                 <div className="flex flex-wrap gap-2">
                                   {timing.days.map((day: string, idx: number) => (
-                                    <span key={idx} className="text-sm bg-card text-card-foreground border border-border px-3 py-1 rounded-full text-muted-foreground shadow-sm">
+                                    <span key={idx} className="text-xs font-mono bg-card text-foreground border border-border/80 px-3 py-1 rounded-full shadow-sm">
                                       {day}
                                     </span>
                                   ))}
@@ -422,16 +432,16 @@ export default function LocationDetails() {
               </section>
             )}
 
-            <hr />
+            <hr className="border-border/60" />
 
             {/* Instructions */}
             {location.instructions && (
               <section>
-                <h2 className="text-2xl font-bold mb-3 flex items-center">
-                  <AlertCircle className="mr-2 h-6 w-6 text-yellow-600" /> 
+                <h2 className="font-display text-2xl font-semibold text-foreground mb-3 flex items-center">
+                  <AlertCircle className="mr-2.5 h-5 w-5 text-primary" /> 
                   Property Instructions & Rules
                 </h2>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-5 border border-yellow-100 dark:border-yellow-900/30">
+                <div className="bg-primary/10 rounded-xl p-5 border border-primary/30">
                   <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">{location.instructions}</p>
                 </div>
               </section>
@@ -444,36 +454,34 @@ export default function LocationDetails() {
             <div className="sticky top-6 space-y-6">
               
               {/* Pricing Card */}
-              <Card className="border-yellow-200 dark:border-yellow-900/40 shadow-lg">
+              <Card className="bg-card border-primary/30 shadow-noir rounded-xl">
                 <CardContent className="p-6 space-y-6">
                   <div>
-                    <div className="flex items-end gap-1 mb-1">
-                      <span className="text-3xl font-bold">₹{Number(location.price).toLocaleString()}</span>
+                    <div className="flex items-end gap-1.5 mb-1">
+                      <span className="font-mono text-3xl font-bold text-foreground">₹{Number(location.price).toLocaleString()}</span>
                       <span className="text-muted-foreground pb-1">/ {location.price_type.replace('Per ', '')}</span>
                     </div>
                     {location.price_hour && (
-                      <div className="text-sm text-muted-foreground mt-1">
+                      <div className="text-sm font-mono text-muted-foreground mt-1">
                         ₹{Number(location.price_hour).toLocaleString()} / Hour
                       </div>
                     )}
                     {location.security_deposit && (
-                      <div className="text-sm text-muted-foreground mt-1">
+                      <div className="text-sm font-mono text-muted-foreground mt-1">
                         Security Deposit: ₹{Number(location.security_deposit).toLocaleString()}
                       </div>
                     )}
                   </div>
-
-
                   
                   <div className="space-y-3">
-                    <Button className="w-full bg-yellow-600 hover:bg-yellow-700 text-white dark:bg-yellow-500 dark:hover:bg-yellow-600 dark:text-zinc-950 font-medium h-12 text-lg transition-colors shadow-sm" onClick={() => setIsEnquireOpen(true)}>
+                    <Button className="w-full bg-primary text-primary-foreground hover:bg-primary-hover font-medium h-12 text-base transition-colors shadow-noir" onClick={() => setIsEnquireOpen(true)}>
                       Enquire Now
                     </Button>
-                    <Button variant="outline" className="w-full h-12 text-lg border-yellow-600 text-yellow-700 dark:text-yellow-400 bg-transparent hover:bg-yellow-50 dark:hover:bg-yellow-950/40 hover:text-yellow-800 dark:hover:text-yellow-300 font-medium transition-colors" onClick={() => setIsBookVisitOpen(true)}>
+                    <Button variant="outline" className="w-full h-12 text-base border-primary/40 text-primary bg-primary/5 hover:bg-primary/15 font-medium transition-colors" onClick={() => setIsBookVisitOpen(true)}>
                       Book Site Visit
                     </Button>
                     {user?.id === location.created_by && (
-                      <Button variant="ghost" className="w-full text-blue-600" onClick={() => {
+                      <Button variant="ghost" className="w-full text-primary hover:bg-primary/10" onClick={() => {
                         setIsViewVisitsOpen(true);
                         fetchSiteVisits();
                       }}>
@@ -482,35 +490,34 @@ export default function LocationDetails() {
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center">
-                    <Shield className="h-4 w-4 text-green-500" /> Secure enquiry via FilmCollab
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2 border-t border-border/60">
+                    <Shield className="h-4 w-4 text-primary" /> Secure enquiry via FilmCollab
                   </div>
                 </CardContent>
               </Card>
 
               {/* Contact Card */}
-              <Card>
-                <CardContent className="px-0 py-2 md:p-6">
-                  <h3 className="font-bold text-lg mb-4 border-b pb-2">Contact Information</h3>
+              <Card className="bg-card border-border/80 shadow-noir rounded-xl">
+                <CardContent className="px-4 py-4 md:p-6">
+                  <h3 className="font-display font-semibold text-lg text-foreground mb-4 border-b border-border/60 pb-2">Contact Information</h3>
                   <div className="space-y-3 text-sm text-muted-foreground">
                     <div>
-                      <span className="text-muted-foreground block text-xs uppercase tracking-wider">Name</span>
-                      <span className="font-medium">{creatorName || location.owner_name}</span>
+                      <span className="text-muted-foreground block text-xs font-mono uppercase tracking-wider">Name</span>
+                      <span className="font-medium text-foreground">{creatorName || location.owner_name}</span>
                     </div>
                     {location.phone && (
                       <div className="pt-2">
-                        <span className="text-muted-foreground block text-xs uppercase tracking-wider">Mobile Number</span>
-                        <span className="font-medium">📞 {location.phone}</span>
+                        <span className="text-muted-foreground block text-xs font-mono uppercase tracking-wider">Mobile Number</span>
+                        <span className="font-mono font-medium text-foreground">📞 {location.phone}</span>
                       </div>
                     )}
                     {location.email && (
                       <div className="pt-2">
-                        <span className="text-muted-foreground block text-xs uppercase tracking-wider">Email</span>
-                        <span className="font-medium">✉️ {location.email}</span>
+                        <span className="text-muted-foreground block text-xs font-mono uppercase tracking-wider">Email</span>
+                        <span className="font-medium text-foreground">✉️ {location.email}</span>
                       </div>
                     )}
                   </div>
-                  
                 </CardContent>
               </Card>
 
@@ -523,9 +530,9 @@ export default function LocationDetails() {
       
       {/* Enquire Modal */}
       <Dialog open={isEnquireOpen} onOpenChange={setIsEnquireOpen}>
-        <DialogContent>
+        <DialogContent className="bg-card border-border/80 shadow-noir">
           <DialogHeader>
-            <DialogTitle>Send Enquiry</DialogTitle>
+            <DialogTitle className="font-display text-xl text-foreground">Send Enquiry</DialogTitle>
             <DialogDescription>Send a message directly to the owner of this property.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
@@ -536,21 +543,24 @@ export default function LocationDetails() {
                 value={enquiryMessage} 
                 onChange={e => setEnquiryMessage(e.target.value)}
                 rows={4}
+                className="bg-surface-elevated border-border/80"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEnquireOpen(false)}>Cancel</Button>
-            <Button onClick={handleEnquire} disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}</Button>
+            <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setIsEnquireOpen(false)}>Cancel</Button>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleEnquire} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Book Visit Modal */}
       <Dialog open={isBookVisitOpen} onOpenChange={setIsBookVisitOpen}>
-        <DialogContent className="sm:max-w-lg w-full">
+        <DialogContent className="sm:max-w-lg w-full bg-card border-border/80 shadow-noir">
           <DialogHeader>
-            <DialogTitle className="text-xl">Book Site Visit</DialogTitle>
+            <DialogTitle className="font-display text-xl text-foreground">Book Site Visit</DialogTitle>
             <DialogDescription>Select your preferred day(s) and time window for visiting the property.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5 pt-2">
@@ -558,7 +568,7 @@ export default function LocationDetails() {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Preferred Day(s)</Label>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs font-mono text-muted-foreground">
                   {selectedDays.length === 0 ? "Select 1 or more days" : `${selectedDays.length} day(s) selected`}
                 </span>
               </div>
@@ -578,8 +588,8 @@ export default function LocationDetails() {
                       className={cn(
                         "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer select-none",
                         isSelected
-                          ? "bg-yellow-600 text-white border-yellow-600 dark:bg-yellow-500 dark:text-zinc-950 dark:border-yellow-500 shadow-sm"
-                          : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border"
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-surface-elevated hover:bg-surface-hover text-muted-foreground hover:text-foreground border-border/80"
                       )}
                     >
                       {day}
@@ -592,7 +602,7 @@ export default function LocationDetails() {
                 <button
                   type="button"
                   onClick={() => setSelectedDays(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])}
-                  className="text-[11px] text-yellow-600 dark:text-yellow-400 hover:underline cursor-pointer"
+                  className="text-[11px] text-primary hover:underline cursor-pointer"
                 >
                   + All Weekdays
                 </button>
@@ -600,7 +610,7 @@ export default function LocationDetails() {
                 <button
                   type="button"
                   onClick={() => setSelectedDays(['Saturday', 'Sunday'])}
-                  className="text-[11px] text-yellow-600 dark:text-yellow-400 hover:underline cursor-pointer"
+                  className="text-[11px] text-primary hover:underline cursor-pointer"
                 >
                   + Weekends
                 </button>
@@ -608,7 +618,7 @@ export default function LocationDetails() {
                 <button
                   type="button"
                   onClick={() => setSelectedDays(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])}
-                  className="text-[11px] text-yellow-600 dark:text-yellow-400 hover:underline cursor-pointer"
+                  className="text-[11px] text-primary hover:underline cursor-pointer"
                 >
                   + All Days
                 </button>
@@ -619,13 +629,13 @@ export default function LocationDetails() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <Clock className="h-4 w-4 text-primary" />
                   Time Window
                 </Label>
                 <span className="text-xs text-muted-foreground">Operating hours</span>
               </div>
 
-              <div className="bg-muted/30 border border-border/80 rounded-xl p-3.5 space-y-3">
+              <div className="bg-surface-elevated border border-border/80 rounded-xl p-3.5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground font-medium block">
@@ -635,7 +645,7 @@ export default function LocationDetails() {
                       type="time"
                       value={visitStartTime}
                       onChange={e => setVisitStartTime(e.target.value)}
-                      className="bg-card border-border h-10 px-3 text-sm rounded-lg font-medium focus-visible:ring-yellow-500"
+                      className="bg-card border-border/80 h-10 px-3 text-sm rounded-lg font-mono focus-visible:ring-primary"
                     />
                   </div>
 
@@ -647,7 +657,7 @@ export default function LocationDetails() {
                       type="time"
                       value={visitEndTime}
                       onChange={e => setVisitEndTime(e.target.value)}
-                      className="bg-card border-border h-10 px-3 text-sm rounded-lg font-medium focus-visible:ring-yellow-500"
+                      className="bg-card border-border/80 h-10 px-3 text-sm rounded-lg font-mono focus-visible:ring-primary"
                     />
                   </div>
                 </div>
@@ -671,8 +681,8 @@ export default function LocationDetails() {
                         className={cn(
                           "text-[11px] px-2.5 py-1 rounded-md border transition-colors cursor-pointer",
                           visitStartTime === slot.start && visitEndTime === slot.end
-                            ? "bg-yellow-600/15 text-yellow-700 border-yellow-500/50 dark:bg-yellow-500/20 dark:text-yellow-300 dark:border-yellow-500/50 font-medium"
-                            : "bg-card hover:bg-muted text-muted-foreground hover:text-foreground border-border/70"
+                            ? "bg-primary/15 text-primary border-primary/50 font-medium"
+                            : "bg-card hover:bg-surface-hover text-muted-foreground hover:text-foreground border-border/70"
                         )}
                       >
                         {slot.label}
@@ -688,21 +698,24 @@ export default function LocationDetails() {
                 placeholder="Any specific requirements..." 
                 value={visitMessage} 
                 onChange={e => setVisitMessage(e.target.value)}
+                className="bg-surface-elevated border-border/80"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsBookVisitOpen(false)}>Cancel</Button>
-            <Button onClick={handleBookVisit} disabled={isSubmitting}>{isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Request Visit'}</Button>
+            <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setIsBookVisitOpen(false)}>Cancel</Button>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleBookVisit} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Request Visit'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* View Visits Modal */}
       <Dialog open={isViewVisitsOpen} onOpenChange={setIsViewVisitsOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-card border-border/80 shadow-noir">
           <DialogHeader>
-            <DialogTitle>Site Visit Requests</DialogTitle>
+            <DialogTitle className="font-display text-xl text-foreground">Site Visit Requests</DialogTitle>
             <DialogDescription>List of users who requested a site visit for this property.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
@@ -710,21 +723,23 @@ export default function LocationDetails() {
               <p className="text-muted-foreground text-center py-4">No site visit requests yet.</p>
             ) : (
               siteVisits.map(visit => (
-                <div key={visit.id} className="border rounded-lg p-4 space-y-2 bg-muted/50">
+                <div key={visit.id} className="border border-border/80 rounded-xl p-4 space-y-2 bg-surface-elevated">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-semibold text-lg">{visit.user?.full_name || visit.user?.first_name || 'Anonymous User'}</h4>
+                      <h4 className="font-semibold text-lg text-foreground">{visit.user?.full_name || visit.user?.first_name || 'Anonymous User'}</h4>
                       <p className="text-sm text-muted-foreground">{visit.user?.email} {visit.user?.phone ? ` • ${visit.user.phone}` : ''}</p>
                     </div>
-                    <Badge variant={visit.status === 'pending' ? 'outline' : 'default'}>{visit.status}</Badge>
+                    <Badge variant={visit.status === 'pending' ? 'outline' : 'default'} className="font-mono uppercase text-[10px]">
+                      {visit.status}
+                    </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm mt-2">
-                    <div><span className="text-muted-foreground">Requested Day:</span> <span className="font-medium">{visit.selected_day}</span></div>
-                    <div><span className="text-muted-foreground">Requested Time:</span> <span className="font-medium">{visit.selected_time}</span></div>
+                    <div><span className="text-muted-foreground">Requested Day:</span> <span className="font-medium text-foreground">{visit.selected_day}</span></div>
+                    <div><span className="text-muted-foreground">Requested Time:</span> <span className="font-mono font-medium text-foreground">{visit.selected_time}</span></div>
                   </div>
                   {visit.message && (
-                    <div className="mt-2 text-sm bg-card text-card-foreground p-3 rounded border">
-                      <span className="text-muted-foreground block mb-1">Message:</span>
+                    <div className="mt-2 text-sm bg-card text-card-foreground p-3 rounded-lg border border-border/80">
+                      <span className="text-muted-foreground block mb-1 text-xs font-mono uppercase">Message:</span>
                       {visit.message}
                     </div>
                   )}
@@ -743,7 +758,7 @@ export default function LocationDetails() {
         >
           <Button 
             variant="ghost" 
-            className="absolute top-4 right-4 text-white hover:bg-card text-card-foreground/20 rounded-full h-12 w-12 p-0"
+            className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full h-12 w-12 p-0"
             onClick={closeLightbox}
           >
             <X className="h-6 w-6" />
@@ -751,7 +766,7 @@ export default function LocationDetails() {
 
           <Button 
             variant="ghost" 
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-card text-card-foreground/20 rounded-full h-14 w-14 p-0 hidden md:flex"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full h-14 w-14 p-0 hidden md:flex"
             onClick={prevImage}
           >
             <ChevronLeft className="h-8 w-8" />
@@ -766,7 +781,7 @@ export default function LocationDetails() {
 
           <Button 
             variant="ghost" 
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-card text-card-foreground/20 rounded-full h-14 w-14 p-0 hidden md:flex"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 rounded-full h-14 w-14 p-0 hidden md:flex"
             onClick={nextImage}
           >
             <ChevronRight className="h-8 w-8" />
@@ -776,7 +791,7 @@ export default function LocationDetails() {
           <div className="absolute inset-y-0 left-0 w-1/3 md:hidden" onClick={prevImage} />
           <div className="absolute inset-y-0 right-0 w-1/3 md:hidden" onClick={nextImage} />
 
-          <div className="absolute bottom-4 left-1/2 -translate-y-1/2 text-white/70 bg-black/50 px-4 py-1 rounded-full text-sm">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 bg-black/60 font-mono px-4 py-1 rounded-full text-sm">
             {selectedImageIndex + 1} / {images.length}
           </div>
         </div>

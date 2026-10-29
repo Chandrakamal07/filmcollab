@@ -9,12 +9,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   Search,
-  UsersRound,
   Tags,
   User,
   Check,
   Eye,
-  Edit,
   Trash2,
   Shield,
   MessageSquare,
@@ -99,7 +97,6 @@ export default function AdminCommunities() {
   };
 
   const handleSaveCommunityTags = (communityId: number) => {
-    // Here you would typically make an API call to update the community's tags
     const communityToUpdate = communities.find(c => c.id === communityId);
     if (communityToUpdate && editingTags) {
       communityToUpdate.tags = editingTags.tags;
@@ -123,22 +120,22 @@ export default function AdminCommunities() {
 
   const getTagBadgeStyle = (tag: string): string => {
     const tagConfig = availableTags.find(t => t.label === tag);
-    if (!tagConfig) return "";
+    if (!tagConfig) return "bg-surface-elevated text-foreground border border-border/80";
 
     return ({
-      purple: "bg-purple-50 text-purple-700 hover:bg-purple-100",
-      orange: "bg-orange-50 text-orange-700 hover:bg-orange-100",
-      green: "bg-green-50 text-green-700 hover:bg-green-100",
-      blue: "bg-blue-50 text-blue-700 hover:bg-blue-100",
-      red: "bg-red-50 text-red-700 hover:bg-red-100",
-      yellow: "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-    }[tagConfig.color] || "");
+      purple: "bg-purple-500/15 text-purple-400 border border-purple-500/30",
+      orange: "bg-amber-500/15 text-amber-500 border border-amber-500/30",
+      green: "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30",
+      blue: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+      red: "bg-destructive/15 text-destructive border border-destructive/30",
+      yellow: "bg-primary/15 text-primary border border-primary/30"
+    }[tagConfig.color] || "bg-surface-elevated text-foreground");
   };
 
   const getStatusBadgeStyle = (status: string) => {
     return status === "Active"
-      ? "bg-green-50 text-green-700 hover:bg-green-100"
-      : "bg-red-50 text-red-700 hover:bg-red-100";
+      ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
+      : "bg-destructive/15 text-destructive border border-destructive/30";
   };
 
   // Filter communities based on search and filters
@@ -156,34 +153,35 @@ export default function AdminCommunities() {
     <AdminLayout pageTitle="Communities Management">
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Communities Management</h1>
-          <p className="text-muted-foreground mt-1">Manage and monitor community groups</p>
+        <div className="border-b border-border/60 pb-5">
+          <p className="noir-eyebrow mb-1">Guilds & Collectives</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Communities Management</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Manage and monitor community groups</p>
         </div>
 
         {/* Main Content Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">Communities</CardTitle>
+        <Card className="noir-card border-border/80 bg-card">
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-2xl font-display">Communities</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             {/* Search and Filter Bar */}
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative flex-1">
+              <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search communities..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-surface-elevated border-border/80"
                 />
               </div>
               
               <div className="flex gap-4 items-center">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">Status:</label>
+                  <label className="text-sm font-medium text-muted-foreground">Status:</label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-[140px] bg-surface-elevated border-border/80">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -197,10 +195,10 @@ export default function AdminCommunities() {
             </div>
 
             {/* Communities Table */}
-            <div className="border rounded-lg">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Community</TableHead>
                     <TableHead>Members</TableHead>
                     <TableHead>Creator</TableHead>
@@ -212,31 +210,31 @@ export default function AdminCommunities() {
                 </TableHeader>
                 <TableBody>
                   {filteredCommunities.map((community) => (
-                    <TableRow key={community.id}>
+                    <TableRow key={community.id} className="border-border/60 hover:bg-surface-hover/50">
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{community.name}</span>
+                          <span className="font-medium text-foreground">{community.name}</span>
                           <span className="text-sm text-muted-foreground truncate max-w-xs">
                             {community.description}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{community.totalMembers.toLocaleString()}</span>
-                          <span className="text-sm text-muted-foreground">
+                        <div className="flex flex-col font-mono">
+                          <span className="font-medium text-foreground">{community.totalMembers.toLocaleString()}</span>
+                          <span className="text-xs text-muted-foreground">
                             {community.activeMembers.toLocaleString()} active
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                            <User className="h-4 w-4 text-yellow-600" />
+                          <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium">{community.creator.name}</span>
-                            <span className="text-xs text-muted-foreground">@{community.creator.username}</span>
+                            <span className="text-sm font-medium text-foreground">{community.creator.name}</span>
+                            <span className="text-xs font-mono text-muted-foreground">@{community.creator.username}</span>
                           </div>
                         </div>
                       </TableCell>
@@ -254,13 +252,13 @@ export default function AdminCommunities() {
                         <div className="flex items-center gap-2">
                           <div className="flex flex-wrap gap-2 flex-1">
                             {community.tags.map((tag, index) => (
-                                <Badge 
-                                  key={index}
-                                  variant="secondary" 
-                                  className={getTagBadgeStyle(tag) || ""}
-                                >
-                                  {tag}
-                                </Badge>
+                              <Badge 
+                                key={index}
+                                variant="secondary" 
+                                className={getTagBadgeStyle(tag) || ""}
+                              >
+                                {tag}
+                              </Badge>
                             ))}
                           </div>
                           <Popover 
@@ -277,13 +275,13 @@ export default function AdminCommunities() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 hover:bg-yellow-50"
+                                className="h-8 w-8 hover:bg-primary/10"
                               >
-                                <Tags className="h-4 w-4 text-yellow-600" />
+                                <Tags className="h-4 w-4 text-primary" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-80 p-0" align="end">
-                              <Command>
+                            <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                              <Command className="bg-card">
                                 <CommandInput placeholder="Search tags..." />
                                 <CommandEmpty>No tags found.</CommandEmpty>
                                 <CommandGroup>
@@ -297,9 +295,9 @@ export default function AdminCommunities() {
                                       >
                                         <div className={cn(
                                           "flex h-4 w-4 items-center justify-center rounded border",
-                                          isSelected ? "bg-yellow-500 border-yellow-500" : "border-gray-200"
+                                          isSelected ? "bg-primary border-primary" : "border-border"
                                         )}>
-                                          {isSelected && <Check className="h-3 w-3 text-white" />}
+                                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                                         </div>
                                         <Badge 
                                           variant="secondary"
@@ -311,10 +309,10 @@ export default function AdminCommunities() {
                                     );
                                   })}
                                 </CommandGroup>
-                                <div className="border-t p-2">
+                                <div className="border-t border-border/60 p-2">
                                   <Button
                                     size="sm"
-                                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white"
+                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => handleSaveCommunityTags(community.id)}
                                   >
                                     Save Changes
@@ -326,8 +324,8 @@ export default function AdminCommunities() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-sm">{community.lastActive}</span>
+                        <div className="flex flex-col font-mono">
+                          <span className="text-sm text-foreground">{community.lastActive}</span>
                           <span className="text-xs text-muted-foreground">
                             Created: {community.dateCreated}
                           </span>
@@ -338,7 +336,7 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
                           >
                             <MessageSquare className="h-4 w-4" />
                           </Button>
@@ -346,7 +344,7 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                           >
                             <Settings className="h-4 w-4" />
                           </Button>
@@ -354,7 +352,7 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -371,7 +369,7 @@ export default function AdminCommunities() {
               <span>Showing {filteredCommunities.length} communities</span>
               <div className="flex items-center gap-2">
                 <span>Rows per page:</span>
-                <select className="w-16 h-8 px-2 border rounded text-sm">
+                <select className="w-16 h-8 px-2 border border-border/80 bg-surface-elevated text-foreground rounded text-sm">
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>

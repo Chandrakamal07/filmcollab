@@ -821,32 +821,33 @@ const PostsPage = () => {
 
   return (
     <AppLayout pageTitle="Posts">
-      <div className="w-full py-4 px-4">
+      <div className="w-full py-4 px-4 md:px-6 space-y-6">
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="border-b border-border/60 pb-5">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Posts</h1>
-              <p className="text-gray-600 mt-1">
+              <p className="noir-eyebrow text-primary mb-1">Creator Feed</p>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-foreground">Posts</h1>
+              <p className="text-muted-foreground text-sm mt-1">
                 Share updates, work-in-progress, and ideas with the community
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     placeholder="Search posts or #hashtag"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-64 border-yellow-200 focus:border-yellow-500"
+                    className="pl-10 w-64 bg-surface-elevated border-border/80"
                   />
                 </div>
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32 border-yellow-200 focus:border-yellow-500">
+                  <SelectTrigger className="w-36 bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border/80">
                     <SelectItem value="recent">Most Recent</SelectItem>
                     <SelectItem value="popular">Most Popular</SelectItem>
                     <SelectItem value="trending">Trending</SelectItem>
@@ -857,108 +858,108 @@ const PostsPage = () => {
                 <Button 
                   variant="outline" 
                   onClick={testPostCreation}
-                  className="text-xs"
+                  className="text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover"
                 >
                   Debug Test
                 </Button>
                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                    <Button className="bg-primary text-primary-foreground hover:bg-primary-hover shadow-noir font-medium">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Post
                     </Button>
                   </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Create New Post</DialogTitle>
-                    <DialogDescription>
-                      Share your thoughts, updates, or work-in-progress with the community.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Input
-                        placeholder="Post title (optional)"
-                        className="border-yellow-200 focus:border-yellow-500"
-                        value={newPost.title}
-                        onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Textarea
-                        placeholder="What's on your mind? Use #hashtags to categorize your post..."
-                        value={newPost.content}
-                        onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
-                        className="min-h-32 border-yellow-200 focus:border-yellow-500"
-                      />
-                    </div>
-                    
-                    {/* Media Upload */}
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Add Media (Optional)</label>
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*,video/*"
-                          onChange={handleMediaSelect}
-                          className="hidden"
-                          id="media-upload"
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border/80 shadow-noir">
+                    <DialogHeader>
+                      <DialogTitle className="font-display text-xl text-foreground">Create New Post</DialogTitle>
+                      <DialogDescription>
+                        Share your thoughts, updates, or work-in-progress with the community.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Input
+                          placeholder="Post title (optional)"
+                          className="bg-surface-elevated border-border/80"
+                          value={newPost.title}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
                         />
-                        <label
-                          htmlFor="media-upload"
-                          className="flex flex-col items-center justify-center cursor-pointer"
-                        >
-                          <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Click to upload images or videos
-                          </p>
-                        </label>
+                      </div>
+                      <div>
+                        <Textarea
+                          placeholder="What's on your mind? Use #hashtags to categorize your post..."
+                          value={newPost.content}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
+                          className="min-h-32 bg-surface-elevated border-border/80"
+                        />
                       </div>
                       
-                      {/* Selected Media Preview */}
-                      {newPost.mediaFiles.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                          {newPost.mediaFiles.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
-                              {file.type.startsWith('image/') ? (
-                                <ImageIcon className="h-4 w-4" />
-                              ) : (
-                                <VideoIcon className="h-4 w-4" />
-                              )}
-                              <span className="text-sm flex-1 truncate">{file.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeMediaFile(index)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
+                      {/* Media Upload */}
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Add Media (Optional)</label>
+                        <div className="border-2 border-dashed border-border/80 bg-surface-elevated/50 hover:border-primary/40 rounded-xl p-6 transition-colors">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,video/*"
+                            onChange={handleMediaSelect}
+                            className="hidden"
+                            id="media-upload"
+                          />
+                          <label
+                            htmlFor="media-upload"
+                            className="flex flex-col items-center justify-center cursor-pointer"
+                          >
+                            <Upload className="h-8 w-8 text-primary mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              Click to upload images or videos
+                            </p>
+                          </label>
                         </div>
-                      )}
-                    </div>
+                        
+                        {/* Selected Media Preview */}
+                        {newPost.mediaFiles.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {newPost.mediaFiles.map((file, index) => (
+                              <div key={index} className="flex items-center gap-2 p-2.5 bg-surface-elevated border border-border/80 rounded-lg">
+                                {file.type.startsWith('image/') ? (
+                                  <ImageIcon className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <VideoIcon className="h-4 w-4 text-primary" />
+                                )}
+                                <span className="text-sm flex-1 truncate text-foreground">{file.name}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeMediaFile(index)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50"
-                        onClick={() => setIsCreateDialogOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                        onClick={handleCreatePost}
-                        disabled={isUploading || !newPost.content.trim()}
-                      >
-                        {isUploading ? "Creating..." : "Create Post"}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                          onClick={() => setIsCreateDialogOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                          onClick={handleCreatePost}
+                          disabled={isUploading || !newPost.content.trim()}
+                        >
+                          {isUploading ? "Creating..." : "Create Post"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </div>
@@ -966,11 +967,11 @@ const PostsPage = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="grid w-full grid-cols-4 bg-yellow-50 border-yellow-200">
-            <TabsTrigger value="all" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">All Posts</TabsTrigger>
-            <TabsTrigger value="trending" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Trending Posts</TabsTrigger>
-            <TabsTrigger value="published" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Published Posts</TabsTrigger>
-            <TabsTrigger value="saved" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Saved Posts</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 bg-surface-elevated border border-border/80">
+            <TabsTrigger value="all" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">All Posts</TabsTrigger>
+            <TabsTrigger value="trending" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Trending Posts</TabsTrigger>
+            <TabsTrigger value="published" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Published Posts</TabsTrigger>
+            <TabsTrigger value="saved" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Saved Posts</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -979,36 +980,36 @@ const PostsPage = () => {
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-muted-foreground mt-2">Loading posts...</p>
+              <p className="text-muted-foreground mt-2 font-mono text-xs uppercase tracking-widest">Loading posts...</p>
             </div>
           ) : filteredPosts.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <div className="text-center py-12 rounded-xl border border-border/80 bg-card/60">
+              <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
               <p className="text-muted-foreground">No posts found</p>
             </div>
           ) : (
             filteredPosts.map((post) => (
-              <Card key={post.id} className="overflow-hidden border-yellow-200">
+              <Card key={post.id} className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-noir">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
+                      <Avatar className="h-10 w-10 border border-border/80">
+                        <AvatarFallback className="bg-primary/15 text-primary font-mono font-semibold">
                           {post.author?.full_name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h3 className="font-semibold text-sm text-gray-900">
+                        <h3 className="font-semibold text-sm text-foreground">
                           {post.author?.full_name || "Unknown User"}
                         </h3>
-                        <p className="text-xs text-gray-600 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                        <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-primary/80" />
                           {formatTimeAgo(post.created_at)}
                         </p>
                       </div>
                     </div>
                     {post.is_featured && (
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                      <Badge variant="secondary" className="bg-primary/15 text-primary border border-primary/30 font-mono text-[11px] uppercase">
                         <Flame className="h-3 w-3 mr-1" />
                         Featured
                       </Badge>
@@ -1020,15 +1021,15 @@ const PostsPage = () => {
                   {/* Post Content */}
                   <div>
                     {post.title && (
-                      <h4 className="font-semibold text-base mb-2">{post.title}</h4>
+                      <h4 className="font-display font-semibold text-lg text-foreground mb-2">{post.title}</h4>
                     )}
-                    <p className="text-sm whitespace-pre-wrap">{post.content}</p>
+                    <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{post.content}</p>
                     
                     {/* Hashtags */}
                     {post.hashtags && post.hashtags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1.5 mt-3">
                         {post.hashtags.map((tag, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
+                          <Badge key={index} variant="outline" className="text-xs bg-surface-elevated border-border/80 text-muted-foreground font-mono">
                             #{tag}
                           </Badge>
                         ))}
@@ -1040,7 +1041,7 @@ const PostsPage = () => {
                   {post.media_urls && post.media_urls.length > 0 && (
                     <div className="space-y-2">
                       {post.media_urls.map((url, index) => (
-                        <div key={index} className="relative">
+                        <div key={index} className="relative rounded-xl overflow-hidden border border-border/80 bg-surface-elevated">
                           {post.media_types?.[index] === 'video' ? (
                             <video
                               src={url}
@@ -1060,17 +1061,17 @@ const PostsPage = () => {
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
                     <div className="flex items-center gap-4">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleLikePost(post.id, post.is_liked || false)}
                         disabled={loadingActions[`like-${post.id}`]}
-                        className={`flex items-center gap-2 transition-colors ${post.is_liked ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-yellow-600'}`}
+                        className={`flex items-center gap-2 transition-colors ${post.is_liked ? 'text-destructive hover:text-destructive' : 'text-muted-foreground hover:text-primary'}`}
                       >
                         <Heart className={`h-4 w-4 transition-all ${post.is_liked ? 'fill-current scale-110' : 'hover:scale-110'}`} />
-                        <span className="font-medium">{post.likes_count}</span>
+                        <span className="font-mono font-medium">{post.likes_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -1080,26 +1081,26 @@ const PostsPage = () => {
                           setIsCommentsDialogOpen(true);
                           fetchComments(post.id);
                         }}
-                        className="flex items-center gap-2 text-muted-foreground hover:text-yellow-600 transition-colors"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
                       >
                         <MessageCircle className="h-4 w-4 hover:scale-110 transition-transform" />
-                        <span className="font-medium">{post.comments_count}</span>
+                        <span className="font-mono font-medium">{post.comments_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSharePost(post)}
-                        className="flex items-center gap-2 text-muted-foreground hover:text-yellow-600 transition-colors"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
                       >
                         <Share2 className="h-4 w-4 hover:scale-110 transition-transform" />
-                        <span className="font-medium">{post.shares_count}</span>
+                        <span className="font-mono font-medium">{post.shares_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSavePost(post.id, post.is_saved || false)}
                         disabled={loadingActions[`save-${post.id}`]}
-                        className={`flex items-center gap-2 transition-colors ${post.is_saved ? 'text-yellow-600 hover:text-yellow-700' : 'text-muted-foreground hover:text-yellow-600'}`}
+                        className={`flex items-center gap-2 transition-colors ${post.is_saved ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-primary'}`}
                       >
                         <Bookmark className={`h-4 w-4 transition-all ${post.is_saved ? 'fill-current scale-110' : 'hover:scale-110'}`} />
                       </Button>
@@ -1114,7 +1115,7 @@ const PostsPage = () => {
                           setIsCommentsDialogOpen(true);
                           fetchComments(post.id);
                         }}
-                        className="text-muted-foreground text-xs"
+                        className="text-muted-foreground hover:text-primary text-xs"
                       >
                         View comments
                         <ChevronRight className="h-3 w-3 ml-1" />
@@ -1129,9 +1130,9 @@ const PostsPage = () => {
 
         {/* Comments Dialog */}
         <Dialog open={isCommentsDialogOpen} onOpenChange={setIsCommentsDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-card border-border/80 shadow-noir">
             <DialogHeader>
-              <DialogTitle>Comments</DialogTitle>
+              <DialogTitle className="font-display text-xl text-foreground">Comments</DialogTitle>
               <DialogDescription>
                 Join the conversation and share your thoughts on this post.
               </DialogDescription>
@@ -1144,9 +1145,9 @@ const PostsPage = () => {
                   placeholder="Write a comment..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 bg-surface-elevated border-border/80"
                 />
-                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleAddComment} disabled={!newComment.trim()}>
                   Post
                 </Button>
               </div>
@@ -1154,46 +1155,46 @@ const PostsPage = () => {
               {/* Comments List */}
               <div className="space-y-4">
                 {comments.map((comment) => (
-                  <div key={comment.id} className="space-y-2">
+                  <div key={comment.id} className="space-y-2 p-3 rounded-xl bg-surface-elevated border border-border/80">
                     <div className="flex items-start gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
+                      <Avatar className="h-8 w-8 border border-border/80">
+                        <AvatarFallback className="bg-primary/15 text-primary font-mono text-xs">
                           {comment.author?.full_name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm">
+                          <h4 className="font-semibold text-sm text-foreground">
                             {comment.author?.full_name || "Unknown User"}
                           </h4>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs font-mono text-muted-foreground">
                             {formatTimeAgo(comment.created_at)}
                           </span>
                         </div>
-                        <p className="text-sm mt-1">{comment.content}</p>
+                        <p className="text-sm text-foreground/90 mt-1">{comment.content}</p>
                       </div>
                     </div>
                     
                     {/* Replies */}
                     {comment.replies && comment.replies.length > 0 && (
-                      <div className="ml-11 space-y-2">
+                      <div className="ml-11 space-y-2 pt-2 border-t border-border/50">
                         {comment.replies.map((reply) => (
                           <div key={reply.id} className="flex items-start gap-3">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback>
+                            <Avatar className="h-6 w-6 border border-border/80">
+                              <AvatarFallback className="bg-primary/15 text-primary font-mono text-[10px]">
                                 {reply.author?.full_name?.charAt(0) || "U"}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <h5 className="font-medium text-xs">
+                                <h5 className="font-medium text-xs text-foreground">
                                   {reply.author?.full_name || "Unknown User"}
                                 </h5>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs font-mono text-muted-foreground">
                                   {formatTimeAgo(reply.created_at)}
                                 </span>
                               </div>
-                              <p className="text-xs mt-1">{reply.content}</p>
+                              <p className="text-xs text-foreground/90 mt-1">{reply.content}</p>
                             </div>
                           </div>
                         ))}

@@ -1851,16 +1851,24 @@ export default function ProfilePage() {
 
   return (
     <AppLayout>
-      <div className="space-y-4 bg-background min-h-screen p-4 -m-4">
+      <div className="space-y-6 bg-background min-h-screen pb-8">
         {/* Profile Header */}
-        <Card className="relative overflow-hidden border-yellow-200/60 dark:border-border bg-card text-card-foreground shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex flex-row items-center md:items-center gap-4 flex-1 text-left w-full">
+        <Card className="relative overflow-hidden border-border/80 bg-card text-card-foreground shadow-noir">
+          <div className="h-24 sm:h-32 w-full bg-gradient-to-r from-surface-elevated via-card to-surface-elevated border-b border-border/60 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.14),transparent_65%)]" />
+            <div className="absolute bottom-3 right-4 hidden sm:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground/60">
+              <span>STUDIO DOSSIER</span>
+              <span>•</span>
+              <span>{profile.shortId ? `ID ${profile.shortId}` : "VERIFIED TALENT"}</span>
+            </div>
+          </div>
+          <CardContent className="p-6 pt-0 sm:pt-0">
+            <div className="flex flex-col md:flex-row md:items-end gap-5 -mt-10 sm:-mt-12 mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 flex-1 text-left w-full">
                 <div className="relative group mx-0 flex-shrink-0">
-                  <Avatar className="w-20 h-20 sm:w-24 sm:h-24 border-4 border-card dark:border-card shadow-lg flex-shrink-0">
-                    <AvatarImage src={profile.avatar} alt={profile.name} />
-                    <AvatarFallback className="text-xl font-semibold bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+                  <Avatar className="w-24 h-24 sm:w-28 sm:h-28 border-4 border-card shadow-noir-lg flex-shrink-0 ring-1 ring-border/70">
+                    <AvatarImage src={profile.avatar} alt={profile.name} className="object-cover" />
+                    <AvatarFallback className="text-2xl font-display font-semibold bg-primary/15 text-primary">
                       {profile.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -1876,36 +1884,36 @@ export default function ProfilePage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploadingAvatar}
-                        className="absolute bottom-0 right-0 p-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full shadow-md transition-colors disabled:opacity-50"
+                        className="absolute bottom-0.5 right-0.5 p-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-full shadow-md transition-colors disabled:opacity-50"
                         title="Edit profile picture"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-3.5 h-3.5" />
                       </button>
                     </>
                   )}
                 </div>
                 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pt-2 sm:pt-0 sm:pb-1">
                   <div className="flex items-center justify-start gap-2 mb-1">
-                    <h1 className="text-xl sm:text-2xl font-bold text-foreground flex flex-nowrap items-center justify-start gap-1.5 sm:gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full max-w-full sm:max-w-none whitespace-nowrap">
+                    <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground flex flex-nowrap items-center justify-start gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full max-w-full sm:max-w-none whitespace-nowrap">
                       {profile.name}
                       {profile.verified && (
-                        <UserCheck className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                        <UserCheck className="w-5 h-5 text-primary flex-shrink-0" />
                       )}
                       {profile.tags?.map(skill => {
                         const tagConfig = [
-                          { label: "Verified", color: "bg-blue-50 text-blue-700 border-blue-200" },
-                          { label: "Popular", color: "bg-green-50 text-green-700 border-green-200" },
-                          { label: "Featured", color: "bg-purple-50 text-purple-700 border-purple-200" },
-                          { label: "Trending", color: "bg-orange-50 text-orange-700 border-orange-200" },
-                          { label: "Expert", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-                          { label: "Mentor", color: "bg-pink-50 text-pink-700 border-pink-200" },
-                          { label: "Influencer", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-                          { label: "Rising Star", color: "bg-amber-50 text-amber-700 border-amber-200" }
+                          { label: "Verified", color: "bg-primary/15 text-primary border-primary/30" },
+                          { label: "Popular", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+                          { label: "Featured", color: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+                          { label: "Trending", color: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+                          { label: "Expert", color: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+                          { label: "Mentor", color: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
+                          { label: "Influencer", color: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" },
+                          { label: "Rising Star", color: "bg-primary/15 text-primary border-primary/30" }
                         ].find(t => t.label === skill);
                         if (!tagConfig) return null;
                         return (
-                          <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] px-2 py-0.5 rounded-full font-medium h-fit`}>
+                          <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] font-sans px-2.5 py-0.5 rounded-full font-medium h-fit`}>
                             {skill}
                           </Badge>
                         );
@@ -1913,17 +1921,17 @@ export default function ProfilePage() {
                     </h1>
                   </div>
                   <div className="flex items-center justify-start gap-2 text-sm mb-2 flex-wrap">
-                    {profile.username && <span className="text-muted-foreground">@{profile.username}</span>}
+                    {profile.username && <span className="text-muted-foreground font-mono text-xs">@{profile.username}</span>}
                     {profile.username && profile.role && <span className="text-muted-foreground/40">•</span>}
-                    {profile.role && <span className="text-foreground font-medium">{profile.role}</span>}
+                    {profile.role && <span className="text-primary font-medium">{profile.role}</span>}
                   </div>
-                  <div className="flex flex-row items-center justify-start gap-4 text-xs text-muted-foreground w-full mt-1">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <div className="flex flex-row flex-wrap items-center justify-start gap-4 text-xs text-muted-foreground w-full mt-1">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary/80 flex-shrink-0" />
                       {profile.location}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-primary/80 flex-shrink-0" />
                       Joined {formatDate(profile.joinedDate)}
                     </div>
                   </div>
@@ -2050,63 +2058,67 @@ export default function ProfilePage() {
             </div>
             
             {/* Statistics Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 sm:gap-x-6 gap-y-3 w-full sm:w-auto">
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Connections">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{connectionsCount.toLocaleString()}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border/70">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 sm:gap-x-7 gap-y-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Connections">
+                  <Users className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{connectionsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Connections</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Projects created & joined">
-                  <Briefcase className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{projectsCount.toLocaleString()}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Projects created & joined">
+                  <Briefcase className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{projectsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Projects</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Jobs joined">
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{jobsCount.toLocaleString()}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Jobs joined">
+                  <Building2 className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{jobsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Roles</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Total profile likes">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Total profile likes">
                   <Heart className="w-4 h-4 text-red-500 dark:text-red-400" />
-                  <span className="font-semibold text-foreground">{likesCount.toLocaleString()}</span>
+                  <span className="font-mono font-semibold text-foreground">{likesCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Appreciations</span>
                 </div>
               </div>
 
               {isOwnProfile ? (
-                <div className="flex gap-2 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
+                <div className="flex gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
                   <Button 
                     size="sm" 
                     variant="secondary" 
-                    className="flex-1 sm:flex-none bg-card text-foreground border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 shadow-sm flex items-center justify-center gap-1 transition-colors"
+                    className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={handleEditProfile}
                   >
-                    <Edit className="w-4 h-4" />
+                    <Edit className="w-4 h-4 text-primary" />
                     Edit Profile
                   </Button>
                   <Button 
                     size="sm" 
                     variant="secondary" 
-                    className="flex-1 sm:flex-none bg-card text-foreground border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 shadow-sm flex items-center justify-center gap-1 transition-colors"
+                    className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={() => setShowShareModal(true)}
                   >
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-4 h-4 text-primary" />
                     Share
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
+                <div className="flex items-center gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
                   <Button 
                     size="sm" 
-                    variant="ghost" 
-                    className="flex-1 sm:flex-none border border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground justify-center transition-colors"
+                    variant="outline" 
+                    className="flex-1 sm:flex-none border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground justify-center transition-colors"
                     onClick={() => navigate(`/messages?u=${encodeURIComponent(profile.username)}`)}
                     disabled={!canMessage}
                   >
-                    <MessageSquare className="w-4 h-4 mr-1.5" />
+                    <MessageSquare className="w-4 h-4 mr-1.5 text-primary" />
                     Message
                   </Button>
                   <Button 
                     size="sm" 
                     onClick={handleConnect}
-                    className="flex-1 sm:flex-none bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white disabled:opacity-50 justify-center"
+                    className="flex-1 sm:flex-none bg-primary hover:bg-primary-hover text-primary-foreground disabled:opacity-50 justify-center font-medium"
                     disabled={!canConnect}
                   >
                     <UserPlus className="w-4 h-4 mr-1.5" />
@@ -2126,7 +2138,7 @@ export default function ProfilePage() {
               {/* Mobile Dropdown */}
               <div className="md:hidden w-full mb-4">
                 <Select value={activeTab} onValueChange={setActiveTab}>
-                  <SelectTrigger className="w-full h-10 bg-card border border-border font-medium text-foreground shadow-sm">
+                  <SelectTrigger className="w-full h-10 bg-card border border-border/80 font-medium text-foreground shadow-sm">
                     <SelectValue placeholder="Select tab" />
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start">
@@ -2141,60 +2153,60 @@ export default function ProfilePage() {
               </div>
 
               {/* Desktop Tabs */}
-              <TabsList className="hidden md:grid w-full overflow-x-auto bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl justify-start grid-cols-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <TabsList className="hidden md:grid w-full overflow-x-auto bg-card border border-border/80 p-1 rounded-xl justify-start grid-cols-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <TabsTrigger 
                   value="overview" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="experience" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Experience
                 </TabsTrigger>
                 <TabsTrigger 
                   value="projects" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Projects
                 </TabsTrigger>
                 <TabsTrigger 
                   value="achievements" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Achievements
                 </TabsTrigger>
                 <TabsTrigger 
                   value="education" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Education
                 </TabsTrigger>
                 <TabsTrigger 
                   value="directory" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Directory
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="space-y-4">
+              <TabsContent value="overview" className="space-y-4 mt-4">
                 {/* Bio */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">About</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">About</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-foreground leading-relaxed">{profile.bio}</p>
+                    <p className="text-sm text-foreground/90 leading-relaxed">{profile.bio}</p>
                   </CardContent>
                 </Card>
 
                 {/* Contact Information */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Contact Information</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Contact Information</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-start gap-2 text-sm">
@@ -2235,7 +2247,7 @@ export default function ProfilePage() {
                         <Globe className="w-4 h-4 text-muted-foreground mt-0.5" />
                         <div className="flex flex-row items-start gap-3 w-full">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5 whitespace-nowrap w-[130px]">Website</span>
-                          <a href={profile.website} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-yellow-500 hover:underline text-sm font-medium break-all">
+                          <a href={profile.website} target="_blank" rel="noreferrer" className="text-primary hover:underline text-sm font-medium break-all">
                             {profile.website}
                           </a>
                         </div>
@@ -2245,9 +2257,9 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Personal Information */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Personal Information</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Personal Information</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
                     <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
@@ -2310,21 +2322,21 @@ export default function ProfilePage() {
 
                 {/* Pricing Details */}
                 {(profile.pricePerDay || profile.pricePerHour) && (
-                  <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                  <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-lg text-foreground">Pricing Details</CardTitle>
+                      <CardTitle className="font-display text-lg text-foreground">Pricing Details</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-8 text-sm">
                       {profile.pricePerDay && (
                         <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5">Price Per Day</span>
-                          <span className="text-foreground font-medium">₹{profile.pricePerDay}</span>
+                          <span className="text-primary font-mono font-semibold">₹{profile.pricePerDay}</span>
                         </div>
                       )}
                       {profile.pricePerHour && (
                         <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5">Price Per Hour</span>
-                          <span className="text-foreground font-medium">₹{profile.pricePerHour}</span>
+                          <span className="text-primary font-mono font-semibold">₹{profile.pricePerHour}</span>
                         </div>
                       )}
                       <div className="grid grid-cols-[140px_1fr] gap-2 items-start md:col-span-1">
@@ -2338,9 +2350,9 @@ export default function ProfilePage() {
                 )}
 
                 {/* Physical Details */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Physical Details</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Physical Details</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-8 text-sm">
                     <div className="grid grid-cols-[100px_1fr] gap-2 items-start">
@@ -2367,14 +2379,14 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Skills */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Skills</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Skills</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
                       {profile.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs bg-muted text-muted-foreground border-border">
+                        <Badge key={index} variant="secondary" className="text-xs bg-surface-elevated text-foreground/90 border border-border/70">
                           {skill}
                         </Badge>
                       ))}
@@ -2384,27 +2396,27 @@ export default function ProfilePage() {
 
               </TabsContent>
 
-              <TabsContent value="experience" className="space-y-4">
+              <TabsContent value="experience" className="space-y-4 mt-4">
                 {/* Experience */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Experience</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Experience</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.experience.map((exp) => (
-                        <div key={exp.id} className="flex gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
-                          <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="w-5 h-5 text-white" />
+                        <div key={exp.id} className="flex gap-3.5 border-b border-border/70 pb-4 last:border-0 last:pb-0">
+                          <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="w-5 h-5 text-primary" />
                           </div>
                           <div className="flex-1">
                             <h4 className="font-semibold text-sm text-foreground">{exp.title}</h4>
-                            <p className="text-sm text-muted-foreground">{exp.company}</p>
+                            <p className="text-sm text-primary/90 font-medium">{exp.company}</p>
                             <p className="text-xs text-muted-foreground">{exp.location}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
                               {formatDateShort(exp.startDate)} - {exp.current ? "Present" : formatDateShort(exp.endDate!)}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">{exp.description}</p>
+                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{exp.description}</p>
                           </div>
                         </div>
                       ))}
@@ -2414,15 +2426,15 @@ export default function ProfilePage() {
 
               </TabsContent>
 
-              <TabsContent value="projects" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="projects" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                    <CardTitle className="text-lg text-foreground">Projects</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Projects</CardTitle>
                     {isOwnProfile && (
                       <Button 
                         size="sm" 
                         onClick={() => navigate("/projects")}
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        className="bg-primary hover:bg-primary-hover text-primary-foreground"
                       >
                         <Plus className="w-4 h-4 mr-1" /> Create Project
                       </Button>
@@ -2436,7 +2448,7 @@ export default function ProfilePage() {
                           <Button 
                             variant="outline"
                             onClick={() => navigate("/projects")}
-                            className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+                            className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground transition-colors"
                           >
                             Go to Projects Page
                           </Button>
@@ -2445,11 +2457,11 @@ export default function ProfilePage() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {userProjects.map((project) => (
-                          <Card key={project.id} className="hover:shadow-md transition-shadow bg-card text-card-foreground border border-yellow-100/60 dark:border-border">
+                          <Card key={project.id} className="hover:border-primary/30 transition-all bg-surface-elevated text-card-foreground border border-border/80 shadow-noir">
                             <CardHeader className="pb-3">
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                  <h4 className="font-semibold text-base text-foreground line-clamp-1">{project.title}</h4>
+                                  <h4 className="font-display font-semibold text-base text-foreground line-clamp-1">{project.title}</h4>
                                   <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                                     <span className="capitalize">{project.project_type}</span>
                                     <span>•</span>
@@ -2458,7 +2470,7 @@ export default function ProfilePage() {
                                 </div>
                                 <div className="flex gap-1">
                                   {project.featured && (
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-yellow-500 text-yellow-600">
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-primary/40 text-primary bg-primary/10">
                                       Featured
                                     </Badge>
                                   )}
@@ -2466,8 +2478,8 @@ export default function ProfilePage() {
                               </div>
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                                 <div className={`w-1.5 h-1.5 rounded-full ${
-                                  project.status === 'completed' ? 'bg-green-500' :
-                                  project.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
+                                  project.status === 'completed' ? 'bg-emerald-500' :
+                                  project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
                                 }`}></div>
                                 <span className="capitalize">{project.status}</span>
                                 {project.location && (
@@ -2487,13 +2499,13 @@ export default function ProfilePage() {
                               </p>
                               <div className="flex flex-wrap gap-1 pt-1">
                                 {Array.isArray(project.skills_required) && project.skills_required.map((skill: string, i: number) => (
-                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-border">
+                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-card text-muted-foreground border-border/70">
                                     {skill}
                                   </Badge>
                                 ))}
                               </div>
-                              <div className="flex justify-between items-center pt-2 text-xs border-t border-border">
-                                <span className="font-medium text-foreground">
+                              <div className="flex justify-between items-center pt-2 text-xs border-t border-border/70">
+                                <span className="font-mono font-medium text-foreground">
                                   Budget: {project.budget_min ? `${project.budget_currency || "₹"}${project.budget_min.toLocaleString()}` : ""}
                                   {project.budget_min && project.budget_max ? " - " : ""}
                                   {project.budget_max ? `${project.budget_currency || "₹"}${project.budget_max.toLocaleString()}` : ""}
@@ -2502,7 +2514,7 @@ export default function ProfilePage() {
                                 <Button 
                                   size="sm" 
                                   variant="ghost" 
-                                  className="h-7 text-xs text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50/50 dark:text-yellow-500 dark:hover:text-yellow-400 dark:hover:bg-yellow-950/20"
+                                  className="h-7 text-xs text-primary hover:text-primary-hover hover:bg-primary/10"
                                   onClick={() => navigate(`/projects`)}
                                 >
                                   Details
@@ -2517,31 +2529,31 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="achievements" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="achievements" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Achievements & Awards</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Achievements & Awards</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.achievements.map((achievement) => (
-                        <div key={achievement.id} className="border border-border rounded-lg p-4 bg-muted/20">
+                        <div key={achievement.id} className="border border-border/70 rounded-xl p-4 bg-surface-elevated">
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-950/30 rounded-full flex items-center justify-center flex-shrink-0">
-                              {achievement.type === 'award' && <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'publication' && <FileText className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'recognition' && <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
+                            <div className="w-9 h-9 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                              {achievement.type === 'award' && <Award className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'publication' && <FileText className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'recognition' && <Star className="w-4 h-4 text-primary" />}
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-medium text-sm text-foreground">{achievement.title}</h4>
-                                <Badge variant="secondary" className="text-xs dark:bg-zinc-800 dark:text-zinc-300">
+                                <Badge variant="secondary" className="text-xs bg-card border-border/70 text-muted-foreground">
                                   {achievement.type.charAt(0).toUpperCase() + achievement.type.slice(1)}
                                 </Badge>
                               </div>
                               <p className="text-xs text-muted-foreground mb-1">{achievement.description}</p>
-                              <p className="text-xs text-muted-foreground">{achievement.date}</p>
+                              <p className="text-xs font-mono text-muted-foreground">{achievement.date}</p>
                             </div>
                           </div>
                         </div>
@@ -2551,27 +2563,27 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="education" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="education" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Education</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Education</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.education.map((edu) => (
-                        <div key={edu.id} className="flex gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
-                          <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <GraduationCap className="w-5 h-5 text-white" />
+                        <div key={edu.id} className="flex gap-3.5 border-b border-border/70 pb-4 last:border-0 last:pb-0">
+                          <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <GraduationCap className="w-5 h-5 text-primary" />
                           </div>
                           <div className="flex-1">
                             <h4 className="font-semibold text-sm text-foreground">{edu.degree}</h4>
-                            <p className="text-sm text-muted-foreground">{edu.school}</p>
+                            <p className="text-sm text-primary/90 font-medium">{edu.school}</p>
                             <p className="text-xs text-muted-foreground">{edu.location}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
                               {formatDateShort(edu.startDate)} - {edu.current ? "Present" : formatDateShort(edu.endDate!)}
                             </p>
                             {edu.description && (
-                              <p className="text-xs text-muted-foreground mt-2">{edu.description}</p>
+                              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{edu.description}</p>
                             )}
                           </div>
                         </div>
@@ -2581,17 +2593,17 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="directory" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="directory" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4 sm:gap-2">
-                    <CardTitle className="text-lg text-foreground w-full sm:w-auto">Directory</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground w-full sm:w-auto">Directory</CardTitle>
                     <div className="flex gap-2 items-center w-full sm:w-auto">
-                      <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="flex-1 sm:flex-none h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                      <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="flex-1 sm:flex-none h-8 bg-primary hover:bg-primary-hover text-primary-foreground">
                         <Plus className="w-4 h-4 mr-1" />
                         Add Files
                       </Button>
                       <div className="flex-1 sm:flex-none w-full"><Select value={directoryFilter} onValueChange={(v: any) => { setDirectoryFilter(v); setDirectoryPage(1); }}>
-                        <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-card border border-border text-foreground">
+                        <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-surface-elevated border border-border/80 text-foreground">
                           <SelectValue placeholder="Filter by type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2607,9 +2619,9 @@ export default function ProfilePage() {
                   </CardHeader>
                   <CardContent>
                     {!isOwnProfile && !profile.privacyShowDirectory ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-border">
+                      <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated rounded-xl border border-border/70">
                         <Lock className="w-12 h-12 text-muted-foreground/40 mb-4" />
-                        <h3 className="text-lg font-medium text-foreground">Directory Locked</h3>
+                        <h3 className="text-lg font-display font-medium text-foreground">Directory Locked</h3>
                         <p className="text-sm text-muted-foreground mt-1">This user has chosen to keep their directory private.</p>
                       </div>
                     ) : (
@@ -2620,13 +2632,13 @@ export default function ProfilePage() {
                         const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
                         if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
                         return paginated.map(file => (
-                          <div key={file.id} className="relative group overflow-hidden rounded-md cursor-pointer border border-border" onClick={() => setPreviewFile(file)}>
+                          <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated hover:border-primary/40 transition-colors" onClick={() => setPreviewFile(file)}>
                               {file.type === 'image' ? (
                                 <div className="relative h-40 w-full">
-                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                                   {file.additional_urls && file.additional_urls.length > 0 && (
-                                    <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                                      <ImageIcon className="w-3 h-3" />
+                                    <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                                      <ImageIcon className="w-3 h-3 text-primary" />
                                       {file.additional_urls.length + 1}
                                     </div>
                                   )}
@@ -2634,7 +2646,7 @@ export default function ProfilePage() {
                               ) :
                                file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
                                file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                               <div className="w-full h-40 bg-muted flex items-center justify-center"><FileText className="w-8 h-8 text-muted-foreground" /></div>}
+                               <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
                                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
                                  e.stopPropagation(); 
                                  setDeleteConfirm({
@@ -2685,7 +2697,7 @@ export default function ProfilePage() {
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Share Profile</DialogTitle>
+            <DialogTitle className="font-display text-xl font-semibold">Share Profile</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
             <div className="space-y-4">
@@ -2726,9 +2738,9 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="pt-4 border-t">
+            <div className="pt-4 border-t border-border/70">
               <Button 
-                className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                className="w-full bg-primary hover:bg-primary-hover text-primary-foreground"
                 onClick={() => {
                   const url = `${window.location.origin}/profile/${profile.shortId || profile.id}`;
                   navigator.clipboard.writeText(url);
@@ -2751,13 +2763,13 @@ export default function ProfilePage() {
       <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="text-2xl font-bold">Edit Profile</DialogTitle>
+            <DialogTitle className="font-display text-2xl font-semibold">Edit Profile</DialogTitle>
           </DialogHeader>
           
           <Tabs value={editProfileTab} onValueChange={setEditProfileTab} className="w-full flex-1 flex flex-col min-h-0">
                           <div className="md:hidden w-full mb-4 mt-2 px-1 flex-shrink-0">
                 <Select value={editProfileTab} onValueChange={setEditProfileTab}>
-                  <SelectTrigger className="w-full h-10 bg-card border border-border font-medium text-foreground shadow-sm">
+                  <SelectTrigger className="w-full h-10 bg-surface-elevated border border-border/80 font-medium text-foreground shadow-sm">
                     <SelectValue placeholder="Select section" />
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start">
@@ -2769,34 +2781,34 @@ export default function ProfilePage() {
                   </SelectContent>
                 </Select>
               </div>
-              <TabsList className="hidden md:grid w-full overflow-x-auto bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <TabsList className="hidden md:grid w-full overflow-x-auto bg-surface-elevated border border-border/80 p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <TabsTrigger 
                 value="profile" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Profile
               </TabsTrigger>
               <TabsTrigger 
                 value="experience" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Experience
               </TabsTrigger>
               <TabsTrigger 
                 value="achievements" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Achievements
               </TabsTrigger>
               <TabsTrigger 
                 value="education" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Education
               </TabsTrigger>
               <TabsTrigger 
                 value="directory" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Directory
               </TabsTrigger>
@@ -3231,8 +3243,8 @@ export default function ProfilePage() {
             <TabsContent value="experience" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Work Experience</h3>
-                  <Button size="sm" onClick={addExperience} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Work Experience</h3>
+                  <Button size="sm" onClick={addExperience} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Experience
                   </Button>
@@ -3241,21 +3253,21 @@ export default function ProfilePage() {
                   {editForm.experience.map((exp, index) => {
                     const isExpanded = expandedEditExperience.has(exp.id);
                     return (
-                      <Card key={exp.id} className="border border-border">
+                      <Card key={exp.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
                           <div 
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditExperienceExpansion(exp.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                <Briefcase className="w-5 h-5 text-white" />
+                              <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Briefcase className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1">
                                 <h4 className="font-semibold text-sm text-foreground">{exp.title}</h4>
                                 <p className="text-sm text-muted-foreground">{exp.company}</p>
                                 <p className="text-xs text-muted-foreground">{exp.location}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs font-mono text-muted-foreground">
                                   {exp.startDate} - {exp.current ? "Present" : exp.endDate}
                                 </p>
                               </div>
@@ -3265,7 +3277,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Job Title</Label>
@@ -3313,8 +3325,8 @@ export default function ProfilePage() {
             <TabsContent value="achievements" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Achievements & Awards</h3>
-                  <Button size="sm" onClick={addAchievement} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Achievements & Awards</h3>
+                  <Button size="sm" onClick={addAchievement} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Achievement
                   </Button>
@@ -3323,18 +3335,18 @@ export default function ProfilePage() {
                   {editForm.achievements.map((achievement, index) => {
                     const isExpanded = expandedEditAchievements.has(achievement.id);
                     return (
-                      <Card key={achievement.id} className="border border-border">
+                      <Card key={achievement.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
                           <div 
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditAchievementExpansion(achievement.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                {achievement.type === 'award' && <Award className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-purple-600" />}
+                              <div className="w-8 h-8 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                {achievement.type === 'award' && <Award className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-primary" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
@@ -3343,7 +3355,7 @@ export default function ProfilePage() {
                                     {achievement.type.charAt(0).toUpperCase() + achievement.type.slice(1)}
                                   </Badge>
                                 </div>
-                                <p className="text-xs text-muted-foreground">{achievement.date}</p>
+                                <p className="text-xs font-mono text-muted-foreground">{achievement.date}</p>
                               </div>
                             </div>
                             <Button variant="ghost" size="sm" className="p-1">
@@ -3351,7 +3363,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Achievement Title</Label>
@@ -3399,8 +3411,8 @@ export default function ProfilePage() {
             <TabsContent value="education" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Education</h3>
-                  <Button size="sm" onClick={addEducation} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Education</h3>
+                  <Button size="sm" onClick={addEducation} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Education
                   </Button>
@@ -3409,21 +3421,21 @@ export default function ProfilePage() {
                   {editForm.education.map((edu, index) => {
                     const isExpanded = expandedEditEducation.has(edu.id);
                     return (
-                      <Card key={edu.id} className="border border-border">
+                      <Card key={edu.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
                           <div 
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditEducationExpansion(edu.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                <GraduationCap className="w-5 h-5 text-white" />
+                              <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <GraduationCap className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1">
                                 <h4 className="font-semibold text-sm text-foreground">{edu.degree}</h4>
                                 <p className="text-sm text-muted-foreground">{edu.school}</p>
                                 <p className="text-xs text-muted-foreground">{edu.location}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs font-mono text-muted-foreground">
                                   {edu.startDate} - {edu.current ? "Present" : edu.endDate}
                                 </p>
                               </div>
@@ -3433,7 +3445,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Degree</Label>
@@ -3480,7 +3492,7 @@ export default function ProfilePage() {
             {/* Directory Tab */}
             <TabsContent value="directory" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-foreground">Directory</h3>
+                <h3 className="text-lg font-display font-semibold text-foreground">Directory</h3>
                 <div className="flex gap-2 items-center w-full sm:w-auto">
                   <div className="flex-1 sm:flex-none w-full"><Select value={directoryFilter} onValueChange={(v: any) => { setDirectoryFilter(v); setDirectoryPage(1); }}>
                     <SelectTrigger className="w-[130px] h-8 text-xs">
@@ -3495,7 +3507,7 @@ export default function ProfilePage() {
                     </SelectContent>
                       </Select>
                   </div>
-                  <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Files
                   </Button>
@@ -3508,13 +3520,13 @@ export default function ProfilePage() {
                   const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
                   if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
                   return paginated.map(file => (
-                    <div key={file.id} className="relative group overflow-hidden rounded-md cursor-pointer border border-border" onClick={() => setPreviewFile(file)}>
+                    <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated" onClick={() => setPreviewFile(file)}>
                        {file.type === 'image' ? (
                          <div className="relative h-40 w-full">
                            <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                            {file.additional_urls && file.additional_urls.length > 0 && (
-                             <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                               <ImageIcon className="w-3 h-3" />
+                             <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                               <ImageIcon className="w-3 h-3 text-primary" />
                                {file.additional_urls.length + 1}
                              </div>
                            )}
@@ -3522,7 +3534,7 @@ export default function ProfilePage() {
                        ) :
                         file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
                         file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                        <div className="w-full h-40 bg-muted flex items-center justify-center"><FileText className="w-8 h-8 text-muted-foreground" /></div>}
+                        <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
                        <p className="text-sm font-medium truncate p-2" title={file.title || file.name}>{file.title || file.name}</p>
                        <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
                          e.stopPropagation(); 
@@ -3558,11 +3570,11 @@ export default function ProfilePage() {
             </TabsContent>
 
             {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-6 border-t border-border mt-6">
-              <Button variant="outline" onClick={handleCancelEdit} className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50">
+            <div className="flex justify-end gap-3 pt-6 border-t border-border/70 mt-6">
+              <Button variant="outline" onClick={handleCancelEdit} className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover">
                 Cancel
               </Button>
-              <Button onClick={handleSaveProfile} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+              <Button onClick={handleSaveProfile} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                 Save Changes
               </Button>
             </div>
@@ -3572,9 +3584,9 @@ export default function ProfilePage() {
 
       {/* Add Files Dialog */}
       <Dialog open={showAddFileDialog} onOpenChange={setShowAddFileDialog}>
-        <DialogContent className="max-w-md bg-card text-card-foreground border-border">
+        <DialogContent className="max-w-md bg-card text-card-foreground border-border/80">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Add Files</DialogTitle>
+            <DialogTitle className="font-display text-xl font-semibold">Add Files</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div
@@ -3591,10 +3603,10 @@ export default function ProfilePage() {
               }}
               onClick={() => addFileInputRef.current?.click()}
               className={cn(
-                "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
+                "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
                 isDraggingFile
-                  ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20"
-                  : "border-gray-300 dark:border-zinc-700 hover:border-yellow-500 dark:hover:border-yellow-500 bg-gray-50/50 dark:bg-zinc-800/50"
+                  ? "border-primary bg-primary/10"
+                  : "border-border/80 hover:border-primary/50 bg-surface-elevated/60"
               )}
             >
               <input
@@ -3610,7 +3622,7 @@ export default function ProfilePage() {
                   }
                 }}
               />
-              <Upload className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+              <Upload className="w-8 h-8 text-primary" />
               {selectedAddFiles.length > 0 ? (
                 <div>
                   <p className="text-sm font-semibold text-foreground">
@@ -3625,7 +3637,7 @@ export default function ProfilePage() {
               ) : (
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Drag and drop your file here, or <span className="text-yellow-600 dark:text-yellow-400 underline font-semibold">browse</span>
+                    Drag and drop your file here, or <span className="text-primary underline font-semibold">browse</span>
                   </p>
                 </div>
               )}
@@ -3642,7 +3654,7 @@ export default function ProfilePage() {
                 placeholder="Enter file title"
                 value={addFileTitle}
                 onChange={(e) => setAddFileTitle(e.target.value)}
-                className="bg-card border-border"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
 
@@ -3653,7 +3665,7 @@ export default function ProfilePage() {
                 placeholder="Enter tags (comma separated e.g. bts, studio, production)"
                 value={addFileTags}
                 onChange={(e) => setAddFileTags(e.target.value)}
-                className="bg-card border-border"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
 
@@ -3666,14 +3678,14 @@ export default function ProfilePage() {
                   setAddFileTitle("");
                   setAddFileTags("");
                 }}
-                className="border-border"
+                className="border-border/80"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleAddFileSubmit}
                 disabled={isUploadingDirectoryFile}
-                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium"
+                className="bg-primary hover:bg-primary-hover text-primary-foreground font-medium"
               >
                 {isUploadingDirectoryFile ? "Uploading..." : "Upload File"}
               </Button>
@@ -3693,7 +3705,7 @@ export default function ProfilePage() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adjust Profile Picture</DialogTitle>
+            <DialogTitle className="font-display">Adjust Profile Picture</DialogTitle>
           </DialogHeader>
           {avatarToCrop && (
             <div className="flex flex-col items-center gap-4 py-4">
@@ -3725,7 +3737,7 @@ export default function ProfilePage() {
                 <Button variant="outline" onClick={() => setIsCropDialogOpen(false)} disabled={isUploadingAvatar}>
                   Cancel
                 </Button>
-                <Button onClick={uploadCroppedImage} disabled={isUploadingAvatar} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                <Button onClick={uploadCroppedImage} disabled={isUploadingAvatar} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                   {isUploadingAvatar ? "Saving..." : "Set as Profile Picture"}
                 </Button>
               </div>

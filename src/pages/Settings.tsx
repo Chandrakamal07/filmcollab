@@ -372,23 +372,24 @@ const Settings = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+            <p className="noir-eyebrow mb-1">Account Control</p>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground tracking-tight">Settings</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage your account settings and preferences</p>
           </div>
-          <Badge variant="outline" className="text-xs">
-            <Shield className="w-3 h-3 mr-1" />
+          <Badge variant="outline" className="w-fit text-xs border-primary/30 bg-primary/10 text-primary px-3 py-1 font-mono">
+            <Shield className="w-3.5 h-3.5 mr-1.5" />
             Account Secure
           </Badge>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <div className="md:hidden w-full mb-4 mt-2 flex-shrink-0">
+          <div className="md:hidden w-full mb-4 mt-2 flex-shrink-0">
             <Select value={activeTab} onValueChange={setActiveTab}>
-              <SelectTrigger className="w-full h-10 bg-card border border-border font-medium text-foreground shadow-sm">
+              <SelectTrigger className="w-full h-10 bg-card border border-border/80 font-medium text-foreground shadow-sm">
                 <SelectValue placeholder="Select section" />
               </SelectTrigger>
               <SelectContent position="popper" side="bottom" align="start">
@@ -399,31 +400,31 @@ const Settings = () => {
               </SelectContent>
             </Select>
           </div>
-          <TabsList className="hidden md:grid w-full overflow-x-auto bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl justify-start grid-cols-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <TabsList className="hidden md:grid w-full overflow-x-auto bg-surface-elevated border border-border/80 p-1 rounded-xl justify-start grid-cols-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <TabsTrigger 
               value="privacy" 
-              className="flex items-center gap-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              className="flex items-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
             >
               <Eye className="w-4 h-4" />
               Privacy
             </TabsTrigger>
             <TabsTrigger 
               value="notifications" 
-              className="flex items-center gap-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              className="flex items-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
             >
               <Bell className="w-4 h-4" />
               Notifications
             </TabsTrigger>
             <TabsTrigger 
               value="appearance" 
-              className="flex items-center gap-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              className="flex items-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
             >
               <Palette className="w-4 h-4" />
               Appearance
             </TabsTrigger>
             <TabsTrigger 
               value="security" 
-              className="flex items-center gap-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              className="flex items-center gap-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
             >
               <Key className="w-4 h-4" />
               Security
@@ -432,17 +433,17 @@ const Settings = () => {
 
           {/* Privacy Settings */}
           <TabsContent value="privacy" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Eye className="w-5 h-5" />
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="flex items-center gap-2 font-display text-xl">
+                  <Eye className="w-5 h-5 text-primary" />
                   Privacy & Visibility
                 </CardTitle>
                 <CardDescription>
                   Control who can see your information and how you appear to others
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
@@ -453,7 +454,7 @@ const Settings = () => {
                       value={privacySettings.profileVisibility} 
                       onValueChange={(value) => handlePrivacyChange('profileVisibility', value)}
                     >
-                      <SelectTrigger className="w-40">
+                      <SelectTrigger className="w-40 bg-surface-elevated border-border/80">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -464,14 +465,14 @@ const Settings = () => {
                   </div>
 
                   {privacySettings.profileVisibility === 'public' && (
-                    <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
+                    <div className="flex items-center justify-between border-t border-border/60 pt-4 mt-4">
                       <div className="space-y-1">
                         <Label>Who can view my profile</Label>
                         <p className="text-sm text-muted-foreground">Restrict visibility to specific user categories</p>
                       </div>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" className="w-[250px] justify-between h-auto min-h-10 text-left font-normal py-2 flex-wrap gap-1">
+                          <Button variant="outline" className="w-[250px] justify-between h-auto min-h-10 text-left font-normal py-2 flex-wrap gap-1 bg-surface-elevated border-border/80">
                             {visibleToCategories?.includes('all') || !visibleToCategories?.length ? (
                               <span>All (Everyone)</span>
                             ) : (
@@ -486,11 +487,11 @@ const Settings = () => {
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[250px] p-0" align="end">
-                          <div className="p-3 border-b text-sm font-semibold">Select Categories</div>
+                        <PopoverContent className="w-[250px] p-0 bg-card border-border/80" align="end">
+                          <div className="p-3 border-b border-border/60 text-sm font-semibold text-foreground">Select Categories</div>
                           <ScrollArea className="h-64">
                             <div className="p-2 space-y-1">
-                              <label className="flex items-center gap-2 rounded hover:bg-muted p-2 cursor-pointer text-sm">
+                              <label className="flex items-center gap-2 rounded hover:bg-surface-hover p-2 cursor-pointer text-sm text-foreground">
                                 <Checkbox 
                                   checked={visibleToCategories?.includes('all') || !visibleToCategories?.length}
                                   onCheckedChange={(checked) => {
@@ -509,7 +510,7 @@ const Settings = () => {
                                   <div key={dept} className="mb-2">
                                     <div className="px-2 py-1 text-xs font-bold text-muted-foreground uppercase tracking-wider">{dept}</div>
                                     {cats.map(cat => (
-                                      <label key={cat} className="flex items-center gap-2 rounded hover:bg-muted p-2 cursor-pointer text-sm ml-2">
+                                      <label key={cat} className="flex items-center gap-2 rounded hover:bg-surface-hover p-2 cursor-pointer text-sm ml-2 text-foreground">
                                         <Checkbox 
                                           checked={!visibleToCategories?.includes('all') && visibleToCategories?.includes(cat)}
                                           onCheckedChange={(checked) => {
@@ -536,10 +537,10 @@ const Settings = () => {
                     </div>
                   )}
 
-                  <Separator />
+                  <Separator className="bg-border/60" />
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Contact Information</h4>
+                    <h4 className="font-medium text-foreground">Contact Information</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -584,10 +585,10 @@ const Settings = () => {
                     </div>
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-border/60" />
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Communication</h4>
+                    <h4 className="font-medium text-foreground">Communication</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -598,7 +599,7 @@ const Settings = () => {
                           value={privacySettings.allowMessages} 
                           onValueChange={(value) => handlePrivacyChange('allowMessages', value)}
                         >
-                          <SelectTrigger className="w-40">
+                          <SelectTrigger className="w-40 bg-surface-elevated border-border/80">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -617,7 +618,7 @@ const Settings = () => {
                           value={privacySettings.allowConnectionRequests} 
                           onValueChange={(value) => handlePrivacyChange('allowConnectionRequests', value)}
                         >
-                          <SelectTrigger className="w-40">
+                          <SelectTrigger className="w-40 bg-surface-elevated border-border/80">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -630,10 +631,10 @@ const Settings = () => {
                     </div>
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-border/60" />
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Activity & Status</h4>
+                    <h4 className="font-medium text-foreground">Activity & Status</h4>
                     <div className="space-y-3">
 
                       <div className="flex items-center justify-between">
@@ -653,7 +654,7 @@ const Settings = () => {
                 <Button 
                   onClick={() => handleSave('Privacy')} 
                   disabled={isLoading}
-                  className="w-full md:w-auto bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  className="w-full md:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Saving...' : 'Save Privacy Settings'}
@@ -664,20 +665,20 @@ const Settings = () => {
 
           {/* Notification Settings */}
           <TabsContent value="notifications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="flex items-center gap-2 font-display text-xl">
+                  <Bell className="w-5 h-5 text-primary" />
                   Notification Preferences
                 </CardTitle>
                 <CardDescription>
                   Choose how and when you want to be notified
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
                   <div className="space-y-4">
-                    <h4 className="font-medium">Notification Channels</h4>
+                    <h4 className="font-medium text-foreground">Notification Channels</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -712,10 +713,10 @@ const Settings = () => {
                     </div>
                   </div>
 
-                  <Separator />
+                  <Separator className="bg-border/60" />
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Activity Notifications</h4>
+                    <h4 className="font-medium text-foreground">Activity Notifications</h4>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="space-y-1">
@@ -765,7 +766,7 @@ const Settings = () => {
                 <Button 
                   onClick={() => handleSave('Notifications')} 
                   disabled={isLoading}
-                  className="w-full md:w-auto bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  className="w-full md:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Saving...' : 'Save Notification Settings'}
@@ -776,17 +777,17 @@ const Settings = () => {
 
           {/* Appearance Settings */}
           <TabsContent value="appearance" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="w-5 h-5" />
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="flex items-center gap-2 font-display text-xl">
+                  <Palette className="w-5 h-5 text-primary" />
                   Theme Settings
                 </CardTitle>
                 <CardDescription>
                   Choose your preferred theme
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 pt-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Theme</Label>
@@ -794,7 +795,7 @@ const Settings = () => {
                       value={appearanceSettings.theme} 
                       onValueChange={(value) => handleAppearanceChange('theme', value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-surface-elevated border-border/80">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -809,7 +810,7 @@ const Settings = () => {
                 <Button 
                   onClick={() => handleSave('Appearance')} 
                   disabled={isLoading}
-                  className="w-full md:w-auto bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  className="w-full md:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Saving...' : 'Save Theme Settings'}
@@ -820,28 +821,28 @@ const Settings = () => {
 
           {/* Security Settings */}
           <TabsContent value="security" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5" />
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="flex items-center gap-2 font-display text-xl">
+                  <Key className="w-5 h-5 text-primary" />
                   Security Settings
                 </CardTitle>
                 <CardDescription>
                   Manage your account security
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 pt-6">
                 <div className="space-y-6">
                   {/* Password Section */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium">Change Password</h4>
-                        <p className="text-sm text-muted-foreground">
+                        <h4 className="font-medium text-foreground">Change Password</h4>
+                        <p className="text-sm text-muted-foreground font-mono">
                           Last changed: {new Date(securitySettings.passwordLastChanged).toLocaleDateString()}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50">
+                      <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground">
                         Change Password
                       </Button>
                     </div>
@@ -851,7 +852,7 @@ const Settings = () => {
                 <Button 
                   onClick={() => handleSave('Security')} 
                   disabled={isLoading}
-                  className="w-full md:w-auto bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  className="w-full md:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Saving...' : 'Save Security Settings'}
