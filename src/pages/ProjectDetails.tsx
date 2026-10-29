@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
+import { DimensionalCard } from "@/components/ui/motion-primitives";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -63,7 +65,11 @@ import {
   Instagram,
   Mail,
   Phone,
-  Lock
+  Lock,
+  LayoutGrid,
+  List as ListIcon,
+  FolderOpen,
+  MoreHorizontal
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -160,7 +166,14 @@ export default function ProjectDetails() {
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(() => {
+    const initialView = searchParams.get("view") || searchParams.get("tab");
+    if (initialView && ["overview", "tasks", "chat", "team", "applicants"].includes(initialView)) {
+      return initialView;
+    }
+    return "overview";
+  });
+  const [taskViewMode, setTaskViewMode] = useState<"board" | "list">("board");
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isHireConfirmOpen, setIsHireConfirmOpen] = useState(false);
@@ -2186,90 +2199,276 @@ export default function ProjectDetails() {
 
   return (
     <AppLayout pageTitle={`${project.title} - Project Details`}>
-      <div className="w-full space-y-6">
-        {/* Header with Back Button and Actions */}
-        <div className="flex justify-between items-center gap-4 w-full">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/projects")}
-            className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Projects
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleShare} 
-              className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
+      <div className="max-w-[1440px] mx-auto pb-8">
+        <div className="flex flex-col xl:flex-row gap-6 items-start">
+          {/* LEFT ZONE: Contextual Project Sub-Sidebar matching 04 / Project workspace */}
+          <aside className="hidden xl:flex xl:w-56 flex-col shrink-0 gap-4 sticky top-20">
+            <button
+              type="button"
+              onClick={() => navigate("/projects")}
+              className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-1"
             >
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            {project.is_creator && (
-              <Button 
-                variant="outline" 
-                onClick={() => setIsEditDialogOpen(true)} 
-                className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to projects
+            </button>
+
+            {/* Mini Project Identity Card */}
+            <div className="rounded-xl border border-border/80 bg-card/90 p-3 flex items-center gap-3 shadow-soft">
+              <div className="h-11 w-14 rounded-lg overflow-hidden bg-surface-elevated border border-border/70 shrink-0">
+                <img
+                  src="https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=400&q=80"
+                  alt={project.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-serif font-bold text-foreground truncate">
+                  {project.title}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate mt-0.5 capitalize">
+                  {project.project_type} • {project.status}
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Workspace Navigation Pills */}
+            <nav className="flex flex-col gap-1">
+              {[
+                { id: "overview", label: "Overview", icon: LayoutGrid, locked: false },
+                { id: "tasks", label: "Tasks", icon: CheckSquare, locked: !isTeamMember },
+                { id: "team", label: "Team", icon: Users, locked: !isTeamMember },
+                { id: "chat", label: "Chat", icon: MessageCircle, locked: !isTeamMember },
+                ...(sourceTab === "created"
+                  ? [{ id: "applicants", label: "Applicants", icon: UserPlus, locked: false }]
+                  : []),
+              ].map((navItem) => {
+                const Icon = navItem.icon;
+                const active = activeTab === navItem.id;
+                return (
+                  <button
+                    key={navItem.id}
+                    type="button"
+                    onClick={() => {
+                      if (navItem.locked) {
+                        toast({
+                          variant: "destructive",
+                          title: "Member Only Access",
+                          description:
+                            "You must be an accepted team member of this project to access this section.",
+                        });
+                        return;
+                      }
+                      setActiveTab(navItem.id);
+                    }}
+                    className={cn(
+                      "relative flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-colors text-left",
+                      active
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-surface-hover/50",
+                      navItem.locked && "opacity-50"
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="project-workspace-side-pill"
+                        className="absolute inset-0 rounded-lg bg-primary/12 border border-primary/30"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2.5">
+                      <Icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />
+                      <span>{navItem.label}</span>
+                    </span>
+                    {navItem.locked && <Lock className="relative z-10 h-3 w-3 opacity-70" />}
+                  </button>
+                );
+              })}
+
+              {project.is_creator && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditDialogOpen(true)}
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover/50 transition-colors text-left mt-2 border-t border-border/50 pt-3"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <span>Settings</span>
+                </button>
+              )}
+            </nav>
+          </aside>
+
+          {/* CENTER + RIGHT PRODUCTION WORKSPACE STAGE */}
+          <div className="flex-1 min-w-0 w-full space-y-5">
+            {/* Mobile Back Button */}
+            <div className="flex xl:hidden justify-between items-center gap-4 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/projects")}
+                className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 text-xs"
               >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Projects
               </Button>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Project Details with Tabs */}
-        <Tabs 
-          value={activeTab} 
-          onValueChange={(val) => {
-            if (!isTeamMember && ["tasks", "chat", "team"].includes(val)) {
-              toast({
-                variant: "destructive",
-                title: "Member Only Access",
-                description: "You must be an accepted team member of this project to access this section."
-              });
-              return;
-            }
-            setActiveTab(val);
-          }} 
-          className="w-full"
-        >
-          <TabsList className={`grid w-full ${sourceTab === 'created' ? 'grid-cols-5' : 'grid-cols-4'} bg-surface-elevated border border-border/80 p-1 rounded-xl h-auto`}>
-            <TabsTrigger value="overview" className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all">Overview</TabsTrigger>
-            <TabsTrigger 
-              value="tasks" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            {/* Widescreen 21:9 Cinema Project Banner matching 04 / Project workspace */}
+            <DimensionalCard
+              tiltStrength={2}
+              className="relative rounded-2xl overflow-hidden border border-border/80 bg-card shadow-noir"
             >
-              <span>Tasks</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            <TabsTrigger 
-              value="chat" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <span>Chat</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            <TabsTrigger 
-              value="team" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <span className="hidden sm:inline">Team Members</span>
-              <span className="sm:hidden">Members</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            {sourceTab === 'created' && (
-              <TabsTrigger value="applicants" className="text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:dark:bg-primary py-2.5 rounded-lg font-medium transition-all">Applicants</TabsTrigger>
-            )}
-          </TabsList>
+              <div className="relative min-h-[200px] sm:min-h-[230px] w-full overflow-hidden flex flex-col justify-end p-6 sm:p-7">
+                <img
+                  src="https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=1600&q=85"
+                  alt={project.title}
+                  className="absolute inset-0 w-full h-full object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#111317] via-[#111317]/65 to-black/30" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#111317]/90 via-[#111317]/40 to-transparent" />
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                  <div className="space-y-2.5 max-w-2xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/40 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
+                        {project.project_type} • {project.status}
+                      </span>
+                      {project.location && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-[10px] text-white/80 flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          {project.location}
+                        </span>
+                      )}
+                    </div>
+
+                    <h1 className="font-serif text-2xl sm:text-4xl font-bold text-white tracking-tight">
+                      {project.title}
+                    </h1>
+
+                    <p className="text-xs sm:text-sm text-white/80 line-clamp-2 leading-relaxed">
+                      {project.description ||
+                        "A cinematic collaboration exploring character, atmosphere, and visual storytelling."}
+                    </p>
+
+                    {/* Crew Avatar Stack + Invite / Join CTA */}
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex -space-x-2">
+                        {[
+                          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80",
+                        ].map((av, i) => (
+                          <img
+                            key={i}
+                            src={av}
+                            alt="Crew member"
+                            className="h-7 w-7 rounded-full object-cover ring-2 ring-[#121417]"
+                          />
+                        ))}
+                        <span className="h-7 px-2 rounded-full bg-surface-elevated/90 ring-2 ring-[#121417] text-[10px] font-mono text-white/90 flex items-center justify-center">
+                          +{Math.max(1, (project.team_size || 5) - 4)}
+                        </span>
+                      </div>
+
+                      {project.allow_applicants && !project.is_creator && !isMember && isCategoryMatched ? (
+                        <Button
+                          size="sm"
+                          onClick={handleJoinProject}
+                          className="h-7 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-semibold"
+                        >
+                          <UserPlus className="h-3 w-3 mr-1" />
+                          Join Project
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleShare}
+                          className="h-7 px-3 text-xs rounded-lg bg-black/55 backdrop-blur-md border-white/20 text-white hover:bg-white/10"
+                        >
+                          Invite
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Banner Actions: Edit Project & Share */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {project.is_creator && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditDialogOpen(true)}
+                        className="h-9 px-3.5 rounded-lg bg-black/60 backdrop-blur-md border-white/20 text-white hover:bg-white/15 text-xs font-medium"
+                      >
+                        Edit project
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShare}
+                      title="Share project"
+                      className="h-9 w-9 p-0 rounded-lg bg-black/60 backdrop-blur-md border-white/20 text-white hover:bg-white/15"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DimensionalCard>
+
+            {/* Project Details with Tabs */}
+            <Tabs
+              value={activeTab}
+              onValueChange={(val) => {
+                if (!isTeamMember && ["tasks", "chat", "team"].includes(val)) {
+                  toast({
+                    variant: "destructive",
+                    title: "Member Only Access",
+                    description:
+                      "You must be an accepted team member of this project to access this section.",
+                  });
+                  return;
+                }
+                setActiveTab(val);
+              }}
+              className="w-full"
+            >
+              {/* Studio Noir V2 Underline Tab Bar */}
+              <div className="flex items-center justify-between border-b border-border/70 px-1">
+                <TabsList className="bg-transparent border-0 p-0 h-auto gap-6 justify-start">
+                  {[
+                    { id: "overview", label: "Overview", locked: false },
+                    { id: "tasks", label: "Tasks", locked: !isTeamMember },
+                    { id: "team", label: "Team", locked: !isTeamMember },
+                    { id: "chat", label: "Chat", locked: !isTeamMember },
+                    ...(sourceTab === "created"
+                      ? [{ id: "applicants", label: "Applicants", locked: false }]
+                      : []),
+                  ].map((t) => (
+                    <TabsTrigger
+                      key={t.id}
+                      value={t.id}
+                      disabled={t.locked}
+                      className="relative bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary text-muted-foreground hover:text-foreground rounded-none px-1 py-3 text-xs font-medium transition-colors flex items-center gap-1.5 border-b-2 border-transparent data-[state=active]:border-primary"
+                    >
+                      <span>{t.label}</span>
+                      {t.locked && <Lock className="h-3 w-3 opacity-70 shrink-0" />}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+
+              <div className="grid grid-cols-1 2xl:grid-cols-12 gap-5 items-start pt-4">
+                <div
+                  className={cn(
+                    "space-y-6 min-w-0",
+                    isTeamMember && activeTab !== "chat" ? "2xl:col-span-8" : "2xl:col-span-12"
+                  )}
+                >
+                  {/* Overview Tab */}
+                  <TabsContent value="overview" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <div className="lg:col-span-2 space-y-6">
                 {/* Project Header Info in Overview */}
@@ -2617,14 +2816,49 @@ export default function ProjectDetails() {
               </Card>
             ) : (
               <>
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Project Tasks</h3>
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                  {/* Board / List View Switcher matching 04 / Project workspace */}
+                  <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-surface-base border border-border/80">
+                    {(
+                      [
+                        { id: "board", label: "Board", icon: LayoutGrid },
+                        { id: "list", label: "List", icon: ListIcon },
+                      ] as const
+                    ).map((mode) => {
+                      const Icon = mode.icon;
+                      const active = taskViewMode === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => setTaskViewMode(mode.id)}
+                          className={cn(
+                            "relative px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors",
+                            active
+                              ? "text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId="task-view-pill"
+                              className="absolute inset-0 rounded-md bg-primary shadow-sm"
+                              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                            />
+                          )}
+                          <Icon className="relative z-10 h-3.5 w-3.5" />
+                          <span className="relative z-10">{mode.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   {canCreateTasks && (
                     <Dialog open={showCreateTask} onOpenChange={setShowCreateTask}>
                       <DialogTrigger asChild>
-                        <Button className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create Task
+                        <Button className="h-9 px-4 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold rounded-lg shadow-amber-glow">
+                          <Plus className="h-3.5 w-3.5 mr-1.5" />
+                          Add task
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -2701,6 +2935,159 @@ export default function ProjectDetails() {
             )}
           </div>
 
+          {taskViewMode === "board" ? (
+            /* 3-Column Production Kanban Board matching 04 / Project workspace */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              {(
+                [
+                  {
+                    status: "pending" as const,
+                    title: "To do",
+                    dotColor: "bg-amber-400",
+                  },
+                  {
+                    status: "in-progress" as const,
+                    title: "In progress",
+                    dotColor: "bg-sky-400",
+                  },
+                  {
+                    status: "completed" as const,
+                    title: "Done",
+                    dotColor: "bg-emerald-400",
+                  },
+                ] as const
+              ).map((col) => {
+                const colTasks = tasks.filter((t) => t.status === col.status);
+                return (
+                  <div
+                    key={col.status}
+                    className="rounded-2xl border border-border/80 bg-card/85 p-3.5 space-y-3 min-h-[340px]"
+                  >
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-border/60">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("h-2 w-2 rounded-full", col.dotColor)} />
+                        <h4 className="text-xs font-semibold text-foreground">{col.title}</h4>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {colTasks.length}
+                        </span>
+                      </div>
+                      <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {colTasks.map((task) => {
+                        const assigneeName =
+                          task.assigned_to_profile?.full_name ||
+                          task.assigned_to_profile?.username ||
+                          (typeof task.assigned_to === "string" && task.assigned_to.length < 24
+                            ? task.assigned_to
+                            : "Crew");
+                        return (
+                          <DimensionalCard
+                            key={task.id}
+                            tiltStrength={4}
+                            className="rounded-xl border border-border/80 bg-surface-elevated/85 p-3.5 space-y-2.5 hover:border-primary/40 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2 min-w-0">
+                                {col.status === "completed" && (
+                                  <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                )}
+                                <h5
+                                  className={cn(
+                                    "text-xs font-semibold text-foreground leading-snug",
+                                    col.status === "completed" &&
+                                      "line-through text-muted-foreground"
+                                  )}
+                                >
+                                  {task.title}
+                                </h5>
+                              </div>
+                            </div>
+
+                            {task.description && (
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                {task.description}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-[10px] font-medium capitalize border",
+                                    task.priority === "high"
+                                      ? "bg-red-500/15 text-red-400 border-red-500/30"
+                                      : task.priority === "medium"
+                                        ? "bg-primary/15 text-primary border-primary/30"
+                                        : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                  )}
+                                >
+                                  {task.priority}
+                                </span>
+
+                                {task.due_date && (
+                                  <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-2.5 w-2.5" />
+                                    {new Date(task.due_date).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <Select
+                                  value={task.status}
+                                  onValueChange={(
+                                    value: "pending" | "in-progress" | "completed"
+                                  ) => handleUpdateTaskStatus(task.id, value)}
+                                >
+                                  <SelectTrigger className="h-6 px-2 text-[10px] border-border/70 bg-card/80 w-auto gap-1">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending" className="text-xs">
+                                      To do
+                                    </SelectItem>
+                                    <SelectItem value="in-progress" className="text-xs">
+                                      In progress
+                                    </SelectItem>
+                                    <SelectItem value="completed" className="text-xs">
+                                      Done
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <div
+                                  title={assigneeName}
+                                  className="h-6 w-6 rounded-full bg-primary/15 border border-primary/30 text-[10px] font-bold text-primary flex items-center justify-center shrink-0"
+                                >
+                                  {assigneeName
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </div>
+                              </div>
+                            </div>
+                          </DimensionalCard>
+                        );
+                      })}
+
+                      {colTasks.length === 0 && (
+                        <div className="text-center py-8 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground">
+                          No tasks in {col.title.toLowerCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
             <Accordion type="multiple" defaultValue={["in-progress", "pending"]} className="w-full space-y-4">
                 {/* In Progress Section */}
                 <AccordionItem value="in-progress" className="border-none">
@@ -2915,6 +3302,7 @@ export default function ProjectDetails() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+          )}
             </>
           )}
         </TabsContent>
@@ -3217,7 +3605,80 @@ export default function ProjectDetails() {
               </Card>
             </TabsContent>
           )}
-        </Tabs>
+                </div>
+
+                {/* RIGHT ZONE: Persistent Live Project Chat Dock matching 04 / Project workspace */}
+                {isTeamMember && activeTab !== "chat" && (
+                  <aside className="2xl:col-span-4 rounded-2xl border border-border/80 bg-card/95 overflow-hidden shadow-noir flex flex-col h-[520px]">
+                    <div className="px-4 py-3.5 border-b border-border/70 flex items-center justify-between bg-surface-base/70">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        <h3 className="text-xs font-semibold text-foreground">Project chat</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("chat")}
+                        className="text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Full view
+                      </button>
+                    </div>
+
+                    <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                      {chatMessages.slice(-4).map((msg, idx) => (
+                        <div key={msg.id || idx} className="flex items-start gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-primary/15 border border-primary/30 text-[10px] font-bold text-primary flex items-center justify-center shrink-0 mt-0.5">
+                            {msg.user_avatar || "CR"}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-xs font-semibold text-foreground truncate">
+                                {msg.user_name}
+                              </span>
+                              <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed break-words">
+                              {msg.message}
+                            </p>
+                            {idx === 0 && (
+                              <div className="mt-2 rounded-lg overflow-hidden border border-border/70 aspect-[16/9]">
+                                <img
+                                  src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80"
+                                  alt="Location scout reference"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="p-3 border-t border-border/70 bg-surface-base/70 flex items-center gap-2">
+                      <Input
+                        value={newMessage}
+                        onChange={handleMessageChange}
+                        placeholder="Write a message..."
+                        onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                        className="h-9 text-xs bg-card border-border/80 rounded-lg"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSendMessage}
+                        className="h-9 w-9 p-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg shrink-0"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </aside>
+                )}
+              </div>
+            </Tabs>
 
         {/* Edit Project Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -3379,6 +3840,8 @@ export default function ProjectDetails() {
             </div>
           </DialogContent>
         </Dialog>
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

@@ -2,29 +2,30 @@
 
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Search,
-  Filter,
   MapPin,
   User as UserIcon,
   UserPlus,
-  Star,
   Award,
   Briefcase,
-  GraduationCap,
   Heart,
   Users,
-  Globe,
   MoreVertical,
   Bookmark,
   Share2,
@@ -32,14 +33,32 @@ import {
   Check,
   Clock,
   UserCheck,
+  SlidersHorizontal,
+  Play,
+  ArrowRight,
+  Sparkles,
+  ExternalLink,
+  Film,
+  ChevronDown,
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
-import { FadeInSection, StaggerItem } from "@/components/ui/motion-primitives";
+import {
+  FadeInSection,
+  StaggerContainer,
+  StaggerItem,
+  DimensionalCard,
+  DimensionalLayer,
+  ImageReveal,
+} from "@/components/ui/motion-primitives";
 
 interface User {
   id: string;
@@ -79,6 +98,45 @@ interface User {
 type FilterType = "all" | "verified" | "new" | "popular";
 type SortType = "recent" | "popular" | "alphabetical";
 
+const PORTRAIT_FALLBACKS = [
+  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=700&q=80",
+];
+
+const SHOWREEL_STILLS = [
+  [
+    "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=600&q=80",
+  ],
+  [
+    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80",
+  ],
+];
+
+const DEFAULT_AVATAR_PLACEHOLDER =
+  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face";
+
+function getPortraitImage(userItem: User, idx: number): string {
+  if (
+    userItem.avatar_url &&
+    userItem.avatar_url !== DEFAULT_AVATAR_PLACEHOLDER &&
+    userItem.avatar_url.trim().length > 0
+  ) {
+    return userItem.avatar_url;
+  }
+  const hash = userItem.id
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), idx);
+  return PORTRAIT_FALLBACKS[hash % PORTRAIT_FALLBACKS.length];
+}
+
 export default function DiscoverPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
@@ -94,6 +152,10 @@ export default function DiscoverPage() {
   const [currentTab, setCurrentTab] = useState<"discover" | "liked" | "saved">("discover");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"about" | "showreel" | "credits" | "skills">(
+    "showreel"
+  );
   const pageSize = 12;
 
   const fetchUsers = useCallback(async () => {
@@ -208,7 +270,7 @@ export default function DiscoverPage() {
           const conn = connectionsData.find(
             (c) =>
               (c.user_id === profile?.id && c.connected_user_id === p.id) ||
-              (c.user_id === p.id && c.connected_user_id === profile?.id),
+              (c.user_id === p.id && c.connected_user_id === profile?.id)
           );
           return {
             id: p.id,
@@ -216,9 +278,7 @@ export default function DiscoverPage() {
             full_name: p.full_name || p.username || "Anonymous",
             username: p.username || "",
             email: p.email || "",
-            avatar_url:
-              p.avatar_url ||
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
+            avatar_url: p.avatar_url || DEFAULT_AVATAR_PLACEHOLDER,
             bio: p.bio || "",
             location: p.location || "",
             role: p.category || p.role || "Creator",
@@ -248,8 +308,8 @@ export default function DiscoverPage() {
                 ? p.settings[0].privacy_settings?.allowConnectionRequests
                 : null
               : p.settings
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ? (p.settings as any).privacy_settings?.allowConnectionRequests
+                ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (p.settings as any).privacy_settings?.allowConnectionRequests
                 : null,
           };
         });
@@ -265,7 +325,7 @@ export default function DiscoverPage() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, user?.id, toast]);
+  }, [profile?.id, profile?.category, profile?.role, user?.id, toast]);
 
   useEffect(() => {
     fetchUsers();
@@ -273,7 +333,7 @@ export default function DiscoverPage() {
 
   const handleToggleCategory = (category: string) => {
     setCategoryFilters((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
     resetPaging();
   };
@@ -302,7 +362,7 @@ export default function DiscoverPage() {
           u.role?.toLowerCase().includes(searchTerm) ||
           u.bio?.toLowerCase().includes(searchTerm) ||
           u.skills?.some((skill) => skill.toLowerCase().includes(searchTerm)) ||
-          u.location?.toLowerCase().includes(searchTerm),
+          u.location?.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -326,7 +386,9 @@ export default function DiscoverPage() {
 
     if (categoryFilters.length > 0) {
       filteredUsers = filteredUsers.filter(
-        (u) => u.category && categoryFilters.includes(u.category),
+        (u) =>
+          (u.category && categoryFilters.includes(u.category)) ||
+          (u.role && categoryFilters.some((cat) => u.role?.toLowerCase().includes(cat.toLowerCase())))
       );
     }
 
@@ -368,6 +430,15 @@ export default function DiscoverPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
 
+  const selectedUser = useMemo(() => {
+    if (!pageItems.length) return null;
+    if (selectedUserId) {
+      const found = pageItems.find((u) => u.id === selectedUserId);
+      if (found) return found;
+    }
+    return pageItems[0];
+  }, [pageItems, selectedUserId]);
+
   function resetPaging() {
     setPage(1);
   }
@@ -376,7 +447,7 @@ export default function DiscoverPage() {
     userId: string,
     userName: string,
     currentStatus?: string | null,
-    initiatorId?: string | null,
+    initiatorId?: string | null
   ) => {
     try {
       if (!user?.id) {
@@ -442,7 +513,7 @@ export default function DiscoverPage() {
         .from("connections")
         .select("*")
         .or(
-          `and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`,
+          `and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`
         )
         .maybeSingle();
 
@@ -538,8 +609,8 @@ export default function DiscoverPage() {
 
         setUsers((prevUsers) =>
           prevUsers.map((u) =>
-            u.id === userId ? { ...u, is_liked: false, likes_count: newLikesCount } : u,
-          ),
+            u.id === userId ? { ...u, is_liked: false, likes_count: newLikesCount } : u
+          )
         );
       } else {
         const { error: insertError } = await supabase.from("user_likes").insert({
@@ -567,8 +638,8 @@ export default function DiscoverPage() {
 
         setUsers((prevUsers) =>
           prevUsers.map((u) =>
-            u.id === userId ? { ...u, is_liked: true, likes_count: newLikesCount } : u,
-          ),
+            u.id === userId ? { ...u, is_liked: true, likes_count: newLikesCount } : u
+          )
         );
       }
 
@@ -621,7 +692,7 @@ export default function DiscoverPage() {
         if (deleteError) throw deleteError;
 
         setUsers((prevUsers) =>
-          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: false } : u)),
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: false } : u))
         );
       } else {
         const { error: insertError } = await supabase.from("user_saves").insert({
@@ -632,7 +703,7 @@ export default function DiscoverPage() {
         if (insertError) throw insertError;
 
         setUsers((prevUsers) =>
-          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: true } : u)),
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: true } : u))
         );
       }
 
@@ -677,45 +748,178 @@ export default function DiscoverPage() {
     }
   };
 
+  const hasActiveFilters =
+    filterType !== "all" ||
+    categoryFilters.length > 0 ||
+    Boolean(locationFilter) ||
+    minLikes > 0 ||
+    sortType !== "recent";
+
+  const quickCrafts = ["All Crafts", "Director", "Actor", "Cinematographer", "Editor", "Writer", "Producer"];
+
   return (
     <AppLayout pageTitle="Talent Hub">
-      <div className="space-y-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <FadeInSection className="bg-card p-6 rounded-xl shadow-soft border border-border/80">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+      <div className="max-w-[1440px] mx-auto space-y-6 pb-8">
+        {/* 03 / Talent Discovery Editorial Header & Inline Filter Bar */}
+        <FadeInSection>
+          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5 pb-2">
             <div>
-              <h1 className="noir-heading-workspace mb-1">Discover Creators</h1>
-              <p className="text-muted-foreground text-sm">
-                Connect with talented filmmakers, artists, and creative professionals
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
+                Find your next collaborator
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Discover talented filmmakers from around the world.
               </p>
             </div>
-            <div className="flex items-center gap-3 w-full lg:w-auto">
-              <div className="relative w-full max-w-md">
+
+            {/* Inline Studio Noir Filter Bar matching 03 / Talent discovery */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search Input */}
+              <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search by name, skills, or location..."
+                  placeholder="Search people, skills, locations..."
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
                     resetPaging();
                   }}
-                  className="pl-10 h-10"
+                  className="pl-9 h-10 bg-surface-base/90 border-border/80 text-xs rounded-lg"
                 />
               </div>
 
-              {/* Filter Sheet (Right Sidebar) */}
+              {/* Craft Pill Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>
+                      {categoryFilters.length > 0 ? `Craft (${categoryFilters.length})` : "Craft"}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {quickCrafts.map((craft) => (
+                    <DropdownMenuItem
+                      key={craft}
+                      onClick={() => {
+                        if (craft === "All Crafts") {
+                          setCategoryFilters([]);
+                        } else {
+                          handleToggleCategory(craft);
+                        }
+                        resetPaging();
+                      }}
+                      className="text-xs flex items-center justify-between cursor-pointer"
+                    >
+                      <span>{craft}</span>
+                      {(craft === "All Crafts" && categoryFilters.length === 0) ||
+                      categoryFilters.includes(craft) ? (
+                        <Check className="w-3.5 h-3.5 text-primary" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Location Quick Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>{locationFilter ? locationFilter : "Location"}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 p-2">
+                  <div className="space-y-1.5">
+                    <Input
+                      placeholder="Filter city or country..."
+                      value={locationFilter}
+                      onChange={(e) => {
+                        setLocationFilter(e.target.value);
+                        resetPaging();
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    {["Mumbai", "London", "Los Angeles", "Berlin", "Seoul", "Remote"].map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => {
+                          setLocationFilter(locationFilter === city ? "" : city);
+                          resetPaging();
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-surface-hover flex items-center justify-between text-muted-foreground hover:text-foreground"
+                      >
+                        <span>{city}</span>
+                        {locationFilter.toLowerCase() === city.toLowerCase() && (
+                          <Check className="w-3 h-3 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Availability / Tier Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>
+                      {filterType === "all"
+                        ? "Availability"
+                        : filterType === "verified"
+                          ? "Verified"
+                          : filterType === "new"
+                            ? "New Talent"
+                            : "Popular"}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {[
+                    { value: "all", label: "All Available" },
+                    { value: "verified", label: "Verified Only" },
+                    { value: "new", label: "New Talent (30d)" },
+                    { value: "popular", label: "High Demand" },
+                  ].map((item) => (
+                    <DropdownMenuItem
+                      key={item.value}
+                      onClick={() => {
+                        setFilterType(item.value as FilterType);
+                        resetPaging();
+                      }}
+                      className="text-xs flex items-center justify-between cursor-pointer"
+                    >
+                      <span>{item.label}</span>
+                      {filterType === item.value && <Check className="w-3.5 h-3.5 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* More Filters Sheet */}
               <Sheet open={showFilters} onOpenChange={setShowFilters}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" className="h-10 px-4 relative shrink-0">
-                    <Filter className="w-4 h-4 mr-2 text-primary" />
-                    Filters
-                    {(filterType !== "all" ||
-                      categoryFilters.length > 0 ||
-                      locationFilter ||
-                      minLikes > 0 ||
-                      sortType !== "recent") && (
-                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />
-                      )}
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground relative shrink-0"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 mr-2 text-primary" />
+                    More filters
+                    {hasActiveFilters && (
+                      <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
+                    )}
                   </Button>
                 </SheetTrigger>
                 <SheetContent
@@ -750,7 +954,6 @@ export default function DiscoverPage() {
 
                   <ScrollArea className="flex-1 p-6">
                     <div className="space-y-6 pb-8">
-                      {/* Filter by Type */}
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
                           Filter by Type
@@ -774,7 +977,6 @@ export default function DiscoverPage() {
                         </Select>
                       </div>
 
-                      {/* Sort by */}
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
                           Sort by
@@ -797,7 +999,6 @@ export default function DiscoverPage() {
                         </Select>
                       </div>
 
-                      {/* Location Filter */}
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
                           Location
@@ -816,7 +1017,6 @@ export default function DiscoverPage() {
                         </div>
                       </div>
 
-                      {/* Likes Count Slider */}
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
@@ -843,7 +1043,6 @@ export default function DiscoverPage() {
                         </div>
                       </div>
 
-                      {/* Categories Filter */}
                       <div className="space-y-2">
                         <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
                           Categories
@@ -888,353 +1087,625 @@ export default function DiscoverPage() {
               </Sheet>
             </div>
           </div>
+
+          {/* Animated Tab Bar (Discover / Liked / Saved) + Result Counter */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-b border-border/60 pb-3">
+            <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-surface-base/90 border border-border/70">
+              {(
+                [
+                  { id: "discover", label: "Discover", icon: Users },
+                  { id: "liked", label: "Liked", icon: Heart },
+                  { id: "saved", label: "Saved", icon: Bookmark },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                const active = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab(tab.id);
+                      resetPaging();
+                    }}
+                    className={`relative px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                      active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="discover-tab-pill"
+                        className="absolute inset-0 rounded-md bg-surface-elevated border border-primary/30 shadow-sm"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <Icon
+                      className={`relative z-10 w-3.5 h-3.5 ${
+                        active ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
+                    <span className="relative z-10">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+              <span>
+                {filtered.length} {filtered.length === 1 ? "Creator" : "Creators"} available
+              </span>
+            </div>
+          </div>
         </FadeInSection>
 
-        {/* Tabs Bar */}
-        <div className="flex justify-between items-center bg-card p-2.5 rounded-xl shadow-soft border border-border/80">
-          <Tabs
-            value={currentTab}
-            onValueChange={(val) => {
-              setCurrentTab(val as "discover" | "liked" | "saved");
-              resetPaging();
-            }}
-            className="w-full sm:w-auto"
-          >
-            <TabsList>
-              <TabsTrigger value="discover">
-                <Users className="w-4 h-4 mr-2" />
-                Discover
-              </TabsTrigger>
-              <TabsTrigger value="liked">
-                <Heart className="w-4 h-4 mr-2" />
-                Liked
-              </TabsTrigger>
-              <TabsTrigger value="saved">
-                <Bookmark className="w-4 h-4 mr-2" />
-                Saved
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          <div className="text-xs text-muted-foreground font-medium mr-2 hidden sm:block font-mono">
-            {filtered.length} {filtered.length === 1 ? "Creator" : "Creators"} found
+        {/* Main Master-Detail Talent Discovery Grid matching 03 / Talent discovery */}
+        {loading ? (
+          <div className="text-center py-20 bg-card/80 rounded-2xl border border-border/80">
+            <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4" />
+            <p className="text-muted-foreground text-sm">Loading creators...</p>
           </div>
-        </div>
+        ) : pageItems.length === 0 ? (
+          <div className="text-center py-20 bg-card/80 rounded-2xl border border-border/80">
+            <Users className="w-12 h-12 text-muted-foreground/60 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold mb-1.5 text-foreground">No creators found</h3>
+            <p className="text-muted-foreground text-sm">
+              Try adjusting your search or filters to find more creators.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {/* LEFT 7 COLUMNS: 3-Column Vertical Portrait Dimensional Talent Grid */}
+            <div className="xl:col-span-7 space-y-6">
+              <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pageItems.map((userItem, idx) => {
+                  const portraitSrc = getPortraitImage(userItem, idx);
+                  const isSelected = selectedUser?.id === userItem.id;
+                  const availabilityLabel =
+                    idx % 4 === 2 ? "In 2 weeks" : idx % 5 === 4 ? "In 1 month" : "Available";
+                  const isImmediate = availabilityLabel === "Available";
 
-        {/* Users Grid */}
-        <div>
-          {loading ? (
-            <div className="text-center py-16 bg-card rounded-xl border border-border/80">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
-              <p className="text-muted-foreground text-sm">Loading creators...</p>
-            </div>
-          ) : pageItems.length === 0 ? (
-            <div className="text-center py-16 bg-card rounded-xl border border-border/80">
-              <Users className="w-12 h-12 text-muted-foreground/60 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold mb-1.5 text-foreground">No creators found</h3>
-              <p className="text-muted-foreground text-sm">
-                Try adjusting your search or filters to find more creators.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pageItems.map((userItem, idx) => (
-                <StaggerItem key={userItem.id} index={idx} liftOnHover>
-                  <Card className="h-full border-border/80 bg-card hover:border-primary/40 hover:shadow-noir overflow-hidden flex flex-col justify-between group">
-                    <div>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            <Avatar className="h-14 w-14 border border-primary/30 ring-2 ring-surface-elevated flex-shrink-0">
-                              <AvatarImage
-                                src={userItem.avatar_url}
-                                alt={userItem.full_name}
-                                className="object-cover"
-                              />
-                              <AvatarFallback className="bg-primary/15 text-primary font-semibold text-sm">
-                                {userItem.full_name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
-                                <span className="truncate">{userItem.full_name}</span>
-                                {userItem.is_verified && (
-                                  <Badge
-                                    variant="outline"
-                                    className="border-primary/40 bg-primary/10 text-primary text-[10px] px-2 py-0"
-                                  >
-                                    Verified
-                                  </Badge>
-                                )}
-                                {userItem.tags?.map((skill) => {
-                                  const supportedLabels = [
-                                    "Verified",
-                                    "Popular",
-                                    "Featured",
-                                    "Trending",
-                                    "Expert",
-                                    "Mentor",
-                                    "Influencer",
-                                    "Rising Star",
-                                  ];
-                                  if (!supportedLabels.includes(skill)) return null;
-                                  return (
-                                    <Badge
-                                      key={skill}
-                                      variant="secondary"
-                                      className="text-[10px] px-2 py-0.5 rounded-full font-medium h-fit leading-tight"
-                                    >
-                                      {skill}
-                                    </Badge>
-                                  );
-                                })}
-                              </CardTitle>
-                              <div className="mt-1 flex flex-col">
-                                <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap">
-                                  <span className="text-primary font-semibold">
-                                    @
-                                    {userItem.username ||
-                                      userItem.full_name.toLowerCase().replace(/\s+/g, "")}
-                                  </span>
-                                  <span className="text-border">•</span>
-                                  <span className="text-muted-foreground truncate">
-                                    {userItem.role}
-                                  </span>
-                                </div>
-                                {userItem.location && (
-                                  <div className="text-xs text-muted-foreground/80 flex items-center mt-0.5 truncate">
-                                    <MapPin className="w-3 h-3 mr-1 text-primary/70 flex-shrink-0" />
-                                    {userItem.location}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* Like Button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              aria-label={userItem.is_liked ? "Unlike profile" : "Like profile"}
-                              onClick={() => handleLike(userItem.id, userItem.full_name)}
-                              className={`h-8 w-8 p-0 rounded-full ${userItem.is_liked
-                                  ? "text-primary hover:text-primary-hover"
-                                  : "text-muted-foreground hover:text-primary"
-                                }`}
-                            >
-                              <Heart
-                                className={`w-4 h-4 ${userItem.is_liked ? "fill-current" : ""}`}
-                              />
-                            </Button>
-                            <span className="text-xs font-semibold text-muted-foreground font-mono">
-                              {userItem.likes_count || 0}
-                            </span>
+                  return (
+                    <StaggerItem key={userItem.id} index={idx}>
+                      <DimensionalCard
+                        tiltStrength={6}
+                        onClick={() => setSelectedUserId(userItem.id)}
+                        className={`h-full rounded-xl bg-card overflow-hidden cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-primary/65 ring-1 ring-primary/30 shadow-noir"
+                            : "border-border/80 hover:border-primary/40"
+                        }`}
+                      >
+                        {/* Top Portrait Frame */}
+                        <div className="relative aspect-[4/4.2] w-full overflow-hidden bg-surface-elevated">
+                          <ImageReveal
+                            src={portraitSrc}
+                            alt={userItem.full_name}
+                            containerClassName="w-full h-full"
+                            className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-transparent to-black/20" />
 
-                            {/* 3 Dots Menu */}
+                          {/* Top-right Quick Actions (Save & Share menu) */}
+                          <div
+                            className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
+                                <button
+                                  type="button"
                                   aria-label="More options"
-                                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground rounded-full"
+                                  className="h-7 w-7 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-colors"
                                 >
-                                  <MoreVertical className="w-4 h-4" />
-                                </Button>
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuContent align="end" className="w-40">
                                 <DropdownMenuItem
                                   onClick={() => handleSave(userItem.id, userItem.full_name)}
-                                  className="flex items-center gap-2 cursor-pointer"
+                                  className="flex items-center gap-2 cursor-pointer text-xs"
                                 >
-                                  <Bookmark className="w-4 h-4 text-muted-foreground" />
+                                  <Bookmark className="w-3.5 h-3.5 text-muted-foreground" />
                                   {userItem.is_saved ? "Unsave" : "Save"}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleShare(userItem.id, userItem.full_name)}
-                                  className="flex items-center gap-2 cursor-pointer"
+                                  className="flex items-center gap-2 cursor-pointer text-xs"
                                 >
-                                  <Share2 className="w-4 h-4 text-muted-foreground" />
+                                  <Share2 className="w-3.5 h-3.5 text-muted-foreground" />
                                   Share
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
+
+                          {/* Verified badge if verified */}
+                          {userItem.is_verified && (
+                            <span className="absolute top-2.5 left-2.5 z-20 px-2 py-0.5 rounded bg-black/65 backdrop-blur-md border border-primary/40 text-[10px] font-medium text-primary">
+                              Verified
+                            </span>
+                          )}
                         </div>
-                      </CardHeader>
 
-                      <CardContent className="space-y-3.5">
-                        {/* Bio */}
-                        {userItem.bio && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                            {userItem.bio}
-                          </p>
-                        )}
+                        {/* Portrait Card Details */}
+                        <DimensionalLayer depth={14} className="p-4 flex flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-[15px] font-semibold text-foreground truncate leading-snug">
+                                {userItem.full_name}
+                              </h3>
+                              <button
+                                type="button"
+                                aria-label={userItem.is_liked ? "Unlike profile" : "Like profile"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLike(userItem.id, userItem.full_name);
+                                }}
+                                className={`shrink-0 p-1 rounded-full transition-colors ${
+                                  userItem.is_liked
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:text-primary"
+                                }`}
+                              >
+                                <Heart
+                                  className={`w-4 h-4 ${userItem.is_liked ? "fill-current" : ""}`}
+                                />
+                              </button>
+                            </div>
 
-                        {/* Pricing and Experience */}
-                        {(userItem.total_experience ||
-                          userItem.price_per_day ||
-                          userItem.price_per_hour) && (
-                            <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-                              {userItem.total_experience && (
-                                <span className="flex items-center gap-1 bg-surface-elevated border border-border/70 text-foreground/90 px-2.5 py-1 rounded-md">
-                                  <Briefcase className="w-3 h-3 text-muted-foreground" />
-                                  {userItem.total_experience}
-                                </span>
-                              )}
+                            <p className="text-xs font-medium text-muted-foreground truncate">
+                              {userItem.role || "Filmmaker"}
+                            </p>
+
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/90 truncate pt-0.5">
+                              <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">
+                                {userItem.location || "Available Worldwide"}
+                              </span>
+                            </div>
+
+                            {/* Availability status dot matching 03 / Talent discovery */}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/90">
+                                <span
+                                  className={`h-2 w-2 rounded-full ${
+                                    isImmediate
+                                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]"
+                                      : "bg-primary shadow-[0_0_8px_rgba(233,180,87,0.6)]"
+                                  }`}
+                                />
+                                {availabilityLabel}
+                              </span>
+
                               {(userItem.price_per_day || userItem.price_per_hour) && (
-                                <span className="flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-1 rounded-md border border-primary/30">
-                                  <Award className="w-3 h-3" />
-                                  {userItem.price_per_hour ? `₹${userItem.price_per_hour}/hr` : ""}
-                                  {userItem.price_per_hour && userItem.price_per_day ? " • " : ""}
-                                  {userItem.price_per_day ? `₹${userItem.price_per_day}/day` : ""}
-                                  {userItem.price_negotiable ? " (Neg.)" : ""}
+                                <span className="text-[10px] font-mono text-primary">
+                                  {userItem.price_per_day
+                                    ? `₹${userItem.price_per_day}/d`
+                                    : `₹${userItem.price_per_hour}/h`}
                                 </span>
                               )}
                             </div>
-                          )}
-
-                        {/* Skills */}
-                        {userItem.skills && userItem.skills.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {userItem.skills.slice(0, 2).map((skill, index) => (
-                              <Badge
-                                key={index}
-                                variant="outline"
-                                className="text-[10px] border-border/80 bg-surface-elevated/60 text-foreground/90"
-                              >
-                                {skill}
-                              </Badge>
-                            ))}
-                            {userItem.skills.length > 2 && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] border-border/60 text-muted-foreground"
-                              >
-                                +{userItem.skills.length - 2} more
-                              </Badge>
-                            )}
                           </div>
-                        )}
-                      </CardContent>
-                    </div>
 
-                    <CardContent className="pt-0 pb-4">
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 pt-3 border-t border-border/60">
-                        {userItem.id !== user?.id &&
-                          (userItem.connection_status === "accepted" ? (
+                          {/* Card Footer Actions */}
+                          <div
+                            className="flex items-center gap-1.5 pt-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Button
-                              variant="secondary"
-                              className="flex-1 text-xs h-9 border-success/40 bg-success/15 text-success hover:bg-success/20 cursor-default"
+                              onClick={() => navigate(`/profile/${userItem.id}`)}
+                              variant="outline"
                               size="sm"
+                              className="flex-1 h-8 text-xs font-medium bg-surface-elevated/70 border-border/80 hover:border-primary/40 hover:text-foreground"
                             >
-                              <Check className="w-3.5 h-3.5 mr-1.5" />
-                              Connected
+                              View profile
                             </Button>
-                          ) : userItem.connection_status === "pending" ? (
-                            userItem.connection_initiator === profile?.id ? (
-                              <Button
-                                variant="secondary"
-                                className="flex-1 text-xs h-9 cursor-not-allowed"
-                                size="sm"
-                                disabled
-                              >
-                                <Clock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
-                                Request Sent
-                              </Button>
-                            ) : (
+
+                            {userItem.id !== user?.id && (
                               <Button
                                 onClick={() =>
                                   handleConnect(
                                     userItem.id,
                                     userItem.full_name,
                                     userItem.connection_status,
-                                    userItem.connection_initiator,
+                                    userItem.connection_initiator
                                   )
                                 }
-                                className="flex-1 text-xs h-9"
+                                variant={
+                                  userItem.connection_status === "accepted" ? "secondary" : "ghost"
+                                }
                                 size="sm"
+                                disabled={
+                                  (userItem.connection_status === "pending" &&
+                                    userItem.connection_initiator === profile?.id) ||
+                                  userItem.allow_connections_from === "none" ||
+                                  userItem.allow_connections_from === "connections"
+                                }
+                                title={
+                                  userItem.connection_status === "accepted"
+                                    ? "Connected"
+                                    : userItem.connection_status === "pending"
+                                      ? "Pending"
+                                      : "Connect"
+                                }
+                                className="h-8 w-8 p-0 shrink-0 border border-border/70 bg-surface-elevated/50 hover:border-primary/40 hover:text-primary"
                               >
-                                <UserCheck className="w-3.5 h-3.5 mr-1.5" />
-                                Accept Request
+                                {userItem.connection_status === "accepted" ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : userItem.connection_status === "pending" ? (
+                                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                                ) : (
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                )}
                               </Button>
-                            )
-                          ) : (
-                            <Button
-                              onClick={() =>
-                                handleConnect(
-                                  userItem.id,
-                                  userItem.full_name,
-                                  userItem.connection_status,
-                                  userItem.connection_initiator,
-                                )
-                              }
-                              className="flex-1 text-xs h-9"
-                              size="sm"
-                              disabled={
-                                userItem.allow_connections_from === "none" ||
-                                userItem.allow_connections_from === "connections"
-                              }
-                            >
-                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                              Connect
-                            </Button>
-                          ))}
-                        <Button
-                          onClick={() => navigate(`/profile/${userItem.id}`)}
-                          variant="outline"
-                          className={`${userItem.id === user?.id ? "w-full" : "flex-1"} text-xs h-9`}
-                          size="sm"
-                        >
-                          <UserIcon className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
-                          View Profile
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </StaggerItem>
-              ))}
-            </div>
-          )}
-        </div>
+                            )}
+                          </div>
+                        </DimensionalLayer>
+                      </DimensionalCard>
+                    </StaggerItem>
+                  );
+                })}
+              </StaggerContainer>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="bg-card p-4 rounded-xl shadow-soft border border-border/80">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <span className="text-xs text-muted-foreground font-medium font-mono">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filtered.length)}{" "}
-                of {filtered.length} creators
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="text-xs h-8"
-                >
-                  Previous
-                </Button>
-                <span className="text-xs text-foreground font-semibold px-3 font-mono">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="text-xs h-8"
-                >
-                  Next
-                </Button>
-              </div>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="bg-card p-4 rounded-xl shadow-soft border border-border/80">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <span className="text-xs text-muted-foreground font-medium font-mono">
+                      Showing {(page - 1) * pageSize + 1} to{" "}
+                      {Math.min(page * pageSize, filtered.length)} of {filtered.length} creators
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="text-xs h-8"
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-xs text-foreground font-semibold px-3 font-mono">
+                        Page {page} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="text-xs h-8"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* RIGHT 5 COLUMNS: Sticky Live Talent Showreel & Dossier Inspector matching 03 / Talent discovery */}
+            {selectedUser && (
+              <div className="xl:col-span-5 xl:sticky xl:top-20">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={selectedUser.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <DimensionalCard
+                      tiltStrength={3.5}
+                      className="rounded-2xl border border-border/80 bg-card/95 overflow-hidden shadow-noir"
+                    >
+                      {/* Top 16:9 Showreel Video Preview Frame */}
+                      <div
+                        onClick={() => {
+                          if (selectedUser.portfolio_url) {
+                            window.open(selectedUser.portfolio_url, "_blank", "noopener,noreferrer");
+                          } else {
+                            navigate(`/profile/${selectedUser.id}`);
+                          }
+                        }}
+                        className="relative aspect-[16/9] w-full overflow-hidden bg-surface-elevated cursor-pointer group/reel"
+                      >
+                        <img
+                          src={getPortraitImage(selectedUser, 0)}
+                          alt={`${selectedUser.full_name} Showreel`}
+                          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover/reel:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/25 to-black/20" />
+
+                        {/* Centered Glassmorphic Play Button */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="h-14 w-14 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center text-white shadow-xl group-hover/reel:scale-110 group-hover/reel:border-primary/60 group-hover/reel:text-primary transition-all">
+                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                          </div>
+                        </div>
+
+                        {/* Duration pill */}
+                        <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[11px] font-mono text-white/90 border border-white/10">
+                          02:16
+                        </span>
+                      </div>
+
+                      {/* Inspector Body */}
+                      <div className="p-5 sm:p-6 space-y-5">
+                        {/* Creator Identity & Primary Connect Bar */}
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <h2 className="font-serif text-2xl font-bold text-foreground tracking-tight">
+                              {selectedUser.full_name}
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <span className="font-medium text-foreground/90">
+                                {selectedUser.role || "Director"}
+                              </span>
+                              <span>•</span>
+                              <span>{selectedUser.location || "Available Worldwide"}</span>
+                              <span>•</span>
+                              <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                                Available
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {selectedUser.id !== user?.id && (
+                              <Button
+                                onClick={() =>
+                                  handleConnect(
+                                    selectedUser.id,
+                                    selectedUser.full_name,
+                                    selectedUser.connection_status,
+                                    selectedUser.connection_initiator
+                                  )
+                                }
+                                disabled={
+                                  (selectedUser.connection_status === "pending" &&
+                                    selectedUser.connection_initiator === profile?.id) ||
+                                  selectedUser.allow_connections_from === "none" ||
+                                  selectedUser.allow_connections_from === "connections"
+                                }
+                                className="h-9 px-5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold shadow-amber-glow"
+                              >
+                                {selectedUser.connection_status === "accepted" ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 mr-1.5" />
+                                    Connected
+                                  </>
+                                ) : selectedUser.connection_status === "pending" ? (
+                                  selectedUser.connection_initiator === profile?.id ? (
+                                    "Request Sent"
+                                  ) : (
+                                    "Accept Request"
+                                  )
+                                ) : (
+                                  "Connect"
+                                )}
+                              </Button>
+                            )}
+
+                            <button
+                              type="button"
+                              aria-label={selectedUser.is_liked ? "Unlike profile" : "Like profile"}
+                              onClick={() => handleLike(selectedUser.id, selectedUser.full_name)}
+                              className={`h-9 w-9 rounded-lg border border-border/80 bg-surface-elevated/70 flex items-center justify-center transition-colors ${
+                                selectedUser.is_liked
+                                  ? "text-primary border-primary/40"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <Heart
+                                className={`w-4 h-4 ${selectedUser.is_liked ? "fill-current" : ""}`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Animated Dossier Sub-Tabs (About / Showreel / Credits / Skills) */}
+                        <div className="flex items-center gap-5 border-b border-border/70">
+                          {(
+                            [
+                              { id: "about", label: "About" },
+                              { id: "showreel", label: "Showreel" },
+                              { id: "credits", label: "Credits" },
+                              { id: "skills", label: "Skills" },
+                            ] as const
+                          ).map((tab) => {
+                            const active = inspectorTab === tab.id;
+                            return (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setInspectorTab(tab.id)}
+                                className={`relative pb-2.5 text-xs font-medium transition-colors ${
+                                  active
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                {tab.label}
+                                {active && (
+                                  <motion.span
+                                    layoutId="dossier-inspector-tab"
+                                    className="absolute left-0 right-0 bottom-0 h-[2px] bg-primary rounded-full"
+                                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Tab Content */}
+                        {inspectorTab === "credits" ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-3 gap-2.5">
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Experience
+                                </div>
+                                <div className="text-sm font-semibold text-foreground mt-1">
+                                  {selectedUser.total_experience ||
+                                    selectedUser.experience_level ||
+                                    "Pro"}
+                                </div>
+                              </div>
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Projects
+                                </div>
+                                <div className="text-sm font-semibold text-foreground mt-1">
+                                  {selectedUser.projects_count || 3} Credits
+                                </div>
+                              </div>
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Endorsements
+                                </div>
+                                <div className="text-sm font-semibold text-primary mt-1">
+                                  {selectedUser.likes_count || 0} Likes
+                                </div>
+                              </div>
+                            </div>
+
+                            {(selectedUser.price_per_day || selectedUser.price_per_hour) && (
+                              <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
+                                <span className="text-xs font-medium text-foreground">
+                                  Standard Production Rate
+                                </span>
+                                <span className="text-xs font-mono font-semibold text-primary">
+                                  {selectedUser.price_per_hour
+                                    ? `₹${selectedUser.price_per_hour}/hr`
+                                    : ""}
+                                  {selectedUser.price_per_hour && selectedUser.price_per_day
+                                    ? " • "
+                                    : ""}
+                                  {selectedUser.price_per_day
+                                    ? `₹${selectedUser.price_per_day}/day`
+                                    : ""}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : inspectorTab === "skills" ? (
+                          <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                              Verified craft specialties and production tags:
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(selectedUser.skills && selectedUser.skills.length > 0
+                                ? selectedUser.skills
+                                : [
+                                    selectedUser.role || "Filmmaking",
+                                    "Visual Storytelling",
+                                    "Production",
+                                    "Directing",
+                                  ]
+                              ).map((skill, i) => (
+                                <Badge
+                                  key={i}
+                                  variant="outline"
+                                  className="text-xs py-1 px-2.5 border-border/80 bg-surface-elevated/80 text-foreground"
+                                >
+                                  {skill}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* 3-Frame Showreel Strip matching 03 / Talent discovery */}
+                            <div className="grid grid-cols-3 gap-2.5">
+                              {SHOWREEL_STILLS[
+                                selectedUser.id.charCodeAt(0) % SHOWREEL_STILLS.length
+                              ].map((stillUrl, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                                  className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated cursor-pointer group/still"
+                                >
+                                  <img
+                                    src={stillUrl}
+                                    alt="Showreel frame"
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/still:scale-105"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Creator Bio */}
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {selectedUser.bio ||
+                                `I'm a ${(selectedUser.role || "filmmaker").toLowerCase()} and visual storyteller drawn to real characters, intimate moments and the beauty in everyday life. I love collaborating with passionate people to tell compelling stories.`}
+                            </p>
+                          </>
+                        )}
+
+                        {/* Selected Work Strip matching 03 / Talent discovery */}
+                        <div className="space-y-3 pt-1 border-t border-border/60">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-foreground">
+                              Selected work
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                            >
+                              View all
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2.5">
+                            {[
+                              {
+                                title: "Monsoon Letters",
+                                meta: `Short Film • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=500&q=80",
+                              },
+                              {
+                                title: "The Waiting Room",
+                                meta: `Short Film • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=500&q=80",
+                              },
+                              {
+                                title: "City of Dust",
+                                meta: `Music Video • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=500&q=80",
+                              },
+                            ].map((work, wIdx) => (
+                              <div
+                                key={wIdx}
+                                onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                                className="group/work cursor-pointer space-y-1.5"
+                              >
+                                <div className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated">
+                                  <img
+                                    src={work.img}
+                                    alt={work.title}
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/work:scale-105"
+                                  />
+                                </div>
+                                <div className="text-[11px] font-semibold text-foreground truncate group-hover/work:text-primary transition-colors">
+                                  {work.title}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground truncate">
+                                  {work.meta}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </DimensionalCard>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -20,10 +20,15 @@ import {
   MapPin,
   Megaphone,
   Film,
+  User,
+  Settings,
+  Users,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "next-themes";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "motion/react";
 
 interface SidebarProps {
   className?: string;
@@ -33,34 +38,33 @@ interface SidebarProps {
 
 const navigationItems = [
   {
-    section: "MAIN",
-    items: [{ name: "Dashboard", icon: Home, href: "/dashboard" }],
-  },
-  {
-    section: "CONTENT",
+    section: "STUDIO WORKSPACE",
     items: [
-      { name: "Talent Hub", icon: Search, href: "/discover" },
-      { name: "Talent Directory", icon: UserCheck, href: "/directory" },
-      { name: "Companies Directory", icon: Building2, href: "/studios" },
-      { name: "Shooting Locations", icon: MapPin, href: "/locations" },
-    ],
-  },
-  {
-    section: "OPPORTUNITIES",
-    items: [
+      { name: "Home", icon: Home, href: "/dashboard" },
+      { name: "My Projects", icon: FolderOpen, href: "/projects" },
+      { name: "Talent Discovery", icon: Search, href: "/discover" },
+      { name: "Opportunities", icon: Briefcase, href: "/jobs" },
       { name: "Casting Calls", icon: Megaphone, href: "/casting-calls" },
-      { name: "Jobs", icon: Briefcase, href: "/jobs" },
-      { name: "Industry Hub", icon: Calendar, href: "/industry-hub" },
-      { name: "Projects", icon: FolderOpen, href: "/projects" },
+      { name: "Messages", icon: MessageCircle, href: "/messages" },
+      { name: "Saved & Network", icon: Heart, href: "/connections" },
     ],
   },
   {
-    section: "NETWORKING",
+    section: "PRODUCTION ECOSYSTEM",
     items: [
-      { name: "Messages", icon: MessageCircle, href: "/messages" },
-      { name: "Connections", icon: Heart, href: "/connections" },
+      { name: "Portfolio Directory", icon: UserCheck, href: "/directory" },
+      { name: "Studios & Houses", icon: Building2, href: "/studios" },
+      { name: "Shooting Locations", icon: MapPin, href: "/locations" },
+      { name: "Industry Hub", icon: Calendar, href: "/industry-hub" },
+      { name: "Editorial Posts", icon: FileText, href: "/posts" },
+      { name: "Creator Guilds", icon: Users, href: "/community" },
     ],
   },
+];
+
+const utilityItems = [
+  { name: "Profile", icon: User, href: "/profile" },
+  { name: "Settings", icon: Settings, href: "/settings" },
 ];
 
 export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarProps) {
@@ -160,27 +164,27 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
   return (
     <div
       className={cn(
-        "flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200 ease-noir relative",
+        "flex h-full w-64 flex-col bg-[#111215] text-sidebar-foreground border-r border-white/[0.07] transition-[width] duration-200 ease-noir relative select-none",
         isCollapsed && "w-16",
         className,
       )}
     >
-      {/* Logo */}
+      {/* Top Studio Wordmark */}
       <div
         className={cn(
-          "flex h-16 items-center border-b border-sidebar-border relative",
+          "flex h-16 items-center border-b border-white/[0.07] relative",
           isCollapsed ? "justify-center" : "justify-between px-5",
         )}
       >
         <div
-          className="flex items-center gap-3 cursor-pointer"
+          className="flex items-center gap-2.5 cursor-pointer group"
           onClick={() => navigate("/dashboard")}
         >
-          <div className="h-8 w-8 rounded-lg border border-primary/40 bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 shadow-sm">
+          <div className="h-8 w-8 rounded-lg border border-primary/40 bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 shadow-sm group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
             <Film className="h-4 w-4" />
           </div>
           {!isCollapsed && (
-            <span className="font-display text-xl font-semibold tracking-tight text-foreground whitespace-nowrap">
+            <span className="font-display text-2xl font-semibold tracking-tight text-foreground whitespace-nowrap">
               FilmCollab
             </span>
           )}
@@ -192,10 +196,10 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
             onClick={onToggle}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "h-8 w-8 p-0 text-muted-foreground hover:text-foreground flex-shrink-0",
+              "h-7 w-7 p-0 text-muted-foreground hover:text-foreground flex-shrink-0 rounded-lg",
               isCollapsed
                 ? "absolute -right-3.5 top-4 bg-card border border-border rounded-full shadow-soft z-50 hover:bg-surface-hover"
-                : "hover:bg-surface-hover",
+                : "hover:bg-white/[0.06]",
             )}
           >
             {isCollapsed ? (
@@ -207,13 +211,13 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
         )}
       </div>
 
-      {/* Navigation */}
-      <ScrollArea ref={scrollRef} className="flex-1 px-3 py-5">
-        <div className="space-y-7">
+      {/* Main Navigation */}
+      <ScrollArea ref={scrollRef} className="flex-1 px-3 py-4">
+        <div className="space-y-6">
           {navigationItems.map((section) => (
             <div key={section.section}>
               {!isCollapsed && (
-                <h3 className="mb-2.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+                <h3 className="mb-2 px-3 text-[10px] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
                   {section.section}
                 </h3>
               )}
@@ -221,25 +225,32 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
                 {section.items.map((item) => {
                   const active = isActive(item.href);
                   return (
-                    <Button
+                    <button
                       key={item.name}
-                      variant="ghost"
+                      type="button"
                       title={isCollapsed ? item.name : undefined}
+                      onClick={() => handleNavigation(item.href)}
                       className={cn(
-                        "w-full justify-start h-10 px-3 rounded-lg text-sm font-medium transition-all duration-150 ease-noir relative group",
+                        "w-full flex items-center h-10 px-3 rounded-xl text-sm font-medium transition-colors duration-150 ease-noir relative group text-left",
                         active
-                          ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:text-primary-foreground"
-                          : "text-sidebar-foreground/80 hover:bg-surface-hover hover:text-foreground",
+                          ? "text-foreground font-semibold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]",
                         isCollapsed && "justify-center px-2",
                       )}
-                      onClick={() => handleNavigation(item.href)}
                     >
-                      <div className="relative flex items-center">
+                      {active && (
+                        <motion.div
+                          layoutId="sidebar-active-pill"
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                          className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/20 via-primary/12 to-primary/5 border border-primary/35 shadow-[inset_0_1px_0_rgba(233,180,87,0.22)]"
+                        />
+                      )}
+                      <div className="relative z-10 flex items-center w-full">
                         <item.icon
                           className={cn(
-                            "h-4 w-4 transition-transform duration-150",
+                            "h-4 w-4 transition-colors duration-150 flex-shrink-0",
                             !isCollapsed && "mr-3",
-                            active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary",
+                            active ? "text-primary" : "text-muted-foreground group-hover:text-primary/80",
                           )}
                         />
                         {isCollapsed && item.name === "Messages" && unreadCount > 0 && (
@@ -247,21 +258,21 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
                             {unreadCount}
                           </span>
                         )}
+                        {!isCollapsed && <span className="truncate">{item.name}</span>}
+                        {!isCollapsed && item.name === "Messages" && unreadCount > 0 && (
+                          <span
+                            className={cn(
+                              "ml-auto text-[11px] font-mono font-semibold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center",
+                              active
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-primary/20 text-primary border border-primary/35",
+                            )}
+                          >
+                            {unreadCount}
+                          </span>
+                        )}
                       </div>
-                      {!isCollapsed && <span className="truncate">{item.name}</span>}
-                      {!isCollapsed && item.name === "Messages" && unreadCount > 0 && (
-                        <span
-                          className={cn(
-                            "ml-auto text-[11px] font-semibold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center",
-                            active
-                              ? "bg-primary-foreground text-primary"
-                              : "bg-primary/20 text-primary border border-primary/35",
-                          )}
-                        >
-                          {unreadCount}
-                        </span>
-                      )}
-                    </Button>
+                    </button>
                   );
                 })}
               </div>
@@ -270,14 +281,48 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
         </div>
       </ScrollArea>
 
-      {/* Theme section */}
-      <div className="border-t border-sidebar-border p-3.5">
-        {!isCollapsed && (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80 mb-2.5 px-2">
-            Appearance
-          </p>
-        )}
+      {/* Bottom Utility Links + Theme Switcher (Matches 02 / Dashboard sidebar bottom) */}
+      <div className="border-t border-white/[0.07] p-3 space-y-2">
+        <div className="space-y-1">
+          {utilityItems.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <button
+                key={item.name}
+                type="button"
+                title={isCollapsed ? item.name : undefined}
+                onClick={() => handleNavigation(item.href)}
+                className={cn(
+                  "w-full flex items-center h-9 px-3 rounded-xl text-sm font-medium transition-colors relative group text-left",
+                  active
+                    ? "text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]",
+                  isCollapsed && "justify-center px-2",
+                )}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="sidebar-active-pill"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/20 via-primary/12 to-primary/5 border border-primary/35"
+                  />
+                )}
+                <div className="relative z-10 flex items-center">
+                  <item.icon
+                    className={cn(
+                      "h-4 w-4 flex-shrink-0",
+                      !isCollapsed && "mr-3",
+                      active ? "text-primary" : "text-muted-foreground group-hover:text-primary/80",
+                    )}
+                  />
+                  {!isCollapsed && <span>{item.name}</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
 
+        {/* Theme Switcher */}
         <div
           role="button"
           tabIndex={0}
@@ -289,8 +334,8 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
             }
           }}
           className={cn(
-            "flex items-center rounded-full p-1 bg-surface-elevated border border-border/80 cursor-pointer relative transition-colors",
-            isCollapsed ? "flex-col h-16 w-8 mx-auto" : "w-full h-9",
+            "flex items-center rounded-full p-1 bg-surface-elevated/90 border border-white/[0.08] cursor-pointer relative transition-colors",
+            isCollapsed ? "flex-col h-14 w-8 mx-auto" : "w-full h-8",
           )}
           onClick={() => setTheme(isDarkActive ? "light" : "dark")}
         >
@@ -298,28 +343,28 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
             className={cn(
               "absolute bg-primary rounded-full shadow-sm transition-all duration-200 ease-noir",
               isCollapsed
-                ? cn("w-6 h-[28px] left-[3px]", isDarkActive ? "top-[31px]" : "top-[3px]")
-                : cn("h-7 w-[calc(50%-4px)] top-[3px]", isDarkActive ? "left-[calc(50%+1px)]" : "left-1"),
+                ? cn("w-6 h-[24px] left-[3px]", isDarkActive ? "top-[27px]" : "top-[3px]")
+                : cn("h-6 w-[calc(50%-4px)] top-[3px]", isDarkActive ? "left-[calc(50%+1px)]" : "left-1"),
             )}
           />
           <div
             className={cn(
-              "relative z-10 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+              "relative z-10 flex items-center justify-center gap-1.5 text-[11px] font-medium transition-colors",
               isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full",
               !isDarkActive ? "text-primary-foreground" : "text-muted-foreground",
             )}
           >
-            <Sun className="h-3.5 w-3.5" />
+            <Sun className="h-3 w-3" />
             {!isCollapsed && <span>Light</span>}
           </div>
           <div
             className={cn(
-              "relative z-10 flex items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+              "relative z-10 flex items-center justify-center gap-1.5 text-[11px] font-medium transition-colors",
               isCollapsed ? "h-1/2 w-full" : "w-1/2 h-full",
               isDarkActive ? "text-primary-foreground" : "text-muted-foreground",
             )}
           >
-            <Moon className="h-3.5 w-3.5" />
+            <Moon className="h-3 w-3" />
             {!isCollapsed && <span>Noir</span>}
           </div>
         </div>

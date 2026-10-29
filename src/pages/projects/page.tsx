@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/app-layout";
+import { DimensionalCard, DimensionalLayer, ImageReveal } from "@/components/ui/motion-primitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1134,73 +1135,79 @@ export default function ProjectsPage() {
                 </Table>
               </div>
             ) : (
-              // Card format for "All Projects" tab
+              // Studio Noir V2 Widescreen 16:9 Dimensional Project Slates
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProjects.map((project) => (
-                  <Card key={project.id} className="group relative overflow-hidden rounded-xl border border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/40 transition-all duration-300">
-                    <div className="h-20 w-full bg-gradient-to-br from-surface-elevated via-card to-background border-b border-border/60 relative overflow-hidden flex items-end justify-between px-6 pb-2.5">
-                      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(233,180,87,0.16),transparent_65%)] pointer-events-none" />
-                      <span className="noir-eyebrow text-[10px] tracking-[0.2em] text-primary/90 relative z-10">{project.project_type} • {project.category}</span>
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground relative z-10">{project.status}</span>
-                    </div>
-                    <CardHeader className="pb-3 pt-4">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="font-display text-xl font-bold tracking-tight line-clamp-1 text-foreground group-hover:text-primary transition-colors">{project.title}</CardTitle>
-                          <div className="flex items-center gap-2 mt-1">
-                            {getTypeIcon(project.project_type)}
-                            <span className="text-sm text-muted-foreground">
-                              {project.project_type} • {project.category}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1.5">
-                            Created by: <span className="font-medium text-primary">@{project.creator_username || "anonymous"}</span>
-                          </p>
+                {filteredProjects.map((project, pIdx) => {
+                  const projectBackdrops = [
+                    "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=900&q=80",
+                  ];
+                  const backdropUrl = projectBackdrops[pIdx % projectBackdrops.length];
+                  return (
+                  <DimensionalCard key={project.id} tiltStrength={5.5} className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/45 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                      <div
+                        onClick={() => handleViewProjectDetails(project)}
+                        className="aspect-[16/9] w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden cursor-pointer"
+                      >
+                        <ImageReveal
+                          src={backdropUrl}
+                          alt={project.title}
+                          containerClassName="w-full h-full"
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-black/20" />
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                          <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
+                            {project.project_type} • {project.category}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/15 font-mono text-[10px] uppercase tracking-wider text-white/90 flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(project.status)}`} />
+                            {project.status}
+                          </span>
                         </div>
-                        <div className="flex gap-1">
-                          {project.featured && (
-                            <Badge variant="outline" className="text-xs border-primary text-primary">
-                              <Star className="h-3 w-3 mr-1" />
-                              Featured
-                            </Badge>
-                          )}
-                          {project.popular && (
-                            <Badge variant="outline" className="text-xs border-primary text-primary">
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                              Popular
-                            </Badge>
-                          )}
+                        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 z-10">
+                          <div>
+                            <h3 className="font-serif text-xl font-bold tracking-tight line-clamp-1 text-white group-hover:text-primary transition-colors">
+                              {project.title}
+                            </h3>
+                            <p className="text-[11px] text-white/75 mt-0.5">
+                              by <span className="font-medium text-primary">@{project.creator_username || "studio"}</span>
+                            </p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center mt-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${getStatusColor(project.status)}`}></div>
-                          <span className="text-sm text-muted-foreground capitalize">{project.status}</span>
-                          <span className="text-sm text-muted-foreground">•</span>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            <span className="text-sm text-muted-foreground">{project.location}</span>
-                          </div>
+                    <CardHeader className="pb-2 pt-3">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5 text-primary/80" />
+                          <span>{project.location || "Remote / Global"}</span>
                         </div>
                         <div className="flex gap-1">
                           <Button 
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleSaveProject(project.id)}
-                            className={savedProjects.includes(project.id) ? "text-primary" : ""}
+                            className={savedProjects.includes(project.id) ? "text-primary h-7 w-7 p-0" : "h-7 w-7 p-0"}
                           >
-                            <Bookmark className={`h-4 w-4 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
+                            <Bookmark className={`h-3.5 w-3.5 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm"
+                            className="h-7 w-7 p-0"
                             onClick={() => handleShareProject(project)}
                           >
-                            <Share2 className="h-4 w-4" />
+                            <Share2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                     </CardHeader>
+                    </div>
                     
                     <CardContent className="space-y-4">
                       <CardDescription className="line-clamp-2 text-muted-foreground">
@@ -1267,8 +1274,9 @@ export default function ProjectsPage() {
                         )}
                       </div>
                     </CardContent>
-                  </Card>
-                ))}
+                  </DimensionalCard>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

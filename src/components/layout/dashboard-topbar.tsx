@@ -25,6 +25,7 @@ import {
   ChevronDown,
   CreditCard,
   HelpCircle,
+  Search,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
@@ -42,78 +43,18 @@ export function DashboardTopbar({
   onMenuToggle,
   isMobileMenuOpen = false,
 }: DashboardTopbarProps) {
-  const { profile, signOut, linkProfile, user } = useAuth();
+  const { profile, signOut, user } = useAuth();
   const navigate = useNavigate();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [showProfileSelector, setShowProfileSelector] = useState(false);
-
-  // Show profile selector if profile is generic
-  const shouldShowProfileSelector =
-    profile &&
-    (!profile.full_name ||
-      profile.full_name === "User" ||
-      profile.role === "USER" ||
-      profile.role === "user");
-
-  const handleSignOut = async () => {
-    await signOut();
-  };
-
-  const handleLinkVFXProfile = async () => {
-    try {
-      console.log("Starting VFX profile linking...");
-
-      const { data: allProfiles } = await supabase.from("profiles").select("*");
-
-      console.log("All profiles:", allProfiles);
-
-      const { data: vfxProfiles } = await supabase
-        .from("profiles")
-        .select("*")
-        .or("full_name.ilike.%VFX%,first_name.ilike.%VFX%");
-
-      console.log("VFX profiles found:", vfxProfiles);
-
-      if (vfxProfiles && vfxProfiles.length > 0) {
-        const vfxProfile = vfxProfiles[0];
-        console.log("Linking to VFX profile:", vfxProfile);
-
-        if (linkProfile) {
-          await linkProfile(vfxProfile.id);
-          console.log("Successfully linked VFX profile");
-          window.location.reload();
-        }
-      } else {
-        console.log("No VFX profile found");
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          const { data: newProfile } = await supabase
-            .from("profiles")
-            .insert({
-              user_id: user.id,
-              full_name: "VFX",
-              first_name: "VFX",
-              role: "VFX Artist",
-            })
-            .select()
-            .single();
-
-          if (newProfile) {
-            console.log("Created new VFX profile:", newProfile);
-            window.location.reload();
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Error linking VFX profile:", err);
-    }
-  };
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isUsingMock, setIsUsingMock] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -121,23 +62,23 @@ export function DashboardTopbar({
         setNotifications([
           {
             id: "mock-1",
-            title: "New job posted",
-            description: "Senior Director position at Netflix Studios",
-            time: "5m ago",
+            title: "12 new project applications",
+            description: "Cinematographer & Editor roles on active slate",
+            time: "2h ago",
             unread: true,
           },
           {
             id: "mock-2",
-            title: "Connection request",
-            description: "John Smith wants to connect",
-            time: "1h ago",
+            title: "New message from Arjun Mehta",
+            description: "I'd love to discuss the role further...",
+            time: "4h ago",
             unread: true,
           },
           {
             id: "mock-3",
-            title: "Project update",
-            description: "Your project 'Indie Film' has a new comment",
-            time: "2h ago",
+            title: "Task due tomorrow",
+            description: "Finalize shooting script & location lock",
+            time: "1d ago",
             unread: false,
           },
         ]);
@@ -158,16 +99,16 @@ export function DashboardTopbar({
           setNotifications([
             {
               id: "mock-1",
-              title: "New job posted",
-              description: "Senior Director position at Netflix Studios",
-              time: "5m ago",
+              title: "12 new project applications",
+              description: "Cinematographer & Editor roles on active slate",
+              time: "2h ago",
               unread: true,
             },
             {
               id: "mock-2",
-              title: "Connection request",
-              description: "John Smith wants to connect",
-              time: "1h ago",
+              title: "New message received",
+              description: "Collaboration inquiry in your inbox",
+              time: "4h ago",
               unread: true,
             },
           ]);
@@ -247,10 +188,15 @@ export function DashboardTopbar({
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    navigate("/discover");
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-card/85 backdrop-blur-xl supports-[backdrop-filter]:bg-card/75 border-b border-border/80">
-      <div className="flex h-16 items-center justify-between px-4 md:px-6 relative">
-        <div className="flex items-center gap-2 md:gap-4 z-10">
+    <header className="sticky top-0 z-40 bg-[#111215]/90 backdrop-blur-2xl supports-[backdrop-filter]:bg-[#111215]/80 border-b border-white/[0.07]">
+      <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-6 relative">
+        <div className="flex items-center gap-3 md:gap-5 flex-1 max-w-xl">
           {/* Mobile menu toggle */}
           <Button
             variant="ghost"
@@ -262,20 +208,28 @@ export function DashboardTopbar({
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
 
-          {/* Logo (Mobile Only) - Centered */}
+          {/* Logo (Mobile Only) */}
           <div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex md:hidden items-center gap-2 cursor-pointer"
+            className="flex md:hidden items-center gap-2 cursor-pointer"
             onClick={() => navigate("/")}
           >
             <div className="h-8 w-8 rounded-lg border border-primary/40 bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
               <Film className="h-4 w-4" />
             </div>
+            <span className="font-display text-lg font-semibold text-foreground">FilmCollab</span>
           </div>
 
-          {/* Page Title (Desktop Only) */}
-          <h1 className="hidden md:block text-lg font-semibold tracking-tight text-foreground">
-            {pageTitle}
-          </h1>
+          {/* Global Studio Search Bar (Matches 02 / Dashboard & 04 / Project Workspace topbar) */}
+          <form onSubmit={handleSearchSubmit} className="hidden md:flex items-center flex-1 max-w-md relative">
+            <Search className="h-4 w-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
+              placeholder={`Search people, projects, skills... (${pageTitle})`}
+              className="w-full h-9 pl-10 pr-4 rounded-xl bg-surface-elevated/90 border border-white/[0.08] text-sm text-foreground placeholder:text-muted-foreground/75 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all"
+            />
+          </form>
         </div>
 
         <div className="flex items-center gap-3">
@@ -286,17 +240,17 @@ export function DashboardTopbar({
                 variant="ghost"
                 size="sm"
                 aria-label="Notifications"
-                className="relative h-9 w-9 p-0 text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                className="relative h-9 w-9 rounded-xl p-0 text-muted-foreground hover:text-foreground hover:bg-white/[0.06]"
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] font-bold flex items-center justify-center bg-primary text-primary-foreground border-0">
+                  <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] font-mono font-bold flex items-center justify-center bg-primary text-primary-foreground border-0">
                     {unreadCount}
                   </Badge>
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 bg-popover border border-border/80 p-4" align="end">
+            <PopoverContent className="w-80 bg-popover border border-border/80 p-4 shadow-noir-lg" align="end">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm text-foreground">Notifications</h3>
@@ -317,7 +271,7 @@ export function DashboardTopbar({
                         setNotificationsOpen(false);
                         navigate("/notifications");
                       }}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors duration-150 ${
+                      className={`p-3 rounded-xl border cursor-pointer transition-colors duration-150 ${
                         notification.unread
                           ? "bg-primary/10 border-primary/30 hover:bg-primary/15"
                           : "bg-surface-base/70 border-border/60 hover:bg-surface-hover"
@@ -331,7 +285,7 @@ export function DashboardTopbar({
                           <p className="text-xs text-muted-foreground line-clamp-2">
                             {notification.description}
                           </p>
-                          <p className="text-[11px] text-muted-foreground/80">
+                          <p className="text-[11px] font-mono text-muted-foreground/80">
                             {notification.time}
                           </p>
                         </div>
@@ -362,41 +316,36 @@ export function DashboardTopbar({
             </PopoverContent>
           </Popover>
 
-          {/* User Profile Menu */}
+          {/* User Profile Menu (Matches 02 / Dashboard top-right user pill) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="flex items-center gap-2.5 h-auto py-1.5 px-2.5 rounded-lg hover:bg-surface-hover"
+                className="flex items-center gap-2.5 h-10 py-1.5 px-2.5 rounded-xl border border-transparent hover:border-white/[0.08] hover:bg-white/[0.04]"
               >
-                <Avatar className="h-8 w-8 border border-border/80">
+                <Avatar className="h-7 w-7 border border-primary/35">
                   <AvatarImage
-                    src={profile?.avatar_url || ""}
+                    src={profile?.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80"}
                     alt={profile?.full_name || "User"}
                   />
                   <AvatarFallback className="bg-primary/20 text-primary font-semibold text-xs">
-                    {(profile?.full_name || profile?.username || "U")[0].toUpperCase()}
+                    {(profile?.full_name || "P")[0].toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="hidden md:flex flex-col items-start text-left">
-                  <span className="text-sm font-medium text-foreground leading-tight">
-                    {profile?.username || user?.email?.split("@")[0] || "user"}
-                  </span>
-                  <span className="text-xs text-muted-foreground leading-tight">
-                    {profile?.full_name || "User"}
-                  </span>
-                </div>
-                <ChevronDown className="hidden md:block h-4 w-4 text-muted-foreground" />
+                <span className="hidden md:inline-block text-sm font-medium text-foreground">
+                  {profile?.full_name || user?.email?.split("@")[0] || "Filmmaker"}
+                </span>
+                <ChevronDown className="hidden md:block h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none text-foreground">
-                    {profile?.full_name || profile?.username || "User"}
+                    {profile?.full_name || "Filmmaker"}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {profile?.email || user?.email || ""}
+                    {user?.email || ""}
                   </p>
                 </div>
               </DropdownMenuLabel>

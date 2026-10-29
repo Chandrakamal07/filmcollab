@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { DimensionalCard, DimensionalLayer, FadeInSection } from "@/components/ui/motion-primitives";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1852,23 +1854,41 @@ export default function ProfilePage() {
   return (
     <AppLayout>
       <div className="space-y-6 bg-background min-h-screen pb-8">
-        {/* Profile Header */}
-        <Card className="relative overflow-hidden border-border/80 bg-card text-card-foreground shadow-noir">
-          <div className="h-24 sm:h-32 w-full bg-gradient-to-r from-surface-elevated via-card to-surface-elevated border-b border-border/60 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.14),transparent_65%)]" />
-            <div className="absolute bottom-3 right-4 hidden sm:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground/60">
-              <span>STUDIO DOSSIER</span>
+        {/* Studio Noir V2 Widescreen Talent Dossier Header */}
+        <Card className="relative overflow-hidden rounded-2xl border-border/80 bg-card text-card-foreground shadow-noir">
+          <div className="h-44 sm:h-56 w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden">
+            <img
+              src={
+                profile.coverImage ||
+                "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=1600&q=85"
+              }
+              alt="Cinema Dossier Backdrop"
+              className="w-full h-full object-cover object-center opacity-55"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-[#121417]/55 to-black/30" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.22),transparent_65%)]" />
+            <div className="absolute top-4 left-6 flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.2em] text-primary">
+                STUDIO TALENT DOSSIER
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-[10px] font-medium text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {profile.availability || "Available for Production"}
+              </span>
+            </div>
+            <div className="absolute bottom-3 right-6 hidden sm:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/75">
+              <span>35MM ANAMORPHIC REEL</span>
               <span>•</span>
               <span>{profile.shortId ? `ID ${profile.shortId}` : "VERIFIED TALENT"}</span>
             </div>
           </div>
           <CardContent className="p-6 pt-0 sm:pt-0">
-            <div className="flex flex-col md:flex-row md:items-end gap-5 -mt-10 sm:-mt-12 mb-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 flex-1 text-left w-full">
+            <div className="flex flex-col md:flex-row md:items-end gap-5 -mt-14 sm:-mt-16 mb-4 relative z-10">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 flex-1 text-left w-full">
                 <div className="relative group mx-0 flex-shrink-0">
-                  <Avatar className="w-24 h-24 sm:w-28 sm:h-28 border-4 border-card shadow-noir-lg flex-shrink-0 ring-1 ring-border/70">
+                  <Avatar className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border-4 border-card shadow-noir-lg flex-shrink-0 ring-1 ring-primary/40">
                     <AvatarImage src={profile.avatar} alt={profile.name} className="object-cover" />
-                    <AvatarFallback className="text-2xl font-display font-semibold bg-primary/15 text-primary">
+                    <AvatarFallback className="text-2xl font-display font-semibold bg-primary/15 text-primary rounded-2xl">
                       {profile.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -2192,16 +2212,69 @@ export default function ProfilePage() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="space-y-4 mt-4">
-                {/* Bio */}
-                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="font-display text-lg text-foreground">About</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-foreground/90 leading-relaxed">{profile.bio}</p>
-                  </CardContent>
-                </Card>
+              <TabsContent value="overview" className="space-y-5 mt-5">
+                {/* Studio Noir V2 Showreel & Bio Dossier Split */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <DimensionalCard tiltStrength={3.5} className="lg:col-span-7 rounded-2xl border-border/80 bg-card text-card-foreground shadow-noir p-6 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-primary">
+                          ARTIST STATEMENT & BIO
+                        </span>
+                        <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">
+                          {profile.role || "Filmmaker"}
+                        </Badge>
+                      </div>
+                      <h3 className="font-serif text-xl font-bold text-foreground">About {profile.name}</h3>
+                      <p className="text-sm text-foreground/90 leading-relaxed">
+                        {profile.bio || "Visual storyteller and production collaborator specializing in narrative cinema, atmospheric lighting, and character-driven filmmaking."}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pt-5 mt-5 border-t border-border/60">
+                      {[
+                        "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=500&q=80",
+                        "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=500&q=80",
+                        "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=500&q=80",
+                      ].map((still, idx) => (
+                        <div key={idx} className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated">
+                          <img src={still} alt="Showreel still" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                        </div>
+                      ))}
+                    </div>
+                  </DimensionalCard>
+
+                  <DimensionalCard tiltStrength={4} className="lg:col-span-5 rounded-2xl border-border/80 bg-card overflow-hidden shadow-noir flex flex-col justify-between">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-elevated">
+                      <img
+                        src={profile.avatar || "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80"}
+                        alt="Featured Showreel"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-transparent" />
+                      <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">FEATURED REEL</div>
+                          <div className="text-sm font-serif font-semibold text-white">Director & Cinematography Reel</div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-black/75 text-[11px] font-mono text-white/90 border border-white/15">
+                          02:16
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-5 grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border/70">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">Experience</div>
+                        <div className="text-sm font-semibold text-foreground mt-0.5">{profile.totalExperience || "5+ Years"}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border/70">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">Travel Ready</div>
+                        <div className="text-sm font-semibold text-emerald-400 mt-0.5">
+                          {profile.availableForTravel !== false ? "Worldwide" : "Local Only"}
+                        </div>
+                      </div>
+                    </div>
+                  </DimensionalCard>
+                </div>
 
                 {/* Contact Information */}
                 <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
