@@ -34,9 +34,13 @@ import {
   ImageReveal,
   StaggerItem,
 } from "@/components/ui/motion-primitives";
-import { SoundstageFallback } from "@/components/three/soundstage/SoundstageFallback";
+import * as THREE from "three";
+import { CinematicWorldFallback } from "@/components/three/cinematic-world/CinematicWorldFallback";
+import { CinematicWorldControls } from "@/components/three/cinematic-world/CinematicWorldControls";
 
-const SoundstageHero = React.lazy(() => import("@/components/three/soundstage/SoundstageHero"));
+const CinematicWorldCanvas = React.lazy(
+  () => import("@/components/three/cinematic-world/CinematicWorldCanvas")
+);
 
 const craftDisciplines = [
   {
@@ -85,6 +89,39 @@ const craftDisciplines = [
 
 const Index = () => {
   const navigate = useNavigate();
+
+  // 3D Cinematic Background State
+  const [pointerTarget] = React.useState(() => new THREE.Vector2(0, 0));
+  const [isPaused, setIsPaused] = React.useState(false);
+  const [reducedMotion, setReducedMotion] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+
+  const handleHeroPointerMove = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "touch") return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      pointerTarget.set(nx, ny);
+    },
+    [pointerTarget]
+  );
+
+  const handleHeroPointerLeave = React.useCallback(() => {
+    pointerTarget.set(0, 0);
+  }, [pointerTarget]);
+
+  const handleTogglePause = React.useCallback(() => {
+    setIsPaused((prev) => !prev);
+  }, []);
 
   const features = [
     {
@@ -176,21 +213,36 @@ const Index = () => {
       {/* 01 / LANDING — STUDIO NOIR CINEMATIC STAGE + 3D WEBGL FILM SCULPTURE */}
       <section className="relative pt-20 pb-12 px-4 sm:px-8">
         <div className="container mx-auto max-w-[1400px]">
-          <div className="relative rounded-2xl border border-white/[0.09] bg-[#121317] shadow-noir-lg overflow-hidden">
-            {/* Hero Main Stage */}
-            <div className="relative min-h-[560px] lg:min-h-[620px] flex flex-col justify-between overflow-hidden">
-              {/* Layer 1: Golden-Hour Production Photography Backdrop with Noir Vignette */}
-              <div className="pointer-events-none absolute inset-0">
-                <img
-                  src="https://images.unsplash.com/photo-1485846234645-a62644f84728?w=1800&auto=format&fit=crop&q=85"
-                  alt="Film production crew on set at golden hour"
-                  className="w-full h-full object-cover object-center opacity-45 scale-[1.02]"
-                />
-                {/* Warm Golden-Hour Sunflare + Deep Left/Bottom Charcoal Vignette */}
-                <div className="absolute inset-0 bg-gradient-to-r from-[#0E0F12] via-[#101114]/88 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#121317] via-[#121317]/35 to-[#0D0E10]/60" />
-                <div className="absolute top-0 right-[12%] w-[560px] h-[420px] rounded-full bg-[#E9B457]/20 blur-[120px]" />
+          <div className="relative rounded-2xl border border-white/[0.09] bg-[#090A0D] shadow-noir-lg overflow-hidden isolate">
+            {/* Hero Main Stage with Full-Hero 3D Cinematic World Background */}
+            <div
+              onPointerMove={handleHeroPointerMove}
+              onPointerLeave={handleHeroPointerLeave}
+              className="relative min-h-[580px] lg:min-h-[640px] flex flex-col justify-between overflow-hidden isolate select-none"
+            >
+              {/* Layer 0: Full-Hero 3D Cinematic World Behind the Interface */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-0"
+              >
+                <React.Suspense fallback={<CinematicWorldFallback />}>
+                  <CinematicWorldCanvas
+                    pointerTarget={pointerTarget}
+                    isPaused={isPaused}
+                    reducedMotion={reducedMotion}
+                  />
+                </React.Suspense>
               </div>
+
+              {/* Layer 1: Atmospheric Gradients (Deep charcoal behind headline, transparent on right) */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-[#090A0D]/95 via-[#090A0D]/75 to-transparent"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[#090A0D] via-transparent to-[#090A0D]/40"
+              />
 
               {/* Upper-Right Editorial Callout */}
               <div className="hidden xl:flex flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
@@ -201,10 +253,10 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Main Grid: Left copy, Right 3D Soundstage */}
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center relative z-20">
+              {/* Main Grid: Left copy, Right open negative space where 3D story fragments emerge */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center relative z-20">
                 {/* Left: Editorial Hero Content (Matches 01 / Landing) */}
-                <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-4 lg:pb-6 min-w-0">
+                <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-6 lg:pb-8 min-w-0">
                   <FadeInSection variant="marketing">
                     <div className="flex items-center gap-2.5 mb-5">
                       <span className="h-[1px] w-7 bg-primary/80" />
@@ -246,16 +298,12 @@ const Index = () => {
                   </FadeInSection>
                 </div>
 
-                {/* Right: 3D Infinite Soundstage Hero Instance */}
-                <div className="relative min-w-0 w-full h-[360px] sm:h-[440px] lg:h-[480px] px-4 sm:px-8 lg:px-6 py-2 flex items-center justify-center">
-                  <React.Suspense fallback={<SoundstageFallback />}>
-                    <SoundstageHero />
-                  </React.Suspense>
-                </div>
+                {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
+                <div className="hidden lg:block relative min-w-0 w-full h-[400px] pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
-              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pb-8 pt-4 border-t border-white/[0.07] bg-gradient-to-t from-[#0E0F12] via-[#121317]/95 to-transparent">
+              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pb-8 pt-4 border-t border-white/[0.07] bg-gradient-to-t from-[#0E0F12] via-[#090A0D]/95 to-transparent">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-4 items-end">
                   <div className="col-span-2 sm:col-span-3 lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5">
                     {craftDisciplines.map((craft, idx) => (
@@ -291,8 +339,14 @@ const Index = () => {
                     ))}
                   </div>
 
-                  {/* Right Architectural Tagline from 01 / Landing */}
+                  {/* Right Architectural Tagline + Discreet Pause/Resume Control */}
                   <div className="col-span-2 sm:col-span-3 lg:col-span-3 flex flex-col justify-end lg:pl-4 pb-2">
+                    <div className="flex items-center justify-between lg:justify-end gap-3 mb-2.5">
+                      <CinematicWorldControls
+                        isPaused={isPaused}
+                        onTogglePause={handleTogglePause}
+                      />
+                    </div>
                     <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground leading-relaxed">
                       A PLATFORM
                       <br />
