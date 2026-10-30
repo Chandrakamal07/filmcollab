@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createGoldenReel } from "../src/components/three/golden-reel/ReelGeometry";
 import { buildFilmLayout } from "../src/components/three/golden-reel/film-layout";
 import { createFilmSystem } from "../src/components/three/golden-reel/FilmPath";
-import { placeReferenceReel, frameReferenceCamera } from "../src/components/three/golden-reel/reference-composition";
+import { placeReferenceReel, frameReferenceCamera, REFERENCE_COMPOSITION } from "../src/components/three/golden-reel/reference-composition";
 import { sampleSequence } from "../src/components/three/golden-reel/sequence-controller";
 
 const reel = createGoldenReel();
@@ -56,13 +56,24 @@ const project = (p: THREE.Vector3) => {
 };
 const reelCenter = project(reel.group.position);
 const crest = project(new THREE.Vector3(2.4, 1.45, 6));
-assert.ok(Math.abs(reelCenter.x - .48) < .035, "Reel sits behind the middle of the hero");
-assert.ok(Math.abs(reelCenter.y - .33) < .04, "Reel vertical position matches reference");
-assert.ok(Math.abs(crest.x - .81) < .04 && Math.abs(crest.y - .17) < .04, "Film crest matches the reference angle and position");
-assert.ok(project(last).y > 1, "Foreground strip leaves the composition through its lower edge");
+assert.ok(Math.abs(reelCenter.x - .473) < .035, "Reel sits behind the middle of the hero");
+assert.ok(Math.abs(reelCenter.y - .363) < .04, "Reel vertical position matches reference");
+assert.ok(Math.abs(crest.x - .753) < .04 && Math.abs(crest.y - .228) < .04, "Film crest matches the reference angle and position");
+assert.ok(project(last).y > .92, "Foreground strip reaches the lower edge without dominating the composition");
 const rimPoints = Array.from({length: 128}, (_, i) => project(new THREE.Vector3(Math.cos(i / 128 * Math.PI * 2) * reel.outerRadius, Math.sin(i / 128 * Math.PI * 2) * reel.outerRadius, .525).applyMatrix4(reel.group.matrixWorld)));
 const reelBounds = { left: Math.min(...rimPoints.map(p => p.x)), right: Math.max(...rimPoints.map(p => p.x)), top: Math.min(...rimPoints.map(p => p.y)), bottom: Math.max(...rimPoints.map(p => p.y)) };
-assert.ok(reelBounds.bottom - reelBounds.top > .52 && reelBounds.bottom - reelBounds.top < .65, "Reel occupies the reference's large vertical footprint");
-assert.ok(reelBounds.right - reelBounds.left > .17 && reelBounds.right - reelBounds.left < .29, "Reel shaft angle yields the reference's narrow ellipse");
-console.log(JSON.stringify({ reelBounds, referenceAnchors: { reelCenter, crest, foreground: project(last) }, samples: layout.samples.length, constantWidth: layout.samples[0].width, collisions, foldedEdges, firstGenre: sampleSequence(0).genre.id, secondGenre: sampleSequence(5.5).genre.id }, null, 2));
+assert.ok(reelBounds.bottom - reelBounds.top > .47 && reelBounds.bottom - reelBounds.top < .52, "Reel occupies the reference's large vertical footprint");
+assert.ok(reelBounds.right - reelBounds.left > .13 && reelBounds.right - reelBounds.left < .20, "Reel shaft angle yields the reference's narrow ellipse");
+// A camera-only scale change must preserve the complete world-space mechanism.
+const baselineCamera = camera.clone();
+baselineCamera.zoom /= REFERENCE_COMPOSITION.presentationScale;
+baselineCamera.updateProjectionMatrix();
+for (const point of [reel.group.position, new THREE.Vector3(2.4, 1.45, 6), last]) {
+  const before = point.clone().project(baselineCamera);
+  const after = point.clone().project(camera);
+  assert.ok(Math.abs(after.x - before.x * .82) < 1e-10);
+  assert.ok(Math.abs(after.y - before.y * .82) < 1e-10);
+}
+assert.equal(reel.group.scale.x, 1.45, "Mechanical scale stays unchanged");
+console.log(JSON.stringify({ presentationScale: REFERENCE_COMPOSITION.presentationScale, reelBounds, referenceAnchors: { reelCenter, crest, foreground: project(last) }, samples: layout.samples.length, constantWidth: layout.samples[0].width, collisions, foldedEdges, firstGenre: sampleSequence(0).genre.id, secondGenre: sampleSequence(5.5).genre.id }, null, 2));
 film.dispose(); texture.dispose(); reel.dispose();
