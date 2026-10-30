@@ -4,6 +4,7 @@ import type { SequenceSample } from "./types";
 import { createSilhouetteAtlas, type SilhouetteAtlasManager } from "./silhouette-atlas";
 import { createGoldenReel, type ReelAssembly } from "./ReelGeometry";
 import { createFilmSystem, type FilmSystem } from "./FilmPath";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 export interface GoldenReelController {
   scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer;
@@ -30,9 +31,16 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
   Object.assign(renderer.domElement.style, { width: "100%", height: "100%", display: "block", pointerEvents: "none" });
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentRoom = new RoomEnvironment();
+  const environmentTarget = pmrem.fromScene(environmentRoom);
+  scene.environment = environmentTarget.texture;
+  scene.environmentIntensity = 0.28;
+  environmentRoom.dispose();
+  pmrem.dispose();
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
   const key = new THREE.DirectionalLight("#fff0cf", 3.2);
-  key.position.set(-2, 4, 5);
+  key.position.set(-4, 5, 2);
   scene.add(key);
   const fill = new THREE.HemisphereLight("#e5ecff", "#49351e", 1.1);
   scene.add(fill);
@@ -43,7 +51,7 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
   const atlas = createSilhouetteAtlas();
   const reel = createGoldenReel();
   reel.group.position.set(-1.3, 0.8, -1.8);
-  reel.group.rotation.set(0.04, -1.05, -0.08);
+  reel.group.rotation.set(0.04, -0.80, -0.08);
   scene.add(reel.group);
   reel.group.updateWorldMatrix(true, false);
   const filmSystem = createFilmSystem(atlas.texture, reel.group, reel.parameters);
@@ -62,7 +70,7 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
   }
   // Full flanges, including rotation, fit inside this sampled envelope.
   for (let i = 0; i < 64; i++) {
-    for (const z of [reel.parameters.flangeFrontZ + 0.04, reel.parameters.flangeRearZ - 0.04]) {
+    for (const z of [reel.parameters.flangeFrontZ + 0.10, reel.parameters.flangeRearZ - 0.10]) {
       envelope.push(new THREE.Vector3(Math.cos(i / 64 * Math.PI * 2) * reel.outerRadius,
         Math.sin(i / 64 * Math.PI * 2) * reel.outerRadius, z).applyMatrix4(reel.group.matrixWorld));
     }
@@ -77,7 +85,7 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
   const draw = (pointer: THREE.Vector2, mobile: boolean) => {
     const width = container.clientWidth || 1200;
     const height = container.clientHeight || 440;
-    const left = mobile ? 0 : width * 0.51;
+    const left = mobile ? 0 : width * 0.44;
     const viewWidth = width - left;
     camera.aspect = viewWidth / height;
     camera.updateProjectionMatrix();
@@ -121,6 +129,7 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
     dispose() {
       disposed = true;
       atlas.dispose(); filmSystem.dispose(); reel.dispose();
+      environmentTarget.dispose();
       helperGeometry.dispose(); helperMaterial.dispose(); renderer.dispose();
       renderer.domElement.remove();
     },

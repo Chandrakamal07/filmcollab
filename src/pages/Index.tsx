@@ -255,7 +255,8 @@ const Index = () => {
                 {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[340px] lg:inset-0 lg:h-auto z-0"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[400px] sm:h-[440px] lg:inset-0 lg:h-auto z-0"
+                  style={{ background: "radial-gradient(ellipse at 77% 49%, rgba(130, 78, 24, 0.16), transparent 50%)" }}
                 >
                   <React.Suspense fallback={<GoldenReelFallback />}>
                     <GoldenReelCanvas
@@ -277,7 +278,7 @@ const Index = () => {
                       </span>
                     </div>
 
-                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[68px] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
+                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[76px] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
                       Your next
                       <span className="block">film starts here.</span>
                     </h1>
@@ -311,7 +312,7 @@ const Index = () => {
                 </div>
 
                 {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="relative min-w-0 w-full h-[300px] sm:h-[340px] lg:h-[460px] pointer-events-none" />
+                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-[620px] pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}

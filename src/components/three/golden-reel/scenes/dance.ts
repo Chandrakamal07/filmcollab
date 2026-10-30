@@ -8,7 +8,7 @@ export const danceScene: GenreDefinition = {
   title: "Romance / Musical",
   render: (ctx: CanvasRenderingContext2D, width: number, height: number, progress: number) => {
     const groundY = height * 0.82;
-    const charHeight = height * 0.54;
+    const charHeight = height * 0.65;
     const centerX = width * 0.50;
 
     ctx.save();
@@ -143,3 +143,4 @@ export const danceScene: GenreDefinition = {
     ctx.restore();
   },
 };
+

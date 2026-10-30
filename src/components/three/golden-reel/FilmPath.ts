@@ -18,12 +18,19 @@ export function createFilmSystem(texture: THREE.CanvasTexture, reel: THREE.Group
   const layout = buildFilmLayout(reel.matrixWorld, parameters);
   const positions: number[] = [];
   const uvs: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
   layout.samples.forEach((s, i) => {
     for (const sign of [-1, 1]) {
       const p = s.center.clone().addScaledVector(s.widthAxis, sign * s.width / 2);
       positions.push(p.x, p.y, p.z);
       uvs.push(sign < 0 ? 0 : 1, (layout.gateEndDistance - s.distance) / layout.framePitch);
+      // Three prominent foreground stories. The distant continuation remains
+      // visible as dark film, rather than a ladder of equally bright tiles.
+      const framesFromFront = (layout.gateEndDistance - s.distance) / layout.framePitch;
+      const light = 1 - THREE.MathUtils.smoothstep(framesFromFront, 2.9, 3.45);
+      const brightness = THREE.MathUtils.lerp(0.035, 1, light);
+      colors.push(brightness, brightness * 0.91, brightness * 0.77);
     }
     if (i < layout.samples.length - 1) {
       const j = i * 2;
@@ -33,11 +40,13 @@ export function createFilmSystem(texture: THREE.CanvasTexture, reel: THREE.Group
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   const filmMaterial = new THREE.MeshBasicMaterial({
     map: texture, side: THREE.DoubleSide, toneMapped: false,
     transparent: true, alphaTest: 0.5,
+    vertexColors: true,
   });
   const filmMesh = new THREE.Mesh(geometry, filmMaterial);
   const group = new THREE.Group();

@@ -7,7 +7,7 @@ import { sampleSequence } from "../src/components/three/golden-reel/sequence-con
 
 const reel = createGoldenReel();
 reel.group.position.set(-1.3, 0.8, -1.8);
-reel.group.rotation.set(0.04, -1.05, -0.08);
+reel.group.rotation.set(0.04, -0.80, -0.08);
 reel.group.updateWorldMatrix(true, false);
 const layout = buildFilmLayout(reel.group.matrixWorld, reel.parameters);
 const inverse = reel.group.matrixWorld.clone().invert();

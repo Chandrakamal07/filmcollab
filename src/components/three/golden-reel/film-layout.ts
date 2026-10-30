@@ -38,12 +38,12 @@ export function buildFilmLayout(matrix: THREE.Matrix4, parameters: ReelGeometryP
   const clear = departure.clone().addScaledVector(departureTangent, 1.85);
   for (let i = 0; i <= 60; i++) add(departure.clone().lerp(clear, i / 60), departureTangent, shaft, "spool-span");
   const curves = [
-    new THREE.CubicBezierCurve3(clear, clear.clone().addScaledVector(departureTangent, 0.65),
-      new THREE.Vector3(0.65, -0.50, -0.05), new THREE.Vector3(0.80, 0.15, -0.55)),
-    new THREE.CubicBezierCurve3(new THREE.Vector3(0.80, 0.15, -0.55),
-      new THREE.Vector3(0.95, 0.80, -1.05), new THREE.Vector3(1.20, 1.65, -1.25), new THREE.Vector3(1.20, 1.65, -0.30)),
+    new THREE.CubicBezierCurve3(clear, clear.clone().addScaledVector(departureTangent, 1.2),
+      new THREE.Vector3(1.6, -0.8, 0.5), new THREE.Vector3(1.7, 0.2, -0.5)),
+    new THREE.CubicBezierCurve3(new THREE.Vector3(1.7, 0.2, -0.5),
+      new THREE.Vector3(1.765, 0.85, -1.15), new THREE.Vector3(1.20, 1.65, -1.25), new THREE.Vector3(1.20, 1.65, -0.30)),
     new THREE.CubicBezierCurve3(new THREE.Vector3(1.20, 1.65, -0.30),
-      new THREE.Vector3(1.20, 1.65, 0.65), new THREE.Vector3(0.55, -0.75, 3.30), new THREE.Vector3(0.10, -1.80, 3.80)),
+      new THREE.Vector3(1.20, 1.65, 0.65), new THREE.Vector3(0.55, -0.75, 3.60), new THREE.Vector3(-0.30, -1.80, 4.50)),
   ];
   const tangents: THREE.Vector3[] = [];
   const points: THREE.Vector3[] = [];

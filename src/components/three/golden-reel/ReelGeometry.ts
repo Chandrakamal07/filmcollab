@@ -36,14 +36,36 @@ export function createGoldenReel(): ReelAssembly {
 
   const ownedGeometries: THREE.BufferGeometry[] = [];
   const ownedMaterials: THREE.Material[] = [];
+  const ownedTextures: THREE.Texture[] = [];
 
   // Materials: Pale champagne gold & aged brass
   const champagneGoldMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#DEC085"),
     metalness: 0.85,
-    roughness: 0.28,
+    roughness: 0.24,
   });
   ownedMaterials.push(champagneGoldMat);
+  // A subtle brushed roughness map breaks up the perfectly uniform metal.
+  // Keep geometry-only tests usable without a browser canvas.
+  if (typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      let seed = 19;
+      for (let y = 0; y < 256; y++) {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        const value = 185 + seed % 60;
+        ctx.fillStyle = `rgb(${value},${value},${value})`;
+        ctx.fillRect(0, y, 256, 1);
+      }
+      const brushed = new THREE.CanvasTexture(canvas);
+      brushed.wrapS = brushed.wrapT = THREE.RepeatWrapping;
+      brushed.repeat.set(5, 5);
+      champagneGoldMat.roughnessMap = brushed;
+      ownedTextures.push(brushed);
+    }
+  }
 
   const agedBrassRimMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#BA954E"),
@@ -69,11 +91,9 @@ export function createGoldenReel(): ReelAssembly {
   // =========================================================
   // Flange Geometry: Genuine 3D cutouts through both flanges
   // =========================================================
-  const outerR = 1.60;
+  const outerR = 2.0;
   const hubHoleR = 0.32;
   const windowCount = 6;
-  const windowCenterR = 0.98;
-  const windowRadius = 0.30;
 
   const flangeShape = new THREE.Shape();
   flangeShape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
@@ -83,14 +103,15 @@ export function createGoldenReel(): ReelAssembly {
   centerHole.absarc(0, 0, hubHoleR, 0, Math.PI * 2, true);
   flangeShape.holes.push(centerHole);
 
-  // 6 Circular Cutout Window Holes
+  // Long annular windows leave six elegant structural spokes, rather than
+  // six round holes in a flat disc. The hole winding opposes the outer face.
   for (let i = 0; i < windowCount; i++) {
-    const angle = (i * Math.PI * 2) / windowCount;
-    const wx = Math.cos(angle) * windowCenterR;
-    const wy = Math.sin(angle) * windowCenterR;
-
+    const angle = i * Math.PI * 2 / windowCount;
     const windowHole = new THREE.Path();
-    windowHole.absarc(wx, wy, windowRadius, 0, Math.PI * 2, true);
+    windowHole.absarc(0, 0, 1.70, angle + 0.32, angle - 0.32, true);
+    windowHole.lineTo(Math.cos(angle - 0.22) * 0.70, Math.sin(angle - 0.22) * 0.70);
+    windowHole.absarc(0, 0, 0.70, angle - 0.22, angle + 0.22, false);
+    windowHole.closePath();
     flangeShape.holes.push(windowHole);
   }
 
@@ -116,18 +137,40 @@ export function createGoldenReel(): ReelAssembly {
   // Flange Spacing & Measured Face Bounds
   const filmWidth = 0.95;
   const flangeCenterOffsetZ = filmWidth / 2 + flangeHalfThick + 0.012; // Z position of front and rear flange centers
-  const flangeInnerFrontZ = flangeCenterOffsetZ - flangeHalfThick; // 0.082 - 0.016 = 0.066
-  const flangeInnerRearZ = -flangeCenterOffsetZ + flangeHalfThick;  // -0.082 + 0.016 = -0.066
-  const flangeClearance = flangeInnerFrontZ - flangeInnerRearZ;   // 0.132m between inner faces
-  const flangeOuterFrontZ = flangeCenterOffsetZ + flangeHalfThick; // 0.082 + 0.016 = 0.098
+  const flangeInnerFrontZ = flangeCenterOffsetZ - flangeHalfThick; // Inner face before the outward dish
+  const flangeInnerRearZ = -flangeCenterOffsetZ + flangeHalfThick;  // Symmetric rear inner face
+  const flangeClearance = flangeInnerFrontZ - flangeInnerRearZ;   // Minimum clear distance between inner faces
+  const flangeOuterFrontZ = flangeCenterOffsetZ + flangeHalfThick; // Front face at the hub
 
   // Front Flange
-  const frontFlange = new THREE.Mesh(flangeGeo, champagneGoldMat);
+  const frontGeometry = flangeGeo.clone();
+  const rearGeometry = flangeGeo.clone();
+  for (const [geometry, sign] of [[frontGeometry, 1], [rearGeometry, -1]] as const) {
+    const position = geometry.getAttribute("position");
+    const normals = geometry.getAttribute("normal");
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i);
+      const y = position.getY(i);
+      const radius = Math.hypot(x, y);
+      position.setZ(i, position.getZ(i) + sign * 0.055 * (radius / outerR) ** 2);
+      // Analytic inverse-transpose of the dish deformation. Recomputing
+      // normals on non-indexed extrusion caps creates visible triangle facets.
+      const nz = normals.getZ(i);
+      const normal = new THREE.Vector3(
+        normals.getX(i) - nz * sign * 0.11 * x / (outerR * outerR),
+        normals.getY(i) - nz * sign * 0.11 * y / (outerR * outerR),
+        nz,
+      ).normalize();
+      normals.setXYZ(i, normal.x, normal.y, normal.z);
+    }
+    ownedGeometries.push(geometry);
+  }
+  const frontFlange = new THREE.Mesh(frontGeometry, champagneGoldMat);
   frontFlange.position.z = flangeCenterOffsetZ;
   rotatingSpool.add(frontFlange);
 
   // Rear Flange
-  const rearFlange = new THREE.Mesh(flangeGeo, champagneGoldMat);
+  const rearFlange = new THREE.Mesh(rearGeometry, champagneGoldMat);
   rearFlange.position.z = -flangeCenterOffsetZ;
   rotatingSpool.add(rearFlange);
 
@@ -136,11 +179,11 @@ export function createGoldenReel(): ReelAssembly {
   ownedGeometries.push(rimTorusGeo);
 
   const frontRim = new THREE.Mesh(rimTorusGeo, agedBrassRimMat);
-  frontRim.position.z = flangeOuterFrontZ;
+  frontRim.position.z = flangeOuterFrontZ + 0.055;
   rotatingSpool.add(frontRim);
 
   const rearRim = new THREE.Mesh(rimTorusGeo, agedBrassRimMat);
-  rearRim.position.z = -flangeOuterFrontZ;
+  rearRim.position.z = -flangeOuterFrontZ - 0.055;
   rotatingSpool.add(rearRim);
 
   // =========================================================
@@ -219,6 +262,7 @@ export function createGoldenReel(): ReelAssembly {
   };
 
   const dispose = () => {
+    ownedTextures.forEach((t) => t.dispose());
     ownedGeometries.forEach((g) => g.dispose());
     ownedMaterials.forEach((m) => m.dispose());
   };

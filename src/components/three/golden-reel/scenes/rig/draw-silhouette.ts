@@ -14,12 +14,12 @@ export function drawCharacterSilhouette(
   const facing = pose.facing; // 1 = right, -1 = left
 
   // Anatomical proportions based on character height H
-  const headR = H * 0.082;
+  const headR = H * 0.062;
   const neckLen = H * 0.045;
   const spineLen = H * 0.28;
-  const pelvisWidth = H * 0.18;
-  const chestWidth = H * 0.24;
-  const waistWidth = H * 0.16;
+  const pelvisWidth = H * 0.15;
+  const chestWidth = H * (pose.clothing?.type === "gown" ? 0.17 : 0.21);
+  const waistWidth = H * (pose.clothing?.type === "gown" ? 0.105 : 0.14);
 
   const thighLen = H * 0.26;
   const calfLen = H * 0.24;
@@ -366,3 +366,4 @@ export function drawCharacterSilhouette(
     head: { x: headCenterX, y: headCenterY },
   };
 }
+

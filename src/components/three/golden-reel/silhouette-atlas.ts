@@ -29,6 +29,12 @@ export function createSilhouetteAtlas(): SilhouetteAtlasManager {
   texture.repeat.set(1, 1 / FRAME_COUNT);
   texture.offset.y = (FRAME_COUNT - 1) / FRAME_COUNT;
 
+  const sceneCanvas = document.createElement("canvas");
+  sceneCanvas.width = FRAME_WIDTH - 116;
+  sceneCanvas.height = FRAME_HEIGHT - 12;
+  const sceneContext = sceneCanvas.getContext("2d");
+  if (!sceneContext) throw new Error("Unable to create scene rendering context");
+
   function renderFrame(genre: number, progress: number) {
     // Reverse row order: advancing positive transport brings the next genre
     // into the near frame without inverting the images within each tile.
@@ -42,8 +48,11 @@ export function createSilhouetteAtlas(): SilhouetteAtlasManager {
     ctx.beginPath();
     ctx.rect(margin, y + 6, FRAME_WIDTH - margin * 2, FRAME_HEIGHT - 12);
     ctx.clip();
-    ctx.translate(margin, y + 6);
-    GENRES[genre].render(ctx, FRAME_WIDTH - margin * 2, FRAME_HEIGHT - 12, progress);
+    sceneContext.clearRect(0, 0, sceneCanvas.width, sceneCanvas.height);
+    GENRES[genre].render(sceneContext, sceneCanvas.width, sceneCanvas.height, progress);
+    ctx.filter = "sepia(0.85) saturate(0.7)";
+    ctx.drawImage(sceneCanvas, margin, y + 6);
+    ctx.filter = "none";
     ctx.restore();
     // Real alpha apertures along both film edges, as in the reference image.
     for (const x of [14, FRAME_WIDTH - 43]) {
