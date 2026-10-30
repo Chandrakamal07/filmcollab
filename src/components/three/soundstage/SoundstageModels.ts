@@ -5,23 +5,24 @@ export function createDirectorChair(): THREE.Group {
   chair.name = "DirectorsChair";
   chair.userData = { componentId: "chair" };
 
+  // Calibrated materials: non-metallic wood and canvas
   const woodMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#18191D"),
-    metalness: 0.12,
-    roughness: 0.72,
+    color: new THREE.Color("#25272F"),
+    metalness: 0.06,
+    roughness: 0.68,
     name: "BlackAshWood",
   });
 
   const metalHingeMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#757B86"),
-    metalness: 0.85,
-    roughness: 0.28,
+    color: new THREE.Color("#787E8C"),
+    metalness: 0.88,
+    roughness: 0.22,
     name: "MachinedSteelHardware",
   });
 
   const canvasMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#1C1E24"),
-    metalness: 0.05,
+    color: new THREE.Color("#282A32"),
+    metalness: 0.04,
     roughness: 0.88,
     name: "HeavyCanvasFabric",
   });
@@ -29,7 +30,7 @@ export function createDirectorChair(): THREE.Group {
   const brassRivetMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#E9B457"),
     metalness: 0.82,
-    roughness: 0.3,
+    roughness: 0.28,
     name: "BrassRivets",
   });
 
@@ -171,36 +172,37 @@ export function createCameraRig(): THREE.Group {
   cameraRig.name = "CinemaCameraRig";
   cameraRig.userData = { componentId: "camera" };
 
+  // Calibrated materials: painted graphite body (low metalness, soft matte specular)
   const chassisMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#13151A"),
-    metalness: 0.85,
-    roughness: 0.24,
-    name: "DarkTitaniumChassis",
+    color: new THREE.Color("#22252C"),
+    metalness: 0.28,
+    roughness: 0.58,
+    name: "MatteGraphiteChassis",
   });
 
   const machinedSteelMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#565C68"),
-    metalness: 0.9,
-    roughness: 0.2,
+    color: new THREE.Color("#686E7C"),
+    metalness: 0.88,
+    roughness: 0.22,
     name: "MachinedSteel",
   });
 
   const amberAccentMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#E9B457"),
-    metalness: 0.75,
-    roughness: 0.3,
+    metalness: 0.78,
+    roughness: 0.28,
     name: "AmberAnodizedKnobs",
   });
 
   const glassMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#0C1824"),
-    roughness: 0.05,
-    metalness: 0.95,
+    color: new THREE.Color("#162838"),
+    roughness: 0.08,
+    metalness: 0.2,
     name: "CoatedOpticalGlass",
   });
 
   const rubberMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#1B1C20"),
+    color: new THREE.Color("#1E2026"),
     roughness: 0.85,
     metalness: 0.08,
     name: "RubberWheelsGrip",
@@ -312,8 +314,8 @@ export function createCameraRig(): THREE.Group {
     new THREE.MeshStandardMaterial({
       color: new THREE.Color("#1B2230"),
       emissive: new THREE.Color("#E9B457"),
-      emissiveIntensity: 0.2,
-      roughness: 0.1,
+      emissiveIntensity: 0.25,
+      roughness: 0.15,
     })
   );
   monitorScreen.position.set(0.25, 0.34, 0.098);
@@ -335,8 +337,9 @@ export function createCameraRig(): THREE.Group {
   lensBarrel1.position.set(0, 0, 0.31);
   bodyGroup.add(lensBarrel1);
 
-  // Focus Gear Ring
+  // Focus Gear Ring - Named explicitly as FocusRing
   const focusRing = new THREE.Mesh(new THREE.CylinderGeometry(0.108, 0.108, 0.05, 32), machinedSteelMat);
+  focusRing.name = "FocusRing";
   focusRing.rotateX(Math.PI / 2);
   focusRing.position.set(0, 0, 0.36);
   bodyGroup.add(focusRing);
@@ -383,16 +386,16 @@ export function createDollyTrack(): THREE.Group {
   track.userData = { componentId: "track" };
 
   const steelRailMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#6B7382"),
-    metalness: 0.92,
-    roughness: 0.22,
+    color: new THREE.Color("#757D8E"),
+    metalness: 0.9,
+    roughness: 0.2,
     name: "SteelRailTubing",
   });
 
   const sleeperMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#18191D"),
-    metalness: 0.15,
-    roughness: 0.78,
+    color: new THREE.Color("#20232B"),
+    metalness: 0.12,
+    roughness: 0.75,
     name: "TrackCrossSleeper",
   });
 
@@ -413,7 +416,6 @@ export function createDollyTrack(): THREE.Group {
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
     const a = startAngle + t * (endAngle - startAngle);
-    // Offset center of circle so track curves naturally around the chair focal point
     const cx = -0.8;
     const cz = -3.8;
     innerCurvePoints.push(new THREE.Vector3(cx + Math.sin(a) * innerRadius, 0.038, cz + Math.cos(a) * innerRadius));
@@ -429,7 +431,7 @@ export function createDollyTrack(): THREE.Group {
   const railOuterMesh = new THREE.Mesh(new THREE.TubeGeometry(outerCurve, 48, 0.024, 12, false), steelRailMat);
   track.add(railOuterMesh);
 
-  // Cross sleepers (Ties every few feet along the curve)
+  // Cross sleepers
   const tieCount = 18;
   for (let i = 0; i <= tieCount; i++) {
     const t = i / tieCount;
@@ -465,16 +467,16 @@ export function createOverheadLighting(): THREE.Group {
   rig.userData = { componentId: "rig" };
 
   const trussMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#363B45"),
-    metalness: 0.88,
-    roughness: 0.32,
+    color: new THREE.Color("#404652"),
+    metalness: 0.85,
+    roughness: 0.28,
     name: "AluminumBoxTruss",
   });
 
   const fresnelMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#1A1D24"),
-    metalness: 0.65,
-    roughness: 0.4,
+    color: new THREE.Color("#222630"),
+    metalness: 0.5,
+    roughness: 0.45,
     name: "FresnelHousing",
   });
 
@@ -548,9 +550,9 @@ export function createOverheadLighting(): THREE.Group {
 
   // 4 Barn Doors (Leaves)
   const doorMat = new THREE.MeshStandardMaterial({
-    color: "#0E1013",
-    metalness: 0.6,
-    roughness: 0.4,
+    color: "#181A20",
+    metalness: 0.5,
+    roughness: 0.45,
   });
 
   const doorTop = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.012, 0.28), doorMat);

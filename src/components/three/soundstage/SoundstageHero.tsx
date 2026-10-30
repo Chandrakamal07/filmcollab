@@ -17,43 +17,56 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
   const [isReady, setIsReady] = React.useState(false);
   const [viewpointAngle, setViewpointAngle] = React.useState(DEFAULT_VIEWPOINT_ANGLE);
   const [currentPreset, setCurrentPreset] = React.useState<LightingPresetId>("dramatic");
-  const [isPaused, setIsPaused] = React.useState(false);
+  const [userPaused, setUserPaused] = React.useState(false);
+  const [reducedMotion, setReducedMotion] = React.useState(false);
   const [hoveredComponent, setHoveredComponent] = React.useState<SoundstageComponent | null>(null);
 
   const sceneRef = React.useRef<SoundstageSceneHandle | null>(null);
 
-  // Check prefers-reduced-motion
+  // Monitor prefers-reduced-motion media query independently from user pause state
   React.useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mediaQuery.matches) {
-      setIsPaused(true);
-    }
+    setReducedMotion(mediaQuery.matches);
 
     const handler = (e: MediaQueryListEvent) => {
-      setIsPaused(e.matches);
+      setReducedMotion(e.matches);
     };
 
     mediaQuery.addEventListener("change", handler);
     return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
-  const handleReset = () => {
+  // Stable callbacks to ensure SoundstageScene is never recreated on parent renders
+  const handleAngleChange = React.useCallback((angle: number) => {
+    setViewpointAngle(angle);
+  }, []);
+
+  const handleReady = React.useCallback(() => {
+    setIsReady(true);
+  }, []);
+
+  const handleHover = React.useCallback((component: SoundstageComponent | null) => {
+    setHoveredComponent(component);
+  }, []);
+
+  const handleSelectPreset = React.useCallback((presetId: LightingPresetId) => {
+    setCurrentPreset(presetId);
+  }, []);
+
+  const handleReset = React.useCallback(() => {
     sceneRef.current?.resetView();
     setViewpointAngle(DEFAULT_VIEWPOINT_ANGLE);
-  };
+  }, []);
 
-  const handleTogglePause = () => {
-    setIsPaused((prev) => !prev);
-  };
+  const handleTogglePause = React.useCallback(() => {
+    setUserPaused((prev) => !prev);
+  }, []);
 
-  const handleAngleChange = (angle: number) => {
+  const handleSliderAngleChange = React.useCallback((angle: number) => {
+    sceneRef.current?.setAngle(angle);
     setViewpointAngle(angle);
-  };
-
-  const handleSelectPreset = (presetId: LightingPresetId) => {
-    setCurrentPreset(presetId);
-  };
+  }, []);
 
   return (
     <div
@@ -63,7 +76,7 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
       data-webgl-ready={isReady ? "true" : "initializing"}
       data-lighting-preset={currentPreset}
       className={cn(
-        "relative w-full h-full min-h-[340px] sm:min-h-[420px] overflow-hidden select-none rounded-2xl",
+        "relative w-full h-full overflow-hidden select-none rounded-2xl border border-white/[0.08] bg-[#08090C] shadow-2xl",
         className
       )}
     >
@@ -71,7 +84,7 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
       <div
         className={cn(
           "absolute inset-0 w-full h-full transition-opacity duration-700 ease-out z-10",
-          isReady ? "opacity-100" : "opacity-0 pointer-events-none"
+          isReady ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
       >
         <SoundstageScene
@@ -79,9 +92,10 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
           viewpointAngle={viewpointAngle}
           onAngleChange={handleAngleChange}
           presetId={currentPreset}
-          isPaused={isPaused}
-          onHoverComponent={setHoveredComponent}
-          onReady={() => setIsReady(true)}
+          isPaused={userPaused}
+          reducedMotion={reducedMotion}
+          onHoverComponent={handleHover}
+          onReady={handleReady}
         />
       </div>
 
@@ -98,14 +112,11 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
       {/* Soundstage Interactive HUD Controls Overlay */}
       <SoundstageControls
         isReady={isReady}
-        isPaused={isPaused}
+        isPaused={userPaused}
         viewpointAngle={viewpointAngle}
         currentPreset={currentPreset}
         hoveredComponent={hoveredComponent}
-        onAngleChange={(angle) => {
-          sceneRef.current?.setAngle(angle);
-          setViewpointAngle(angle);
-        }}
+        onAngleChange={handleSliderAngleChange}
         onSelectPreset={handleSelectPreset}
         onResetView={handleReset}
         onTogglePause={handleTogglePause}
@@ -115,4 +126,3 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
 };
 
 export default SoundstageHero;
-

@@ -1,6 +1,7 @@
 import * as React from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import {
   LightingPresetId,
   LIGHTING_PRESETS,
@@ -18,6 +19,7 @@ import {
 export interface SoundstageSceneHandle {
   resetView: () => void;
   setAngle: (angle: number) => void;
+  getInitCount: () => number;
 }
 
 export interface SoundstageSceneProps {
@@ -25,8 +27,41 @@ export interface SoundstageSceneProps {
   onAngleChange: (angle: number) => void;
   presetId: LightingPresetId;
   isPaused: boolean;
+  reducedMotion?: boolean;
   onHoverComponent: (component: SoundstageComponent | null) => void;
   onReady: () => void;
+}
+
+// Helper: Deduplicated disposal of Three.js objects, geometries, materials, and textures
+function disposeOwnedObject(root: THREE.Object3D) {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      if (child.geometry) geometries.add(child.geometry);
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => materials.add(m));
+        } else {
+          materials.add(child.material);
+        }
+      }
+    }
+  });
+
+  geometries.forEach((g) => g.dispose());
+  materials.forEach((m) => {
+    for (const key of Object.keys(m)) {
+      const val = (m as Record<string, unknown>)[key];
+      if (val && typeof val === "object" && "isTexture" in val && (val as THREE.Texture).isTexture) {
+        textures.add(val as THREE.Texture);
+      }
+    }
+    m.dispose();
+  });
+  textures.forEach((t) => t.dispose());
 }
 
 export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, SoundstageSceneProps>(
@@ -36,6 +71,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       onAngleChange,
       presetId,
       isPaused,
+      reducedMotion = false,
       onHoverComponent,
       onReady,
     },
@@ -43,97 +79,96 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
   ) => {
     const mountRef = React.useRef<HTMLDivElement | null>(null);
 
-    // Refs for animation loop and interaction
-    const stateRef = React.useRef({
-      viewpointAngle,
-      targetAngle: viewpointAngle,
+    // Development lifecycle counter to verify stable scene instance
+    const initCounterRef = React.useRef(0);
+
+    // Keep event callbacks in a mutable ref so effect identity does not trigger reinitialization
+    const callbacksRef = React.useRef({
+      onAngleChange,
+      onHoverComponent,
+      onReady,
+    });
+
+    React.useLayoutEffect(() => {
+      callbacksRef.current = {
+        onAngleChange,
+        onHoverComponent,
+        onReady,
+      };
+    }, [onAngleChange, onHoverComponent, onReady]);
+
+    // Keep mutable props in a synchronized ref for the render loop
+    const propsRef = React.useRef({
       presetId,
       isPaused,
-      isDragging: false,
-      lastPointerX: 0,
-      dragVelocity: 0,
-      entranceTime: 0,
-      isEntranceDone: false,
-      ambientTime: 0,
-      hoveredId: null as string | null,
+      reducedMotion,
+      viewpointAngle,
     });
 
-    // Keep stateRef in sync with props
     React.useEffect(() => {
-      stateRef.current.presetId = presetId;
-    }, [presetId]);
+      propsRef.current = {
+        presetId,
+        isPaused,
+        reducedMotion,
+        viewpointAngle,
+      };
+    }, [presetId, isPaused, reducedMotion, viewpointAngle]);
 
-    React.useEffect(() => {
-      stateRef.current.isPaused = isPaused;
-    }, [isPaused]);
-
-    React.useEffect(() => {
-      // Sync from slider or external angle changes when not actively dragging
-      if (!stateRef.current.isDragging) {
-        stateRef.current.targetAngle = viewpointAngle;
-      }
-    }, [viewpointAngle]);
-
-    const lightsRef = React.useRef<{
-      keySpot: THREE.SpotLight | null;
-      fillDir: THREE.DirectionalLight | null;
-      rimSpot: THREE.SpotLight | null;
-      ambient: THREE.AmbientLight | null;
-      coneMesh: THREE.Mesh<THREE.CylinderGeometry, THREE.ShaderMaterial> | null;
-      fresnelLensMesh: THREE.Mesh | null;
-      focusRingMesh: THREE.Mesh | null;
+    // External control refs for imperative handle
+    const externalControlRef = React.useRef<{
+      setTargetAngle: ((angle: number) => void) | null;
+      resetView: (() => void) | null;
     }>({
-      keySpot: null,
-      fillDir: null,
-      rimSpot: null,
-      ambient: null,
-      coneMesh: null,
-      fresnelLensMesh: null,
-      focusRingMesh: null,
+      setTargetAngle: null,
+      resetView: null,
     });
 
-    // Expose reset and setAngle imperative handle
     React.useImperativeHandle(ref, () => ({
       resetView: () => {
-        stateRef.current.targetAngle = 0;
-        stateRef.current.dragVelocity = 0;
-        onAngleChange(0);
+        externalControlRef.current.resetView?.();
       },
       setAngle: (angle: number) => {
-        stateRef.current.targetAngle = THREE.MathUtils.clamp(
-          angle,
-          -MAX_ARC_ANGLE_RAD,
-          MAX_ARC_ANGLE_RAD
-        );
-        onAngleChange(stateRef.current.targetAngle);
+        externalControlRef.current.setTargetAngle?.(angle);
       },
+      getInitCount: () => initCounterRef.current,
     }));
 
+    // Main initialization effect: empty dependency array so ONE scene instance is owned
     React.useEffect(() => {
       const container = mountRef.current;
       if (!container) return;
+
+      initCounterRef.current++;
+      let disposed = false;
 
       let width = container.clientWidth || 800;
       let height = container.clientHeight || 500;
 
       // 1. Scene, Camera, Renderer
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color("#060709");
-      scene.fog = new THREE.FogExp2(new THREE.Color("#060709"), 0.035);
+      scene.background = new THREE.Color("#08090C");
+      scene.fog = new THREE.FogExp2(new THREE.Color("#08090C"), 0.028);
 
       const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 60);
 
-      const renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false,
-        powerPreference: "high-performance",
-      });
+      let renderer: THREE.WebGLRenderer;
+      try {
+        renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+        });
+      } catch (err) {
+        console.warn("Soundstage WebGL initialization failed:", err);
+        return;
+      }
+
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
+      renderer.toneMappingExposure = 1.1;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
 
       container.replaceChildren(renderer.domElement);
@@ -142,12 +177,60 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       renderer.domElement.style.cursor = "grab";
       renderer.domElement.style.touchAction = "pan-y pinch-zoom";
 
-      // 2. Studio Cyclorama Floor
+      // 2. Studio Environment Map (PMREM RoomEnvironment)
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const environmentScene = new RoomEnvironment();
+      const environmentTarget = pmrem.fromScene(environmentScene);
+      scene.environment = environmentTarget.texture;
+      scene.environmentIntensity = 0.35;
+
+      // 3. Studio Base Illumination
+      // Hemisphere Light: soft natural top/ground fill
+      const hemisphere = new THREE.HemisphereLight(0xdde6ff, 0x40372f, 0.7);
+      scene.add(hemisphere);
+
+      // Studio Ambient Light: baseline shadow visibility
+      const ambientLight = new THREE.AmbientLight(0x20232c, 0.6);
+      scene.add(ambientLight);
+
+      // Directional Studio Fill Light
+      const fillLight = new THREE.DirectionalLight(0x9aa3b5, 1.4);
+      fillLight.position.set(-4.5, 3.8, 2.8);
+      scene.add(fillLight);
+
+      // 4. Key 5KW Fresnel Spotlight
+      const keySpot = new THREE.SpotLight(0xffd19a, 0); // starts 0 for smooth entrance
+      keySpot.position.set(0.6, 4.4, 0.9);
+      keySpot.target.position.set(0.05, 0.8, -0.05);
+      scene.add(keySpot.target);
+      keySpot.angle = 0.48;
+      keySpot.penumbra = 0.65;
+      keySpot.decay = 2; // physically realistic inverse-square decay
+      keySpot.distance = 0; // infinite reach with decay
+      keySpot.castShadow = true;
+      keySpot.shadow.mapSize.set(1024, 1024);
+      keySpot.shadow.camera.near = 0.5;
+      keySpot.shadow.camera.far = 16;
+      keySpot.shadow.bias = -0.0004;
+      scene.add(keySpot);
+
+      // 5. Rim / Kicker Spotlight (Behind equipment)
+      const rimSpot = new THREE.SpotLight(0xe9b457, 0);
+      rimSpot.position.set(2.4, 3.2, -2.8);
+      rimSpot.target.position.set(0.5, 0.9, 0.1);
+      scene.add(rimSpot.target);
+      rimSpot.angle = 0.6;
+      rimSpot.penumbra = 0.8;
+      rimSpot.decay = 2;
+      rimSpot.distance = 0;
+      scene.add(rimSpot);
+
+      // 6. Studio Floor & Cyclorama
       const floorGeo = new THREE.CircleGeometry(16, 48);
       const floorMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#08090C"),
-        metalness: 0.38,
-        roughness: 0.44,
+        color: new THREE.Color("#0a0c10"),
+        metalness: 0.32,
+        roughness: 0.45,
         name: "StudioFloorReflective",
       });
       const floorMesh = new THREE.Mesh(floorGeo, floorMat);
@@ -156,10 +239,10 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       floorMesh.receiveShadow = true;
       scene.add(floorMesh);
 
-      // Studio Cyclorama curved background wall
+      // Studio Cyclorama Wall
       const cycGeo = new THREE.CylinderGeometry(15, 15, 12, 36, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
       const cycMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#040507"),
+        color: new THREE.Color("#060709"),
         metalness: 0.05,
         roughness: 0.95,
         side: THREE.BackSide,
@@ -169,120 +252,11 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       cycMesh.receiveShadow = true;
       scene.add(cycMesh);
 
-      // 3. Populate Soundstage Equipment
-      const soundstageGroup = new THREE.Group();
-      soundstageGroup.name = "SoundstageObjects";
-      scene.add(soundstageGroup);
-
-      // A. Director's Chair (Center Focal Point)
-      const chairGroup = createDirectorChair();
-      chairGroup.position.set(0.05, 0, -0.05);
-      chairGroup.rotation.y = 0.32; // Slight 3/4 turn towards main camera view
-      soundstageGroup.add(chairGroup);
-
-      // B. 35mm Cinema Camera Rig on Hydraulic Dolly
-      const cameraRigGroup = createCameraRig();
-      cameraRigGroup.position.set(1.9, 0, 0.75);
-      cameraRigGroup.rotation.y = -0.72; // Angled directly framing the director's chair
-      soundstageGroup.add(cameraRigGroup);
-
-      // Find focus ring in camera rig for subtle ambient animation
-      cameraRigGroup.traverse((child) => {
-        if (child.name === "FocusRing" || (child instanceof THREE.Mesh && child.geometry instanceof THREE.CylinderGeometry && child.scale.y > 0.03)) {
-          if (!lightsRef.current.focusRingMesh && child instanceof THREE.Mesh) {
-            lightsRef.current.focusRingMesh = child;
-          }
-        }
-      });
-
-      // C. Curved Dolly Track on Studio Floor
-      const dollyTrackGroup = createDollyTrack();
-      soundstageGroup.add(dollyTrackGroup);
-
-      // D. Overhead Rigging & 5KW Fresnel Spotlight
-      const overheadRigGroup = createOverheadLighting();
-      soundstageGroup.add(overheadRigGroup);
-
-      // Find Fresnel lens mesh for emissive glow sync
-      overheadRigGroup.traverse((child) => {
-        if (child.name === "FresnelLensMesh" && child instanceof THREE.Mesh) {
-          lightsRef.current.fresnelLensMesh = child;
-        }
-      });
-
-      // Also attempt GLTF upgrade asynchronously for high-fidelity assets
-      const gltfLoader = new GLTFLoader();
-      gltfLoader.load(
-        "/models/director-chair.glb",
-        (gltf) => {
-          // Chair loaded from GLTF - seamless upgrade
-          const loadedChair = gltf.scene;
-          loadedChair.name = "DirectorsChairGLB";
-          loadedChair.position.copy(chairGroup.position);
-          loadedChair.rotation.copy(chairGroup.rotation);
-          loadedChair.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              child.userData = { componentId: "chair" };
-            }
-          });
-          soundstageGroup.remove(chairGroup);
-          soundstageGroup.add(loadedChair);
-        },
-        undefined,
-        (err) => {
-          // Procedural fallback already active and rendered seamlessly
-        }
-      );
-
-      gltfLoader.load(
-        "/models/soundstage-camera.glb",
-        (gltf) => {
-          const loadedCamera = gltf.scene;
-          loadedCamera.name = "CinemaCameraGLB";
-          loadedCamera.position.copy(cameraRigGroup.position);
-          loadedCamera.rotation.copy(cameraRigGroup.rotation);
-          loadedCamera.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              child.userData = { componentId: "camera" };
-            }
-          });
-          soundstageGroup.remove(cameraRigGroup);
-          soundstageGroup.add(loadedCamera);
-        },
-        undefined,
-        (err) => {
-          // Procedural fallback active
-        }
-      );
-
-      // 4. Lighting System
-      // A. Key 5KW Fresnel Spotlight
-      const keySpot = new THREE.SpotLight(0xffd19a, 0); // starts 0 for entrance
-      keySpot.position.set(0.6, 4.25, 0.9);
-      keySpot.target.position.set(0.05, 0.8, -0.05);
-      scene.add(keySpot.target);
-      keySpot.angle = 0.46;
-      keySpot.penumbra = 0.72;
-      keySpot.decay = 1.6;
-      keySpot.distance = 15;
-      keySpot.castShadow = true;
-      keySpot.shadow.mapSize.width = 1024;
-      keySpot.shadow.mapSize.height = 1024;
-      keySpot.shadow.camera.near = 1.0;
-      keySpot.shadow.camera.far = 16;
-      keySpot.shadow.bias = -0.0004;
-      scene.add(keySpot);
-      lightsRef.current.keySpot = keySpot;
-
-      // B. Volumetric Atmospheric Spotlight Cone
-      // Geometry extends from fixture at y=4.25 down to floor at y=0.02
-      const coneHeight = 4.23;
-      const coneGeo = new THREE.CylinderGeometry(0.32, 2.5, coneHeight, 32, 1, true);
-      // Translate cylinder center so top is at origin
+      // 7. Volumetric Atmospheric Spotlight Cone
+      // h = 4.35m; radius matches spotlight angle tan(0.48)*4.35 ≈ 2.26m
+      const coneHeight = 4.35;
+      const coneBottomRadius = 2.26;
+      const coneGeo = new THREE.CylinderGeometry(0.32, coneBottomRadius, coneHeight, 32, 1, true);
       coneGeo.translate(0, -coneHeight / 2, 0);
 
       const coneMat = new THREE.ShaderMaterial({
@@ -317,55 +291,168 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
           varying vec3 vViewPosition;
 
           void main() {
-            // Longitudinal fade: soft at lens exit, fades out before hitting floor
-            float yFade = smoothstep(0.0, 0.15, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+            // Correct non-reversed longitudinal fade
+            // vUv.y: 0 is bottom (near floor), 1 is top (at Fresnel lens)
+            float longitudinalFade = smoothstep(0.0, 0.15, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
 
-            // Rim / viewing angle falloff for volumetric softness
+            // Soft silhouette edge falloff
             vec3 normal = normalize(vNormal);
             vec3 viewDir = normalize(vViewPosition);
             float rim = abs(dot(viewDir, normal));
             float softRim = pow(1.0 - rim, 0.6) * 0.7 + rim * 0.3;
 
-            float alpha = uOpacity * yFade * softRim * uIntensity;
+            float alpha = uOpacity * longitudinalFade * softRim * uIntensity;
             gl_FragColor = vec4(uColor, alpha);
           }
         `,
       });
 
       const coneMesh = new THREE.Mesh(coneGeo, coneMat);
-      coneMesh.position.set(0.6, 4.25, 0.9);
-      // Orient cone towards the spotlight target
+      coneMesh.position.set(0.6, 4.4, 0.9);
       const lookTarget = new THREE.Vector3(0.05, 0.02, -0.05);
       coneMesh.quaternion.setFromUnitVectors(
         new THREE.Vector3(0, -1, 0),
         lookTarget.clone().sub(coneMesh.position).normalize()
       );
       scene.add(coneMesh);
-      lightsRef.current.coneMesh = coneMesh;
 
-      // C. Directional Studio Fill Light
-      const fillDir = new THREE.DirectionalLight(0x8a94a6, 0.35);
-      fillDir.position.set(-4.5, 3.8, 2.8);
-      scene.add(fillDir);
-      lightsRef.current.fillDir = fillDir;
+      // 8. Populate Soundstage Equipment
+      const soundstageGroup = new THREE.Group();
+      soundstageGroup.name = "SoundstageObjects";
+      scene.add(soundstageGroup);
 
-      // D. Rim / Kicker Light (Behind equipment)
-      const rimSpot = new THREE.SpotLight(0xe9b457, 1.6);
-      rimSpot.position.set(2.4, 3.2, -2.8);
-      rimSpot.target.position.set(0.8, 0.9, 0.2);
-      scene.add(rimSpot.target);
-      rimSpot.angle = 0.6;
-      rimSpot.penumbra = 0.8;
-      rimSpot.distance = 12;
-      scene.add(rimSpot);
-      lightsRef.current.rimSpot = rimSpot;
+      // A. Director's Chair (Center Focal Point)
+      let chairGroup: THREE.Group = createDirectorChair();
+      chairGroup.position.set(0.05, 0, -0.05);
+      chairGroup.rotation.y = 0.32;
+      soundstageGroup.add(chairGroup);
 
-      // E. Studio Ambient Base
-      const ambient = new THREE.AmbientLight(0x12141a, 0.45);
-      scene.add(ambient);
-      lightsRef.current.ambient = ambient;
+      // B. 35mm Cinema Camera Rig on Hydraulic Dolly
+      let cameraRigGroup: THREE.Group = createCameraRig();
+      cameraRigGroup.position.set(1.9, 0, 0.75);
+      cameraRigGroup.rotation.y = -0.72;
+      soundstageGroup.add(cameraRigGroup);
 
-      // 5. Interactive Raycasting Setup
+      // C. Curved Dolly Track on Studio Floor
+      const dollyTrackGroup = createDollyTrack();
+      soundstageGroup.add(dollyTrackGroup);
+
+      // D. Overhead Rigging & 5KW Fresnel Spotlight
+      const overheadRigGroup = createOverheadLighting();
+      soundstageGroup.add(overheadRigGroup);
+
+      // References for animated nodes
+      let focusRingNode: THREE.Object3D | null = cameraRigGroup.getObjectByName("FocusRing");
+      let focusRingInitialQuat: THREE.Quaternion | null = focusRingNode ? focusRingNode.quaternion.clone() : null;
+
+      let fresnelLensMesh: THREE.Mesh | null = null;
+      overheadRigGroup.traverse((child) => {
+        if (child.name === "FresnelLensMesh" && child instanceof THREE.Mesh) {
+          fresnelLensMesh = child;
+        }
+      });
+
+      // 9. Safe Asynchronous GLTF Model Loading with Unmount Guard
+      const gltfLoader = new GLTFLoader();
+
+      gltfLoader.load(
+        "/models/director-chair.glb",
+        (gltf) => {
+          if (disposed) {
+            disposeOwnedObject(gltf.scene);
+            return;
+          }
+          const loadedChair = gltf.scene;
+          loadedChair.name = "DirectorsChairGLB";
+          loadedChair.position.copy(chairGroup.position);
+          loadedChair.rotation.copy(chairGroup.rotation);
+          loadedChair.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              child.userData = { componentId: "chair" };
+            }
+          });
+          soundstageGroup.remove(chairGroup);
+          disposeOwnedObject(chairGroup);
+          chairGroup = loadedChair;
+          soundstageGroup.add(loadedChair);
+        },
+        undefined,
+        (err) => {
+          if (disposed) return;
+          console.warn("Soundstage chair GLB load failed, keeping procedural asset:", err);
+        }
+      );
+
+      gltfLoader.load(
+        "/models/soundstage-camera.glb",
+        (gltf) => {
+          if (disposed) {
+            disposeOwnedObject(gltf.scene);
+            return;
+          }
+          const loadedCamera = gltf.scene;
+          loadedCamera.name = "CinemaCameraGLB";
+          loadedCamera.position.copy(cameraRigGroup.position);
+          loadedCamera.rotation.copy(cameraRigGroup.rotation);
+          loadedCamera.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              child.userData = { componentId: "camera" };
+            }
+          });
+          soundstageGroup.remove(cameraRigGroup);
+          disposeOwnedObject(cameraRigGroup);
+          cameraRigGroup = loadedCamera;
+          soundstageGroup.add(loadedCamera);
+
+          // Re-query focus ring from newly loaded GLB
+          focusRingNode = loadedCamera.getObjectByName("FocusRing");
+          focusRingInitialQuat = focusRingNode ? focusRingNode.quaternion.clone() : null;
+        },
+        undefined,
+        (err) => {
+          if (disposed) return;
+          console.warn("Soundstage camera GLB load failed, keeping procedural asset:", err);
+        }
+      );
+
+      // 10. Per-Instance Animation State
+      const animState = {
+        viewpointAngle: propsRef.current.viewpointAngle,
+        targetAngle: propsRef.current.viewpointAngle,
+        isDragging: false,
+        lastPointerX: 0,
+        entranceTime: 0,
+        isEntranceDone: false,
+        ambientTime: 0,
+        hoveredId: null as string | null,
+      };
+
+      externalControlRef.current = {
+        setTargetAngle: (angle: number) => {
+          const clamped = THREE.MathUtils.clamp(angle, -MAX_ARC_ANGLE_RAD, MAX_ARC_ANGLE_RAD);
+          animState.targetAngle = clamped;
+          // If user interacts during entrance, skip camera travel and finalize entrance
+          if (!animState.isEntranceDone) {
+            animState.entranceTime = 2.4;
+            animState.isEntranceDone = true;
+          }
+          callbacksRef.current.onAngleChange(clamped);
+        },
+        resetView: () => {
+          animState.targetAngle = 0;
+          if (!animState.isEntranceDone) {
+            animState.entranceTime = 2.4;
+            animState.isEntranceDone = true;
+          }
+          callbacksRef.current.onAngleChange(0);
+        },
+      };
+
+      // 11. Interactive Raycasting & Pointer Listeners
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
 
@@ -390,48 +477,50 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         return null;
       };
 
-      // 6. Pointer & Drag Event Listeners
       const onPointerDown = (e: PointerEvent) => {
-        stateRef.current.isDragging = true;
-        stateRef.current.lastPointerX = e.clientX;
-        stateRef.current.dragVelocity = 0;
+        animState.isDragging = true;
+        animState.lastPointerX = e.clientX;
         renderer.domElement.style.cursor = "grabbing";
         renderer.domElement.setPointerCapture(e.pointerId);
+
+        // Cancel entrance camera travel if user drags
+        if (!animState.isEntranceDone) {
+          animState.entranceTime = 2.4;
+          animState.isEntranceDone = true;
+        }
       };
 
       const onPointerMove = (e: PointerEvent) => {
-        if (stateRef.current.isDragging) {
-          const deltaX = e.clientX - stateRef.current.lastPointerX;
-          stateRef.current.lastPointerX = e.clientX;
+        if (animState.isDragging) {
+          const deltaX = e.clientX - animState.lastPointerX;
+          animState.lastPointerX = e.clientX;
 
-          // Scrub camera along arc: drag right -> camera rotates right
           const sensitivity = 0.0032;
           const deltaRad = -deltaX * sensitivity;
 
           const newTarget = THREE.MathUtils.clamp(
-            stateRef.current.targetAngle + deltaRad,
+            animState.targetAngle + deltaRad,
             -MAX_ARC_ANGLE_RAD,
             MAX_ARC_ANGLE_RAD
           );
 
-          stateRef.current.dragVelocity = deltaRad;
-          stateRef.current.targetAngle = newTarget;
-          stateRef.current.viewpointAngle = newTarget;
-          onAngleChange(newTarget);
+          animState.targetAngle = newTarget;
+          animState.viewpointAngle = newTarget;
+          callbacksRef.current.onAngleChange(newTarget);
         } else {
           // Hover inspection
           const comp = getInteractiveComponent(e);
-          if (comp?.id !== stateRef.current.hoveredId) {
-            stateRef.current.hoveredId = comp ? comp.id : null;
-            onHoverComponent(comp);
+          if (comp?.id !== animState.hoveredId) {
+            animState.hoveredId = comp ? comp.id : null;
+            callbacksRef.current.onHoverComponent(comp);
             renderer.domElement.style.cursor = comp ? "pointer" : "grab";
           }
         }
       };
 
       const onPointerUp = (e: PointerEvent) => {
-        if (stateRef.current.isDragging) {
-          stateRef.current.isDragging = false;
+        if (animState.isDragging) {
+          animState.isDragging = false;
           renderer.domElement.style.cursor = "grab";
           try {
             renderer.domElement.releasePointerCapture(e.pointerId);
@@ -442,9 +531,9 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       };
 
       const onPointerLeave = () => {
-        if (!stateRef.current.isDragging && stateRef.current.hoveredId) {
-          stateRef.current.hoveredId = null;
-          onHoverComponent(null);
+        if (!animState.isDragging && animState.hoveredId) {
+          animState.hoveredId = null;
+          callbacksRef.current.onHoverComponent(null);
           renderer.domElement.style.cursor = "grab";
         }
       };
@@ -455,9 +544,21 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       renderer.domElement.addEventListener("pointercancel", onPointerUp);
       renderer.domElement.addEventListener("pointerleave", onPointerLeave);
 
-      // 7. Responsive Sizing
+      // Context Loss Handling
+      const onContextLost = (e: Event) => {
+        e.preventDefault();
+        console.warn("Soundstage WebGL context lost");
+      };
+      const onContextRestored = () => {
+        console.log("Soundstage WebGL context restored");
+        renderer.render(scene, camera);
+      };
+      renderer.domElement.addEventListener("webglcontextlost", onContextLost);
+      renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
+
+      // 12. Responsive Resize Handling
       const handleResize = () => {
-        if (!container) return;
+        if (!container || disposed) return;
         width = container.clientWidth || 800;
         height = container.clientHeight || 500;
         camera.aspect = width / height;
@@ -468,132 +569,164 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       const resizeObserver = new ResizeObserver(handleResize);
       resizeObserver.observe(container);
 
-      // 8. Main Animation Render Loop
+      // 13. Reusable Color & Vector Allocations (Zero GC per-frame allocations)
+      const targetKeyColor = new THREE.Color();
+      const targetFillColor = new THREE.Color();
+      const targetRimColor = new THREE.Color();
+      const targetAmbientColor = new THREE.Color();
+      const focusTarget = new THREE.Vector3(0.15, 0.95, -0.05);
+
+      // 14. Visibility Observer & RAF Scheduler
+      let isVisibleOnScreen = true;
+      let isTabActive = true;
       let animId = 0;
       let lastTime = performance.now();
+      let hasReportedReady = false;
 
+      const intersectionObserver = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          isVisibleOnScreen = entry ? entry.isIntersecting : true;
+          if (isVisibleOnScreen && isTabActive) {
+            lastTime = performance.now();
+            if (!animId) {
+              animId = requestAnimationFrame(animate);
+            }
+          }
+        },
+        { threshold: 0.05 }
+      );
+      intersectionObserver.observe(container);
+
+      const onVisibilityChange = () => {
+        isTabActive = !document.hidden;
+        if (isTabActive && isVisibleOnScreen) {
+          lastTime = performance.now();
+          if (!animId) {
+            animId = requestAnimationFrame(animate);
+          }
+        }
+      };
+      document.addEventListener("visibilitychange", onVisibilityChange);
+
+      // 15. Main Animation Loop
       const animate = (time: number) => {
+        if (disposed) return;
+
+        // Stop loop when completely offscreen or tab hidden to conserve GPU/battery
+        if (!isVisibleOnScreen || !isTabActive) {
+          animId = 0;
+          return;
+        }
+
         animId = requestAnimationFrame(animate);
 
-        const delta = Math.min((time - lastTime) / 1000, 0.1);
+        const deltaSeconds = Math.min((time - lastTime) / 1000, 0.05);
         lastTime = time;
 
-        const state = stateRef.current;
+        const currentProps = propsRef.current;
+        const reducedMotion = currentProps.reducedMotion;
 
-        // A. Directed Entrance Sequence (0 to 2.4s)
-        if (!state.isEntranceDone) {
-          state.entranceTime += delta;
-          const entranceDuration = 2.4;
-          const progress = Math.min(state.entranceTime / entranceDuration, 1.0);
+        // A. Directed 2.4s Entrance Sequence
+        let entranceProgress = 1.0;
+        let entranceCameraOffset = 0;
 
-          // Ease out cubic
+        if (!animState.isEntranceDone) {
+          animState.entranceTime += deltaSeconds;
+          const progress = Math.min(animState.entranceTime / 2.4, 1.0);
+          // Cubic ease-out
           const eased = 1.0 - Math.pow(1.0 - progress, 3);
-
-          // Power up spotlight smoothly
-          const activePreset = LIGHTING_PRESETS[state.presetId];
-          if (keySpot) {
-            keySpot.intensity = activePreset.keyIntensity * Math.min(progress * 1.5, 1.0);
-          }
-          if (coneMat) {
-            coneMat.uniforms.uIntensity.value = Math.min(progress * 1.4, 1.0);
-          }
+          entranceProgress = eased;
+          entranceCameraOffset = (1.0 - eased) * 0.45;
 
           if (progress >= 1.0) {
-            state.isEntranceDone = true;
-            onReady();
+            animState.isEntranceDone = true;
           }
         }
 
-        // B. Inertia and angle easing
-        if (!state.isDragging && Math.abs(state.dragVelocity) > 0.0001) {
-          state.targetAngle = THREE.MathUtils.clamp(
-            state.targetAngle + state.dragVelocity,
-            -MAX_ARC_ANGLE_RAD,
-            MAX_ARC_ANGLE_RAD
-          );
-          state.dragVelocity *= 0.91; // friction decay
-          onAngleChange(state.targetAngle);
+        // B. Viewpoint Damping (Delta-time based, frame-rate independent)
+        animState.viewpointAngle = reducedMotion
+          ? animState.targetAngle
+          : THREE.MathUtils.damp(animState.viewpointAngle, animState.targetAngle, 8, deltaSeconds);
+
+        // C. Continuous Ambient Motion
+        // When paused or reduced-motion, ambient clock is frozen, preserving exact drift pose without snaps
+        if (!currentProps.isPaused && !reducedMotion) {
+          animState.ambientTime += deltaSeconds;
         }
 
-        // Smooth lerp of viewpointAngle towards targetAngle
-        state.viewpointAngle = THREE.MathUtils.lerp(state.viewpointAngle, state.targetAngle, 0.14);
+        const t = animState.ambientTime;
+        const azimuthDrift = Math.sin(t * 0.22) * 0.012;
+        const elevationDrift = Math.cos(t * 0.18) * 0.035;
 
-        // C. Continuous Ambient Drift
-        let ambientAzimuthOffset = 0;
-        let ambientElevationOffset = 0;
-
-        if (!state.isPaused) {
-          state.ambientTime += delta;
-          const t = state.ambientTime;
-
-          // Subtle breathing camera drift: ~18s period, +-0.02 rad
-          ambientAzimuthOffset = Math.sin(t * 0.35) * 0.022;
-          ambientElevationOffset = Math.cos(t * 0.28) * 0.06;
-
-          // Subtle lens focus ring rotation drift
-          if (lightsRef.current.focusRingMesh) {
-            lightsRef.current.focusRingMesh.rotation.z = Math.sin(t * 0.5) * 0.25;
-          }
-
-          // Subtle keylight tungsten hum (+-1.2%)
-          if (keySpot && state.isEntranceDone) {
-            const flicker = 1.0 + Math.sin(t * 8.0) * 0.012 + Math.cos(t * 19.0) * 0.008;
-            const targetIntensity = LIGHTING_PRESETS[state.presetId].keyIntensity;
-            keySpot.intensity = THREE.MathUtils.lerp(keySpot.intensity, targetIntensity * flicker, 0.1);
-          }
+        // Lens Focus Ring Animation (rotates explicitly around local axis)
+        if (focusRingNode && focusRingInitialQuat && !currentProps.isPaused && !reducedMotion) {
+          focusRingNode.quaternion.copy(focusRingInitialQuat);
+          focusRingNode.rotateZ(Math.sin(t * 0.45) * 0.22);
         }
 
-        // D. Smooth Lighting Preset Lerping
-        const currentPresetConfig = LIGHTING_PRESETS[state.presetId];
-        const lerpFactor = 0.08;
+        // D. Smooth Lighting Preset Lerping (OUTSIDE pause check - works while paused!)
+        const blend = reducedMotion ? 1.0 : 1.0 - Math.exp(-6.0 * deltaSeconds);
+        const preset = LIGHTING_PRESETS[currentProps.presetId];
 
-        if (keySpot && state.isEntranceDone) {
-          keySpot.color.lerp(new THREE.Color(currentPresetConfig.keyColor), lerpFactor);
-        }
-        if (coneMat) {
-          coneMat.uniforms.uColor.value.lerp(new THREE.Color(currentPresetConfig.coneColor), lerpFactor);
-          coneMat.uniforms.uOpacity.value = THREE.MathUtils.lerp(
-            coneMat.uniforms.uOpacity.value,
-            currentPresetConfig.coneOpacity,
-            lerpFactor
-          );
-        }
-        if (fillDir) {
-          fillDir.color.lerp(new THREE.Color(currentPresetConfig.fillColor), lerpFactor);
-          fillDir.intensity = THREE.MathUtils.lerp(fillDir.intensity, currentPresetConfig.fillIntensity, lerpFactor);
-        }
-        if (rimSpot) {
-          rimSpot.color.lerp(new THREE.Color(currentPresetConfig.rimColor), lerpFactor);
-          rimSpot.intensity = THREE.MathUtils.lerp(rimSpot.intensity, currentPresetConfig.rimIntensity, lerpFactor);
-        }
-        if (ambient) {
-          ambient.color.lerp(new THREE.Color(currentPresetConfig.ambientColor), lerpFactor);
-          ambient.intensity = THREE.MathUtils.lerp(ambient.intensity, currentPresetConfig.ambientIntensity, lerpFactor);
-        }
-        if (lightsRef.current.fresnelLensMesh) {
-          const mat = lightsRef.current.fresnelLensMesh.material as THREE.MeshStandardMaterial;
+        // Key spotlight intensity and color
+        targetKeyColor.set(preset.keyColor);
+        keySpot.color.lerp(targetKeyColor, blend);
+        keySpot.intensity = THREE.MathUtils.lerp(
+          keySpot.intensity,
+          preset.keyIntensity * entranceProgress,
+          blend
+        );
+
+        // Fill directional light
+        targetFillColor.set(preset.fillColor);
+        fillLight.color.lerp(targetFillColor, blend);
+        fillLight.intensity = THREE.MathUtils.lerp(fillLight.intensity, preset.fillIntensity, blend);
+
+        // Rim spotlight
+        targetRimColor.set(preset.rimColor);
+        rimSpot.color.lerp(targetRimColor, blend);
+        rimSpot.intensity = THREE.MathUtils.lerp(
+          rimSpot.intensity,
+          preset.rimIntensity * entranceProgress,
+          blend
+        );
+
+        // Studio ambient
+        targetAmbientColor.set(preset.ambientColor);
+        ambientLight.color.lerp(targetAmbientColor, blend);
+        ambientLight.intensity = THREE.MathUtils.lerp(ambientLight.intensity, preset.ambientIntensity, blend);
+
+        // Fresnel fixture emissive lens sync
+        if (fresnelLensMesh) {
+          const mat = fresnelLensMesh.material as THREE.MeshStandardMaterial;
           if (mat && mat.emissive) {
-            mat.emissive.lerp(new THREE.Color(currentPresetConfig.fresnelLensEmissive), lerpFactor);
+            mat.emissive.lerp(new THREE.Color(preset.fresnelLensEmissive), blend);
           }
         }
 
-        // E. Camera Position & Framing
-        // Focus focal point is Director's Chair center
-        const focusTarget = new THREE.Vector3(0.15, 0.95, -0.05);
+        // Volumetric atmospheric spotlight cone sync
+        coneMat.uniforms.uColor.value.lerp(targetKeyColor, blend);
+        coneMat.uniforms.uOpacity.value = THREE.MathUtils.lerp(
+          coneMat.uniforms.uOpacity.value,
+          preset.coneOpacity,
+          blend
+        );
+        coneMat.uniforms.uIntensity.value = THREE.MathUtils.lerp(
+          coneMat.uniforms.uIntensity.value,
+          entranceProgress,
+          blend
+        );
 
+        // E. Camera Framing & Orientation
         const isMobile = width < 768;
         const baseRadius = isMobile ? 8.2 : 6.8;
         const baseHeight = isMobile ? 2.9 : 2.35;
-        const baseAzimuth = 0.36; // 3/4 angle default
+        const baseAzimuth = 0.36; // 3/4 studio angle default
 
-        // Entrance offset: smoothly blends out
-        const entranceOffset = !state.isEntranceDone
-          ? (1.0 - Math.min(state.entranceTime / 2.4, 1.0)) * 0.4
-          : 0;
-
-        const totalAzimuth = baseAzimuth + state.viewpointAngle + ambientAzimuthOffset;
-        const totalRadius = baseRadius + entranceOffset;
-        const totalHeight = baseHeight + ambientElevationOffset + entranceOffset * 0.6;
+        const totalAzimuth = baseAzimuth + animState.viewpointAngle + azimuthDrift;
+        const totalRadius = baseRadius + entranceCameraOffset;
+        const totalHeight = baseHeight + elevationDrift + entranceCameraOffset * 0.5;
 
         camera.position.x = focusTarget.x + Math.sin(totalAzimuth) * totalRadius;
         camera.position.z = focusTarget.z + Math.cos(totalAzimuth) * totalRadius;
@@ -601,39 +734,47 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         camera.lookAt(focusTarget);
 
         renderer.render(scene, camera);
+
+        // F. Report Ready after essential content is rendered
+        if (!hasReportedReady) {
+          hasReportedReady = true;
+          callbacksRef.current.onReady();
+        }
       };
 
       animId = requestAnimationFrame(animate);
 
-      // 9. Teardown
+      // 16. Comprehensive Teardown
       return () => {
+        disposed = true;
         cancelAnimationFrame(animId);
         resizeObserver.disconnect();
+        intersectionObserver.disconnect();
+        document.removeEventListener("visibilitychange", onVisibilityChange);
 
         renderer.domElement.removeEventListener("pointerdown", onPointerDown);
         renderer.domElement.removeEventListener("pointermove", onPointerMove);
         renderer.domElement.removeEventListener("pointerup", onPointerUp);
         renderer.domElement.removeEventListener("pointercancel", onPointerUp);
         renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
+        renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+        renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
+
+        // Clean up RoomEnvironment texture & PMREM
+        scene.environment = null;
+        environmentTarget.dispose();
+        environmentScene.dispose?.();
+        pmrem.dispose();
+
+        // Dispose scene contents deduplicating resources
+        disposeOwnedObject(scene);
 
         renderer.dispose();
         if (renderer.domElement.parentElement === container) {
           container.removeChild(renderer.domElement);
         }
-
-        // Dispose geometries and materials
-        scene.traverse((obj) => {
-          if (obj instanceof THREE.Mesh) {
-            obj.geometry?.dispose();
-            if (Array.isArray(obj.material)) {
-              obj.material.forEach((m) => m.dispose());
-            } else if (obj.material) {
-              obj.material.dispose();
-            }
-          }
-        });
       };
-    }, [onAngleChange, onHoverComponent, onReady]);
+    }, []); // Empty dependency array: ONE scene instance is owned per lifecycle
 
     return (
       <div

@@ -201,54 +201,57 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Layer 2: Left-Aligned Editorial Hero Content (Matches 01 / Landing) */}
-              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-4 lg:pb-6 max-w-2xl">
-                <FadeInSection variant="marketing">
-                  <div className="flex items-center gap-2.5 mb-5">
-                    <span className="h-[1px] w-7 bg-primary/80" />
-                    <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.26em] text-primary">
-                      FOR FILMMAKERS, BY FILMMAKERS
-                    </span>
-                  </div>
+              {/* Main Grid: Left copy, Right 3D Soundstage */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center relative z-20">
+                {/* Left: Editorial Hero Content (Matches 01 / Landing) */}
+                <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-4 lg:pb-6 min-w-0">
+                  <FadeInSection variant="marketing">
+                    <div className="flex items-center gap-2.5 mb-5">
+                      <span className="h-[1px] w-7 bg-primary/80" />
+                      <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.26em] text-primary">
+                        FOR FILMMAKERS, BY FILMMAKERS
+                      </span>
+                    </div>
 
-                  <h1 className="font-display text-4xl sm:text-6xl lg:text-[68px] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
-                    Your next
-                    <span className="block">film starts here.</span>
-                  </h1>
+                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[68px] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
+                      Your next
+                      <span className="block">film starts here.</span>
+                    </h1>
 
-                  <p className="text-base sm:text-lg text-[#C7C5BE] mb-9 max-w-xl leading-relaxed">
-                    Find collaborators, join exciting projects and bring your ideas to life
-                    with a global community of filmmakers.
-                  </p>
+                    <p className="text-base sm:text-lg text-[#C7C5BE] mb-9 max-w-xl leading-relaxed">
+                      Find collaborators, join exciting projects and bring your ideas to life
+                      with a global community of filmmakers.
+                    </p>
 
-                  {/* Primary & Secondary CTAs (Matches 01 / Landing) */}
-                  <div className="flex flex-wrap items-center gap-4">
-                    <Button
-                      size="lg"
-                      onClick={() => navigate("/discover")}
-                      className="h-12 px-7 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_8px_28px_rgba(233,180,87,0.32)] group"
-                    >
-                      Find talent
-                      <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                    </Button>
+                    {/* Primary & Secondary CTAs (Matches 01 / Landing) */}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Button
+                        size="lg"
+                        onClick={() => navigate("/discover")}
+                        className="h-12 px-7 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_8px_28px_rgba(233,180,87,0.32)] group"
+                      >
+                        Find talent
+                        <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                      </Button>
 
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => navigate("/jobs")}
-                      className="h-12 px-7 rounded-xl text-sm font-medium border-white/20 bg-black/45 backdrop-blur-md text-foreground hover:border-primary/55 hover:bg-white/[0.08]"
-                    >
-                      Explore opportunities
-                    </Button>
-                  </div>
-                </FadeInSection>
-              </div>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => navigate("/jobs")}
+                        className="h-12 px-7 rounded-xl text-sm font-medium border-white/20 bg-black/45 backdrop-blur-md text-foreground hover:border-primary/55 hover:bg-white/[0.08]"
+                      >
+                        Explore opportunities
+                      </Button>
+                    </div>
+                  </FadeInSection>
+                </div>
 
-              {/* Layer 3: ONE Responsive 3D Infinite Soundstage Hero Instance */}
-              <div className="relative lg:absolute lg:top-0 lg:bottom-[210px] lg:right-0 w-full lg:w-[54%] xl:w-[56%] h-[320px] sm:h-[420px] lg:h-auto max-w-[620px] lg:max-w-none mx-auto lg:mx-0 z-20 flex items-center justify-center pointer-events-auto px-4 lg:px-0 my-2 lg:my-0">
-                <React.Suspense fallback={<SoundstageFallback />}>
-                  <SoundstageHero />
-                </React.Suspense>
+                {/* Right: 3D Infinite Soundstage Hero Instance */}
+                <div className="relative min-w-0 w-full h-[360px] sm:h-[440px] lg:h-[480px] px-4 sm:px-8 lg:px-6 py-2 flex items-center justify-center">
+                  <React.Suspense fallback={<SoundstageFallback />}>
+                    <SoundstageHero />
+                  </React.Suspense>
+                </div>
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
