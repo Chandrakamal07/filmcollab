@@ -1,4 +1,3 @@
-import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,13 +33,9 @@ import {
   ImageReveal,
   StaggerItem,
 } from "@/components/ui/motion-primitives";
-import * as THREE from "three";
-import { GoldenReelFallback } from "@/components/three/golden-reel/GoldenReelFallback";
-import { GoldenReelControls } from "@/components/three/golden-reel/GoldenReelControls";
+import { GoldenReelMedia } from "@/components/three/golden-reel/GoldenReelMedia";
 
-const GoldenReelCanvas = React.lazy(
-  () => import("@/components/three/golden-reel/GoldenReelCanvas")
-);
+
 
 const craftDisciplines = [
   {
@@ -89,44 +84,6 @@ const craftDisciplines = [
 
 const Index = () => {
   const navigate = useNavigate();
-
-  // 3D Cinematic Background State
-  const [pointerTarget] = React.useState(() => new THREE.Vector2(0, 0));
-  const [isPaused, setIsPaused] = React.useState(false);
-  const [reducedMotion, setReducedMotion] = React.useState(false);
-  const [hasWebGLError, setHasWebGLError] = React.useState(false);
-
-  const handleWebGLError = React.useCallback(() => {
-    setHasWebGLError(true);
-  }, []);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mq.matches);
-    const h = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
-
-  const handleHeroPointerMove = React.useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.pointerType === "touch") return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      pointerTarget.set(nx, ny);
-    },
-    [pointerTarget]
-  );
-
-  const handleHeroPointerLeave = React.useCallback(() => {
-    pointerTarget.set(0, 0);
-  }, [pointerTarget]);
-
-  const handleTogglePause = React.useCallback(() => {
-    setIsPaused((prev) => !prev);
-  }, []);
 
   const features = [
     {
@@ -217,8 +174,6 @@ const Index = () => {
 
       {/* 01 / LANDING — STUDIO NOIR CINEMATIC STAGE + 3D WEBGL FILM SCULPTURE */}
       <section
-        onPointerMove={handleHeroPointerMove}
-        onPointerLeave={handleHeroPointerLeave}
         className="relative pt-16 pb-12 px-0"
       >
         <div className="w-full mx-auto">
@@ -250,22 +205,15 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Main Grid: Left copy, Right open negative space where 3D story fragments emerge */}
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:aspect-[16/9] lg:min-h-[680px] lg:max-h-[1080px] items-center relative z-20">
-                {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
+              {/* Main Grid: Left copy, Right open negative space where the uploaded reel animation appears */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:aspect-[16/9] lg:min-h-0 items-center relative z-20">
+                {/* Layer 0: Uploaded reel media fills the hero without stretching or cropping */}
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[400px] sm:h-[440px] lg:inset-0 lg:h-auto z-0"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 aspect-video lg:aspect-auto lg:inset-0 lg:h-auto z-0"
                   style={{ background: "radial-gradient(ellipse at 77% 49%, rgba(159, 93, 25, 0.29), transparent 50%)" }}
                 >
-                  <React.Suspense fallback={<GoldenReelFallback />}>
-                    <GoldenReelCanvas
-                      pointerTarget={pointerTarget}
-                      isPaused={isPaused}
-                      reducedMotion={reducedMotion}
-                      onError={handleWebGLError}
-                    />
-                  </React.Suspense>
+                  <GoldenReelMedia />
                   <div className="absolute inset-0 hidden lg:block" style={{ background: "linear-gradient(90deg, rgba(9,10,13,.96) 0%, rgba(9,10,13,.8) 22%, rgba(9,10,13,.22) 40%, transparent 60%)" }} />
                 </div>
 
@@ -312,8 +260,8 @@ const Index = () => {
                   </FadeInSection>
                 </div>
 
-                {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-full pointer-events-none" />
+                {/* Right: Open negative space allowing the cinematic background to breathe */}
+                <div className="relative min-w-0 w-full aspect-video lg:aspect-auto lg:h-full pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
@@ -353,15 +301,8 @@ const Index = () => {
                     ))}
                   </div>
 
-                  {/* Right Architectural Tagline + Discreet Pause/Resume Control */}
+                  {/* Right Architectural Tagline */}
                   <div className="col-span-2 sm:col-span-3 lg:col-span-3 flex flex-col justify-end lg:pl-4 pb-2">
-                    <div className="flex items-center justify-between lg:justify-end gap-3 mb-2.5">
-                      <GoldenReelControls
-                        isPaused={isPaused}
-                        onTogglePause={handleTogglePause}
-                        disabled={hasWebGLError}
-                      />
-                    </div>
                     <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground leading-relaxed">
                       A PLATFORM
                       <br />
