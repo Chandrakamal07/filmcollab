@@ -7,9 +7,11 @@ interface FilmSculptureFallbackProps {
 }
 
 /**
- * Consolidated Cinematic Frame Flow Fallback.
- * Matches the photographic 3-frame diagonal composition using HTML/CSS.
- * Used for initial pre-load, WebGL unsupported/failure, mobile view, and prefers-reduced-motion.
+ * Consolidated 3D Cinema Ribbon Fallback.
+ * Depicts ONE continuous, curved 35mm cinema ribbon bending smoothly
+ * into an open S-shaped curve and receding into depth with authentic sprockets
+ * and amber studio lighting accents.
+ * Used for initial pre-load, WebGL unsupported/failure, and prefers-reduced-motion.
  */
 export const FilmSculptureFallback: React.FC<FilmSculptureFallbackProps> = ({
   className,
@@ -17,109 +19,148 @@ export const FilmSculptureFallback: React.FC<FilmSculptureFallbackProps> = ({
 }) => {
   return (
     <div
-      data-testid="film-sculpture-fallback"
-      aria-label="Cinematic production frames composition"
+      data-testid="film-ribbon-fallback"
+      aria-label="Continuous 3D cinema ribbon composition"
       className={cn(
-        "relative w-full h-full min-h-[280px] sm:min-h-[340px] flex items-center justify-center select-none pointer-events-none overflow-hidden transition-opacity duration-300 ease-out",
+        "relative w-full h-full min-h-[320px] sm:min-h-[400px] flex items-center justify-center select-none pointer-events-none overflow-hidden transition-opacity duration-300 ease-out",
         isFadingOut ? "opacity-0" : "opacity-100",
         className,
       )}
-      style={{ perspective: "1000px" }}
+      style={{ perspective: "1400px" }}
     >
-      {/* Ambient warm rim glow matching Three.js key/rim lights */}
-      <div className="absolute top-[12%] right-[14%] w-64 h-48 rounded-full bg-primary/15 blur-[80px] pointer-events-none" />
-      <div className="absolute bottom-[16%] left-[18%] w-52 h-40 rounded-full bg-primary/10 blur-[70px] pointer-events-none" />
+      {/* Soft warm studio rim lighting */}
+      <div className="absolute top-[16%] right-[18%] w-80 h-64 rounded-full bg-primary/20 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[22%] left-[15%] w-64 h-52 rounded-full bg-primary/10 blur-[85px] pointer-events-none" />
 
-      {/* Composition Container with subtle 3D perspective orientation */}
+      {/* 3D S-Curved Ribbon Assembly */}
       <div
-        className="relative w-full max-w-[500px] h-[300px] sm:h-[350px] flex items-center justify-center"
+        className="relative w-full max-w-[620px] h-[360px] sm:h-[420px] flex items-center justify-center"
         style={{ transformStyle: "preserve-3d" }}
       >
-        {/* Frame 3: Supporting Frame 2 (Lower-Left Depth Layer) */}
+        {/* Rear Deep Receding Loop of the S (Layer 3) */}
         <div
-          className="absolute rounded-xl border border-white/10 bg-[#16181D] shadow-[0_12px_32px_rgba(0,0,0,0.65)] overflow-hidden transition-transform duration-700 ease-out"
+          className="absolute rounded-xl border-t border-b border-primary/30 bg-[#121418] shadow-[0_16px_40px_rgba(0,0,0,0.85)] overflow-hidden"
           style={{
-            width: "46%",
-            aspectRatio: "16 / 9.5",
-            left: "6%",
-            bottom: "12%",
-            transform: "translateZ(-70px) rotateY(-4deg) rotateX(2deg)",
-            filter: "brightness(0.78) contrast(1.05)",
+            width: "42%",
+            height: "140px",
+            right: "12%",
+            top: "8%",
+            transform: "translateZ(-140px) rotateY(-24deg) rotateX(12deg) rotateZ(-6deg)",
+            filter: "brightness(0.72) contrast(1.1)",
           }}
         >
-          <div className="relative w-full h-full overflow-hidden">
+          {/* Top/Bottom 35mm Sprocket Rails */}
+          <div className="absolute inset-x-0 top-0 h-4 bg-[#0E1013] border-b border-primary/25 flex items-center justify-around px-2 z-10">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <span key={i} className="w-2 h-2 rounded-[2px] bg-primary/30" />
+            ))}
+          </div>
+          <div className="absolute inset-0 pt-4 pb-4">
             <img
-              src="/images/hero/frame-supporting-2.jpg"
-              alt="Anamorphic cinema camera optics"
-              className="w-full h-full object-cover object-center"
+              src="/images/hero/frame-4.jpg"
+              alt="Cinema soundstage studio"
+              className="w-full h-full object-cover object-center opacity-85"
               loading="eager"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            <div className="absolute inset-0 border border-primary/25 rounded-xl pointer-events-none" />
-            <div className="absolute bottom-2 left-2.5 flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground/90 uppercase tracking-widest">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-              03 // OPTICS
-            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-black/70" />
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-4 bg-[#0E1013] border-t border-primary/25 flex items-center justify-around px-2 z-10">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <span key={i} className="w-2 h-2 rounded-[2px] bg-primary/30" />
+            ))}
           </div>
         </div>
 
-        {/* Frame 2: Supporting Frame 1 (Upper-Right Depth Layer) */}
+        {/* Mid Turn of the S-Curve (Layer 2) */}
         <div
-          className="absolute rounded-xl border border-white/10 bg-[#16181D] shadow-[0_14px_38px_rgba(0,0,0,0.7)] overflow-hidden transition-transform duration-700 ease-out"
+          className="absolute rounded-xl border-t border-b border-primary/45 bg-[#14161B] shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden"
           style={{
-            width: "54%",
-            aspectRatio: "16 / 9.5",
-            right: "6%",
-            top: "8%",
-            transform: "translateZ(-35px) rotateY(-12deg) rotateX(4deg)",
+            width: "56%",
+            height: "170px",
+            right: "2%",
+            top: "24%",
+            transform: "translateZ(-60px) rotateY(-18deg) rotateX(8deg) rotateZ(-3deg)",
             filter: "brightness(0.85) contrast(1.05)",
           }}
         >
-          <div className="relative w-full h-full overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-5 bg-[#0F1115] border-b border-primary/35 flex items-center justify-around px-2 z-10">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <span key={i} className="w-2 h-2.5 rounded-[2px] bg-primary/40" />
+            ))}
+          </div>
+          <div className="absolute inset-0 pt-5 pb-5">
             <img
-              src="/images/hero/frame-main.jpg"
-              alt="Camera operator on tracking shot on set"
+              src="/images/hero/frame-supporting-1.jpg"
+              alt="Cinematography stage lighting"
               className="w-full h-full object-cover object-center"
               loading="eager"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-            <div className="absolute inset-0 border border-primary/30 rounded-xl pointer-events-none" />
-            <div className="absolute bottom-2 left-2.5 flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground/90 uppercase tracking-widest">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/80" />
-              02 // CAMERA UNIT
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60" />
+            <div className="absolute bottom-6 left-3 font-mono text-[9px] text-primary/90 uppercase tracking-widest">
+              02 // STAGE LIGHTING
             </div>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-5 bg-[#0F1115] border-t border-primary/35 flex items-center justify-around px-2 z-10">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <span key={i} className="w-2 h-2.5 rounded-[2px] bg-primary/40" />
+            ))}
           </div>
         </div>
 
-        {/* Frame 1: Hero Frame (Foreground Focal Point) */}
+        {/* Broad Photographic Foreground Section of the S-Ribbon (Layer 1) */}
         <div
-          className="absolute rounded-xl border border-white/15 bg-[#181A1F] shadow-[0_20px_54px_rgba(0,0,0,0.85),0_0_0_1px_rgba(233,180,87,0.22)] overflow-hidden transition-transform duration-700 ease-out z-10"
+          className="absolute rounded-xl border-t border-b border-primary/60 bg-[#16181D] shadow-[0_28px_70px_rgba(0,0,0,0.92),0_0_0_1px_rgba(233,180,87,0.35)] overflow-hidden z-20"
           style={{
-            width: "70%",
-            aspectRatio: "16 / 9.5",
-            left: "15%",
-            top: "22%",
-            transform: "translateZ(30px) rotateY(-6deg) rotateX(2deg)",
+            width: "75%",
+            height: "215px",
+            left: "8%",
+            top: "32%",
+            transform: "translateZ(40px) rotateY(-6deg) rotateX(2deg) rotateZ(1deg)",
           }}
         >
-          <div className="relative w-full h-full overflow-hidden">
+          {/* Top 35mm Perforation Rail with Amber Trim */}
+          <div className="absolute inset-x-0 top-0 h-6 bg-[#111317] border-b border-primary/45 flex items-center justify-between px-3 z-10">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-1.5 rounded-[1px] bg-primary/80" />
+              <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-primary font-semibold">
+                35MM CONTINUOUS CINEMA RIBBON
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <span key={i} className="w-2.5 h-3 rounded-[2px] bg-primary/50 shadow-[0_0_4px_rgba(233,180,87,0.3)]" />
+              ))}
+            </div>
+          </div>
+
+          {/* Broad Photographic Surface */}
+          <div className="absolute inset-0 pt-6 pb-6">
             <img
-              src="/images/hero/frame-supporting-1.jpg"
-              alt="Film production slate on set"
+              src="/images/hero/frame-main.jpg"
+              alt="Film director and camera operator on set"
               className="w-full h-full object-cover object-center"
               loading="eager"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-            {/* Thin warm amber precision rim highlight */}
-            <div className="absolute inset-0 border border-primary/50 rounded-xl shadow-[inset_0_0_16px_rgba(233,180,87,0.18)] pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+            <div className="absolute inset-0 shadow-[inset_0_0_24px_rgba(0,0,0,0.7)]" />
 
             {/* Frame metadata footer */}
-            <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between font-mono text-[10px] text-foreground/90 tracking-wider">
+            <div className="absolute bottom-2 left-4 right-4 flex items-center justify-between font-mono text-[10px] text-foreground/90 tracking-wider">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_#E9B457]" />
+                <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_#E9B457]" />
                 <span className="font-semibold text-primary uppercase">01 // PRODUCTION</span>
               </div>
-              <span className="text-muted-foreground text-[9px]">35MM WIDESCREEN</span>
+              <span className="text-muted-foreground text-[9px]">ANAMORPHIC S-CURVE</span>
+            </div>
+          </div>
+
+          {/* Bottom 35mm Perforation Rail with Amber Trim */}
+          <div className="absolute inset-x-0 bottom-0 h-6 bg-[#111317] border-t border-primary/45 flex items-center justify-between px-3 z-10">
+            <span className="font-mono text-[9px] text-muted-foreground">SCENE 14A // TAKE 4</span>
+            <div className="flex items-center gap-2.5">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <span key={i} className="w-2.5 h-3 rounded-[2px] bg-primary/50 shadow-[0_0_4px_rgba(233,180,87,0.3)]" />
+              ))}
             </div>
           </div>
         </div>

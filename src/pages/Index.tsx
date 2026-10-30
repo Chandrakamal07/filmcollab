@@ -192,13 +192,6 @@ const Index = () => {
                 <div className="absolute top-0 right-[12%] w-[560px] h-[420px] rounded-full bg-[#E9B457]/20 blur-[120px]" />
               </div>
 
-              {/* Layer 2: Desktop 3D WebGL Canvas Slot (Right half of the stage) */}
-              <div className="hidden lg:flex absolute inset-y-0 right-0 w-[54%] xl:w-[56%] pointer-events-auto z-10 items-center justify-center">
-                <React.Suspense fallback={<FilmSculptureFallback />}>
-                  <FilmSculptureCanvas />
-                </React.Suspense>
-              </div>
-
               {/* Upper-Right Editorial Callout */}
               <div className="hidden xl:flex flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
                 <p className="font-display italic text-lg text-foreground/80 -rotate-3 pr-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
@@ -208,8 +201,8 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Layer 3: Left-Aligned Editorial Hero Content (Matches 01 / Landing) */}
-              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-6 max-w-2xl">
+              {/* Layer 2: Left-Aligned Editorial Hero Content (Matches 01 / Landing) */}
+              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-4 lg:pb-6 max-w-2xl">
                 <FadeInSection variant="marketing">
                   <div className="flex items-center gap-2.5 mb-5">
                     <span className="h-[1px] w-7 bg-primary/80" />
@@ -251,9 +244,11 @@ const Index = () => {
                 </FadeInSection>
               </div>
 
-              {/* Mobile / Tablet Dedicated Media Slot (clean separation below CTAs, above craft strip) */}
-              <div className="lg:hidden relative z-20 px-4 sm:px-8 py-4 flex items-center justify-center">
-                <FilmSculptureFallback className="w-full max-w-[420px] h-[280px] sm:h-[320px]" />
+              {/* Layer 3: ONE Responsive 3D Cinema Ribbon Scene Instance */}
+              <div className="relative lg:absolute lg:top-0 lg:bottom-[210px] lg:right-0 w-full lg:w-[54%] xl:w-[56%] h-[320px] sm:h-[380px] lg:h-auto max-w-[580px] lg:max-w-none mx-auto lg:mx-0 z-20 flex items-center justify-center pointer-events-auto px-4 lg:px-0 my-2 lg:my-0">
+                <React.Suspense fallback={<FilmSculptureFallback />}>
+                  <FilmSculptureCanvas />
+                </React.Suspense>
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
