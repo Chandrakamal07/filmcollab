@@ -112,10 +112,6 @@ export const GoldenReelCanvas: React.FC<GoldenReelCanvasProps> = React.memo(
             z: controller.camera.position.z,
           }),
           getReelRotation: () => controller.reel.rotatingSpool.rotation.z,
-          getRollerRotations: () => ({
-            upper: controller.filmSystem.upperRoller.rotation.y,
-            lower: controller.filmSystem.lowerRoller.rotation.y,
-          }),
           isReady: () => controller.isReady(),
         };
       }

@@ -8,8 +8,8 @@ import { comedyScene } from "./scenes/comedy";
 import { adventureScene } from "./scenes/adventure";
 
 export const GENRES: GenreDefinition[] = [
-  actionScene,
   danceScene,
+  actionScene,
   chaseScene,
   horrorScene,
   comedyScene,
@@ -56,3 +56,4 @@ export function sampleSequence(activeTime: number): SequenceSample {
     transportInFrames,
   };
 }
+

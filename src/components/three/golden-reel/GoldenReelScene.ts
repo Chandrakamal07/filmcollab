@@ -1,266 +1,131 @@
 import * as THREE from "three";
 import { sampleSequence } from "./sequence-controller";
 import type { SequenceSample } from "./types";
-import { createSilhouetteAtlas, SilhouetteAtlasManager } from "./silhouette-atlas";
-import { createGoldenReel, ReelAssembly } from "./ReelGeometry";
-import { createFilmSystem, FilmSystem } from "./FilmPath";
+import { createSilhouetteAtlas, type SilhouetteAtlasManager } from "./silhouette-atlas";
+import { createGoldenReel, type ReelAssembly } from "./ReelGeometry";
+import { createFilmSystem, type FilmSystem } from "./FilmPath";
 
 export interface GoldenReelController {
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  reel: ReelAssembly;
-  filmSystem: FilmSystem;
-  atlas: SilhouetteAtlasManager;
-  update: (deltaSeconds: number, isRunning: boolean, pointer: THREE.Vector2, isMobile: boolean) => void;
-  seekTime: (targetSeconds: number) => void;
+  scene: THREE.Scene; camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer;
+  reel: ReelAssembly; filmSystem: FilmSystem; atlas: SilhouetteAtlasManager;
+  update: (delta: number, running: boolean, pointer: THREE.Vector2, mobile: boolean) => void;
+  seekTime: (time: number) => void;
   toggleHelpers: (visible?: boolean) => boolean;
-  dispose: () => void;
-  isReady: () => boolean;
-  getActiveTime: () => number;
-  getSequenceSample: () => SequenceSample;
+  dispose: () => void; isReady: () => boolean;
+  getActiveTime: () => number; getSequenceSample: () => SequenceSample;
 }
-
-export function createGoldenReelScene(
-  container: HTMLElement,
-  onFirstRender?: () => void,
-  onError?: (err: Error) => void
-): GoldenReelController {
-  const width = container.clientWidth || window.innerWidth || 1200;
-  const height = container.clientHeight || 700;
-
-  let disposed = false;
-  let isReady = false;
-  let hasReportedFirstRender = false;
-
-  const ownedGeometries = new Set<THREE.BufferGeometry>();
-  const ownedMaterials = new Set<THREE.Material>();
-
-  // 1. WebGL Renderer
+export function createGoldenReelScene(container: HTMLElement, onFirstRender?: () => void, onError?: (error: Error) => void): GoldenReelController {
   let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance",
-    });
-  } catch (err) {
-    onError?.(err instanceof Error ? err : new Error(String(err)));
-    throw err;
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+  } catch (error) {
+    onError?.(error instanceof Error ? error : new Error(String(error)));
+    throw error;
   }
-
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(width, height);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.setSize(container.clientWidth || 1200, container.clientHeight || 440);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-  renderer.domElement.style.width = "100%";
-  renderer.domElement.style.height = "100%";
-  renderer.domElement.style.display = "block";
-  renderer.domElement.style.pointerEvents = "none";
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  Object.assign(renderer.domElement.style, { width: "100%", height: "100%", display: "block", pointerEvents: "none" });
   container.appendChild(renderer.domElement);
-
-  // 2. Scene & Camera
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 40);
-  const baseCamPos = new THREE.Vector3(0.15, 0.0, 7.2);
-  camera.position.copy(baseCamPos);
-  const cameraTarget = new THREE.Vector3(0.50, -0.05, 0.0);
-  camera.lookAt(cameraTarget);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
+  const key = new THREE.DirectionalLight("#fff0cf", 3.2);
+  key.position.set(-2, 4, 5);
+  scene.add(key);
+  const fill = new THREE.HemisphereLight("#e5ecff", "#49351e", 1.1);
+  scene.add(fill);
+  const rim = new THREE.DirectionalLight("#e9b457", 1.4);
+  rim.position.set(3, 2, -4);
+  scene.add(rim);
 
-  // 3. Cinematic Studio Lighting for Warm Gold Reel & Depth
-  const keyLight = new THREE.DirectionalLight("#FFE8C4", 2.2);
-  keyLight.position.set(4.5, 3.8, 2.5);
-  scene.add(keyLight);
-
-  const rimLight = new THREE.SpotLight("#F5D28A", 2.8, 10, Math.PI / 3, 0.6, 1.2);
-  rimLight.position.set(1.2, 3.0, -1.0);
-  rimLight.target.position.set(2.4, 0.45, -0.6);
-  scene.add(rimLight);
-  scene.add(rimLight.target);
-
-  const ambientLight = new THREE.AmbientLight("#0A0C10", 0.95);
-  scene.add(ambientLight);
-
-  const gateFillLight = new THREE.PointLight("#FFE0B2", 1.4, 6.0, 1.5);
-  gateFillLight.position.set(1.5, 0.6, 0.8);
-  scene.add(gateFillLight);
-
-  // 4. Silhouette Atlas & Textures
-  let atlas: SilhouetteAtlasManager;
-  try {
-    atlas = createSilhouetteAtlas();
-  } catch (err) {
-    onError?.(err instanceof Error ? err : new Error(String(err)));
-    throw err;
-  }
-
-  // 5. Vintage Golden Reel Assembly (Created & positioned first to derive contact tangents)
+  const atlas = createSilhouetteAtlas();
   const reel = createGoldenReel();
-  reel.group.position.set(2.40, 0.48, -0.55);
-  reel.group.rotation.set(0.16, -0.36, 0.06);
-  reel.group.updateWorldMatrix(true, false);
+  reel.group.position.set(-1.3, 0.8, -1.8);
+  reel.group.rotation.set(0.04, -1.05, -0.08);
   scene.add(reel.group);
-
-  const initialReelAngle = 0.45;
-  reel.rotatingSpool.rotation.z = initialReelAngle;
-
-  // 6. Filmstrip Ribbon & Rollers System (Derived tangentially from the reel)
+  reel.group.updateWorldMatrix(true, false);
   const filmSystem = createFilmSystem(atlas.texture, reel.group, reel.parameters);
   scene.add(filmSystem.group);
 
-  // Reel, feeder and guides are one assembly. Apply presentation transforms
-  // to their shared parent, never independently after computing contacts.
-  const presentation = new THREE.Group();
-  presentation.name = "goldenReelPresentation";
-  presentation.add(reel.group, filmSystem.group);
-  presentation.scale.setScalar(0.72);
-  presentation.position.set(1.9, 0.1, 0);
-  scene.add(presentation);
-
-  // =========================================================
-  // 7. Development-Only Inspection Helpers (Dev & Verification)
-  // =========================================================
-  const helpersGroup = new THREE.Group();
-  helpersGroup.name = "inspectionHelpers";
-  helpersGroup.visible = false;
-  presentation.add(helpersGroup);
-
-  // Spindle Axis Helper (Cyan line along reel local Z)
-  const spindleGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(0, 0, -0.6).applyEuler(reel.group.rotation).add(reel.group.position),
-    new THREE.Vector3(0, 0, 0.6).applyEuler(reel.group.rotation).add(reel.group.position),
-  ]);
-  ownedGeometries.add(spindleGeo);
-  const spindleLine = new THREE.Line(spindleGeo, new THREE.LineBasicMaterial({ color: "#00E5FF" }));
-  ownedMaterials.add(spindleLine.material);
-  helpersGroup.add(spindleLine);
-
-  // Gate Boundary Helper (Green outline)
-  const gateBoxGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-0.70, 0.556, 0.65),
-    new THREE.Vector3(1.10, 0.556, 0.65),
-    new THREE.Vector3(1.10, -0.456, 0.65),
-    new THREE.Vector3(-0.70, -0.456, 0.65),
-    new THREE.Vector3(-0.70, 0.556, 0.65),
-  ]);
-  ownedGeometries.add(gateBoxGeo);
-  const gateBox = new THREE.Line(gateBoxGeo, new THREE.LineBasicMaterial({ color: "#00E676" }));
-  ownedMaterials.add(gateBox.material);
-  helpersGroup.add(gateBox);
-
-  const toggleHelpers = (visible?: boolean): boolean => {
-    helpersGroup.visible = visible ?? !helpersGroup.visible;
+  const helpers = new THREE.Group();
+  helpers.visible = false;
+  const helperGeometry = new THREE.BufferGeometry().setFromPoints(filmSystem.samples.map(s => s.center));
+  const helperMaterial = new THREE.LineBasicMaterial({ color: "#00ffbb" });
+  helpers.add(new THREE.Line(helperGeometry, helperMaterial));
+  scene.add(helpers);
+  const envelope: THREE.Vector3[] = [];
+  for (const s of filmSystem.samples) {
+    envelope.push(s.center.clone().addScaledVector(s.widthAxis, s.width / 2));
+    envelope.push(s.center.clone().addScaledVector(s.widthAxis, -s.width / 2));
+  }
+  // Full flanges, including rotation, fit inside this sampled envelope.
+  for (let i = 0; i < 64; i++) {
+    for (const z of [reel.parameters.flangeFrontZ + 0.04, reel.parameters.flangeRearZ - 0.04]) {
+      envelope.push(new THREE.Vector3(Math.cos(i / 64 * Math.PI * 2) * reel.outerRadius,
+        Math.sin(i / 64 * Math.PI * 2) * reel.outerRadius, z).applyMatrix4(reel.group.matrixWorld));
+    }
+  }
+  let activeTime = 0;
+  let sample = sampleSequence(0);
+  let disposed = false;
+  let reportedReady = false;
+  const target = new THREE.Vector3(-0.1, -0.65, 0);
+  const zeroPointer = new THREE.Vector2();
+  let lastMobile = false;
+  const draw = (pointer: THREE.Vector2, mobile: boolean) => {
+    const width = container.clientWidth || 1200;
+    const height = container.clientHeight || 440;
+    const left = mobile ? 0 : width * 0.51;
+    const viewWidth = width - left;
+    camera.aspect = viewWidth / height;
+    camera.updateProjectionMatrix();
+    const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    let distance = 0;
+    for (const p of envelope) {
+      distance = Math.max(distance, p.z + Math.max(
+        Math.abs(p.x - target.x) / (tan * camera.aspect), Math.abs(p.y - target.y) / tan,
+      ) * 1.10);
+    }
+    camera.position.set(target.x + pointer.x * 0.025, target.y + pointer.y * 0.025, distance);
+    camera.lookAt(target.x, target.y, distance - 1);
+    renderer.setViewport(0, 0, width, height);
+    renderer.setScissorTest(false);
+    renderer.clear();
+    renderer.setViewport(left, 0, viewWidth, height);
+    renderer.setScissor(left, 0, viewWidth, height);
+    renderer.setScissorTest(true);
     renderer.render(scene, camera);
-    return helpersGroup.visible;
+    renderer.setScissorTest(false);
   };
-
-  // 8. Time & Sequence State
-  let activeTime = 0.0;
-  let currentSample: SequenceSample = sampleSequence(0.0);
-
-  filmSystem.updateTransport(0.0);
-  atlas.update(currentSample);
-  isReady = true;
-
-  const update = (
-    deltaSeconds: number,
-    isRunning: boolean,
-    pointer: THREE.Vector2,
-    isMobile: boolean
-  ) => {
-    if (disposed) return;
-
-    const dt = Math.min(Math.max(deltaSeconds, 0), 0.05);
-    if (isRunning) {
-      activeTime += dt;
-    }
-
-    currentSample = sampleSequence(activeTime);
-
-    // Update 2D silhouette animation on active frame
-    atlas.update(currentSample);
-
-    // Synchronize film transport through viewing gate
-    filmSystem.updateTransport(currentSample.transportInFrames);
-
-    // Synchronize reel rotation derived from unwrapped travelled distance
-    const filmDistance = currentSample.transportInFrames * filmSystem.framePitch;
-    const reelAngle = initialReelAngle - filmDistance / reel.effectiveWindingRadius;
-    reel.rotatingSpool.rotation.z = reelAngle;
-
-    // Subtle pointer parallax
-    const parallaxX = pointer.x * (isMobile ? 0.05 : 0.16);
-    const parallaxY = pointer.y * (isMobile ? 0.03 : 0.10);
-
-    if (isMobile) {
-      // This canvas occupies the reserved background region below mobile copy.
-      // Fit the same assembly (including the guides) to the current aspect.
-      const fitScale = Math.min(0.85, camera.aspect * 0.62);
-      presentation.scale.setScalar(fitScale);
-      presentation.position.set(0.5 - 1.3 * fitScale, -0.55 * fitScale, 0);
-      camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, 6.5);
-    } else {
-      presentation.scale.setScalar(0.72);
-      presentation.position.set(1.9, 0.1, 0);
-      camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, baseCamPos.z);
-    }
-    camera.lookAt(cameraTarget);
-
-    renderer.render(scene, camera);
-
-    if (isReady && !hasReportedFirstRender) {
-      hasReportedFirstRender = true;
-      onFirstRender?.();
-    }
+  const apply = () => {
+    sample = sampleSequence(activeTime);
+    atlas.update(sample);
+    filmSystem.updateTransport(sample.transportInFrames);
+    reel.rotatingSpool.rotation.z = 0.45 + sample.transportInFrames * filmSystem.framePitch / reel.effectiveWindingRadius;
   };
-
-  const seekTime = (targetSeconds: number) => {
-    activeTime = targetSeconds;
-    currentSample = sampleSequence(activeTime);
-    atlas.update(currentSample);
-    filmSystem.updateTransport(currentSample.transportInFrames);
-    const filmDistance = currentSample.transportInFrames * filmSystem.framePitch;
-    const reelAngle = initialReelAngle - filmDistance / reel.effectiveWindingRadius;
-    reel.rotatingSpool.rotation.z = reelAngle;
-    renderer.render(scene, camera);
-  };
-
-  const dispose = () => {
-    disposed = true;
-
-    atlas.dispose();
-    filmSystem.dispose();
-    reel.dispose();
-
-    ownedGeometries.forEach((g) => g.dispose());
-    ownedGeometries.clear();
-
-    ownedMaterials.forEach((m) => m.dispose());
-    ownedMaterials.clear();
-
-
-    renderer.dispose();
-    if (renderer.domElement.parentElement === container) {
-      container.removeChild(renderer.domElement);
-    }
-  };
-
+  apply();
   return {
-    scene,
-    camera,
-    renderer,
-    reel,
-    filmSystem,
-    atlas,
-    update,
-    seekTime,
-    toggleHelpers,
-    dispose,
-    isReady: () => isReady,
+    scene, camera, renderer, reel, filmSystem, atlas,
+    update(delta, running, pointer, mobile) {
+      if (disposed) return;
+      lastMobile = mobile;
+      if (running) activeTime += Math.min(Math.max(delta, 0), 0.05);
+      apply();
+      draw(pointer, mobile);
+      if (!reportedReady) { reportedReady = true; onFirstRender?.(); }
+    },
+    seekTime(time) { activeTime = Math.max(0, time); apply(); draw(zeroPointer, lastMobile); },
+    toggleHelpers(visible) { helpers.visible = visible ?? !helpers.visible; draw(zeroPointer, lastMobile); return helpers.visible; },
+    dispose() {
+      disposed = true;
+      atlas.dispose(); filmSystem.dispose(); reel.dispose();
+      helperGeometry.dispose(); helperMaterial.dispose(); renderer.dispose();
+      renderer.domElement.remove();
+    },
+    isReady: () => !disposed,
     getActiveTime: () => activeTime,
-    getSequenceSample: () => currentSample,
+    getSequenceSample: () => sample,
   };
 }
-

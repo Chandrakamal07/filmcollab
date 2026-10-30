@@ -255,7 +255,7 @@ const Index = () => {
                 {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[340px] lg:top-0 lg:-bottom-[220px] lg:h-auto z-0"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[340px] lg:inset-0 lg:h-auto z-0"
                 >
                   <React.Suspense fallback={<GoldenReelFallback />}>
                     <GoldenReelCanvas
@@ -311,7 +311,7 @@ const Index = () => {
                 </div>
 
                 {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="relative min-w-0 w-full h-[300px] sm:h-[340px] lg:h-[400px] pointer-events-none" />
+                <div className="relative min-w-0 w-full h-[300px] sm:h-[340px] lg:h-[460px] pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}

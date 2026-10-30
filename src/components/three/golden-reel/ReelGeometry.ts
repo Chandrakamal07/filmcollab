@@ -114,7 +114,8 @@ export function createGoldenReel(): ReelAssembly {
   ownedGeometries.push(flangeGeo);
 
   // Flange Spacing & Measured Face Bounds
-  const flangeCenterOffsetZ = 0.082; // Z position of front and rear flange centers
+  const filmWidth = 0.95;
+  const flangeCenterOffsetZ = filmWidth / 2 + flangeHalfThick + 0.012; // Z position of front and rear flange centers
   const flangeInnerFrontZ = flangeCenterOffsetZ - flangeHalfThick; // 0.082 - 0.016 = 0.066
   const flangeInnerRearZ = -flangeCenterOffsetZ + flangeHalfThick;  // -0.082 + 0.016 = -0.066
   const flangeClearance = flangeInnerFrontZ - flangeInnerRearZ;   // 0.132m between inner faces
@@ -166,7 +167,7 @@ export function createGoldenReel(): ReelAssembly {
   // Wound Film Pack on Spool (loaded between the flanges)
   // =========================================================
   const woundFilmR = 0.92; // Winding circle radius
-  const woundFilmWidth = flangeClearance * 0.96; // 0.126m, clears both flanges
+  const woundFilmWidth = filmWidth; // 0.126m, clears both flanges
   const woundFilmGeo = new THREE.CylinderGeometry(woundFilmR, woundFilmR, woundFilmWidth, 48);
   woundFilmGeo.rotateX(Math.PI / 2);
   ownedGeometries.push(woundFilmGeo);
@@ -235,3 +236,4 @@ export function createGoldenReel(): ReelAssembly {
     dispose,
   };
 }
+
