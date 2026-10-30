@@ -34,9 +34,9 @@ import {
   ImageReveal,
   StaggerItem,
 } from "@/components/ui/motion-primitives";
-import { FilmSculptureFallback } from "@/components/three/FilmSculptureFallback";
+import { SoundstageFallback } from "@/components/three/soundstage/SoundstageFallback";
 
-const FilmSculptureCanvas = React.lazy(() => import("@/components/three/FilmSculptureCanvas"));
+const SoundstageHero = React.lazy(() => import("@/components/three/soundstage/SoundstageHero"));
 
 const craftDisciplines = [
   {
@@ -244,10 +244,10 @@ const Index = () => {
                 </FadeInSection>
               </div>
 
-              {/* Layer 3: ONE Responsive 3D Cinema Ribbon Scene Instance */}
-              <div className="relative lg:absolute lg:top-0 lg:bottom-[210px] lg:right-0 w-full lg:w-[54%] xl:w-[56%] h-[320px] sm:h-[380px] lg:h-auto max-w-[580px] lg:max-w-none mx-auto lg:mx-0 z-20 flex items-center justify-center pointer-events-auto px-4 lg:px-0 my-2 lg:my-0">
-                <React.Suspense fallback={<FilmSculptureFallback />}>
-                  <FilmSculptureCanvas />
+              {/* Layer 3: ONE Responsive 3D Infinite Soundstage Hero Instance */}
+              <div className="relative lg:absolute lg:top-0 lg:bottom-[210px] lg:right-0 w-full lg:w-[54%] xl:w-[56%] h-[320px] sm:h-[420px] lg:h-auto max-w-[620px] lg:max-w-none mx-auto lg:mx-0 z-20 flex items-center justify-center pointer-events-auto px-4 lg:px-0 my-2 lg:my-0">
+                <React.Suspense fallback={<SoundstageFallback />}>
+                  <SoundstageHero />
                 </React.Suspense>
               </div>
 
