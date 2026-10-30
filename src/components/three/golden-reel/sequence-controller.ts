@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { GenreDefinition, SequenceSample } from "./types";
 import { actionScene } from "./scenes/action";
 import { danceScene } from "./scenes/dance";
@@ -15,11 +16,12 @@ export const GENRES: GenreDefinition[] = [
   adventureScene,
 ];
 
-export const GENRE_COUNT = GENRES.length; // 6
+export const GENRE_COUNT = GENRES.length; // Exactly 6 genres
 export const PLAY_SECONDS = 4.0;
 export const HOLD_SECONDS = 0.3;
 export const ADVANCE_SECONDS = 1.2;
 export const SLOT_SECONDS = PLAY_SECONDS + HOLD_SECONDS + ADVANCE_SECONDS; // 5.5s
+export const CYCLE_SECONDS = GENRE_COUNT * SLOT_SECONDS; // 33.0s
 
 export function smootherstep(value: number): number {
   const t = Math.min(Math.max(value, 0), 1);
@@ -30,7 +32,7 @@ export function sampleSequence(activeTime: number): SequenceSample {
   const slot = Math.floor(activeTime / SLOT_SECONDS);
   const localTime = activeTime - slot * SLOT_SECONDS;
 
-  const genreIndex = ((slot % GENRE_COUNT) + GENRE_COUNT) % GENRE_COUNT;
+  const genreIndex = THREE.MathUtils.euclideanModulo(slot, GENRE_COUNT);
   const nextGenreIndex = (genreIndex + 1) % GENRE_COUNT;
 
   const advanceStart = PLAY_SECONDS + HOLD_SECONDS;
@@ -54,4 +56,3 @@ export function sampleSequence(activeTime: number): SequenceSample {
     transportInFrames,
   };
 }
-

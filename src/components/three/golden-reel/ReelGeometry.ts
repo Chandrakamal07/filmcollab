@@ -1,8 +1,20 @@
 import * as THREE from "three";
 
+export interface ReelGeometryParameters {
+  windingRadius: number;
+  filmPackWidth: number;
+  spindleAxis: THREE.Vector3;
+  flangeFrontZ: number;
+  flangeRearZ: number;
+  flangeClearance: number;
+}
+
 export interface ReelAssembly {
   group: THREE.Group;
-  rotatingPart: THREE.Group;
+  rotatingSpool: THREE.Group;
+  stationaryMount: THREE.Group;
+  rotatingPart: THREE.Group; // Alias for backward compatibility
+  parameters: ReelGeometryParameters;
   effectiveWindingRadius: number;
   outerRadius: number;
   dispose: () => void;
@@ -10,8 +22,17 @@ export interface ReelAssembly {
 
 export function createGoldenReel(): ReelAssembly {
   const group = new THREE.Group();
-  const rotatingPart = new THREE.Group();
-  group.add(rotatingPart);
+  group.name = "reelAssembly";
+
+  // 1. Stationary Mount (axle, mounting spindle, and front lock cap)
+  const stationaryMount = new THREE.Group();
+  stationaryMount.name = "stationaryMount";
+  group.add(stationaryMount);
+
+  // 2. Rotating Spool (front/rear flanges, core hub, wound film pack, rim torus)
+  const rotatingSpool = new THREE.Group();
+  rotatingSpool.name = "rotatingSpool";
+  group.add(rotatingSpool);
 
   const ownedGeometries: THREE.BufferGeometry[] = [];
   const ownedMaterials: THREE.Material[] = [];
@@ -45,7 +66,9 @@ export function createGoldenReel(): ReelAssembly {
   });
   ownedMaterials.push(woundFilmMat);
 
-  // 1. Construct Flange with real cutout circular openings
+  // =========================================================
+  // Flange Geometry: Genuine 3D cutouts through both flanges
+  // =========================================================
   const outerR = 1.60;
   const hubHoleR = 0.32;
   const windowCount = 6;
@@ -71,85 +94,128 @@ export function createGoldenReel(): ReelAssembly {
     flangeShape.holes.push(windowHole);
   }
 
+  const flangeExtrudeDepth = 0.022;
+  const flangeBevel = 0.005;
+  const flangeTotalThickness = flangeExtrudeDepth + flangeBevel * 2; // 0.032
+  const flangeHalfThick = flangeTotalThickness * 0.5; // 0.016
+
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-    depth: 0.022,
+    depth: flangeExtrudeDepth,
     bevelEnabled: true,
     bevelSegments: 3,
     steps: 1,
-    bevelSize: 0.005,
-    bevelThickness: 0.005,
+    bevelSize: flangeBevel,
+    bevelThickness: flangeBevel,
     curveSegments: 32,
   };
 
   const flangeGeo = new THREE.ExtrudeGeometry(flangeShape, extrudeSettings);
-  flangeGeo.center();
+  flangeGeo.center(); // Extends along Z from -flangeHalfThick to +flangeHalfThick
   ownedGeometries.push(flangeGeo);
+
+  // Flange Spacing & Measured Face Bounds
+  const flangeCenterOffsetZ = 0.082; // Z position of front and rear flange centers
+  const flangeInnerFrontZ = flangeCenterOffsetZ - flangeHalfThick; // 0.082 - 0.016 = 0.066
+  const flangeInnerRearZ = -flangeCenterOffsetZ + flangeHalfThick;  // -0.082 + 0.016 = -0.066
+  const flangeClearance = flangeInnerFrontZ - flangeInnerRearZ;   // 0.132m between inner faces
+  const flangeOuterFrontZ = flangeCenterOffsetZ + flangeHalfThick; // 0.082 + 0.016 = 0.098
 
   // Front Flange
   const frontFlange = new THREE.Mesh(flangeGeo, champagneGoldMat);
-  frontFlange.position.z = 0.075;
-  rotatingPart.add(frontFlange);
+  frontFlange.position.z = flangeCenterOffsetZ;
+  rotatingSpool.add(frontFlange);
 
   // Rear Flange
   const rearFlange = new THREE.Mesh(flangeGeo, champagneGoldMat);
-  rearFlange.position.z = -0.075;
-  rotatingPart.add(rearFlange);
+  rearFlange.position.z = -flangeCenterOffsetZ;
+  rotatingSpool.add(rearFlange);
 
   // Reinforcing Outer Rims with beveled brass lip
   const rimTorusGeo = new THREE.TorusGeometry(outerR + 0.003, 0.012, 16, 64);
   ownedGeometries.push(rimTorusGeo);
 
   const frontRim = new THREE.Mesh(rimTorusGeo, agedBrassRimMat);
-  frontRim.position.z = 0.088;
-  rotatingPart.add(frontRim);
+  frontRim.position.z = flangeOuterFrontZ;
+  rotatingSpool.add(frontRim);
 
   const rearRim = new THREE.Mesh(rimTorusGeo, agedBrassRimMat);
-  rearRim.position.z = -0.088;
-  rotatingPart.add(rearRim);
+  rearRim.position.z = -flangeOuterFrontZ;
+  rotatingSpool.add(rearRim);
 
-  // 2. Central Core / Hub (Connects flanges)
-  const coreHubR = 0.52;
-  const coreHubWidth = 0.15;
+  // =========================================================
+  // Central Core / Hub (Connects flanges coaxially along Z)
+  // =========================================================
+  const coreHubR = 0.50;
+  const coreHubWidth = flangeClearance + 0.004; // fits securely between inner flange faces
   const coreHubGeo = new THREE.CylinderGeometry(coreHubR, coreHubR, coreHubWidth, 32);
-  coreHubGeo.rotateX(Math.PI / 2);
+  coreHubGeo.rotateX(Math.PI / 2); // local cylinder axis along Z
   ownedGeometries.push(coreHubGeo);
 
   const coreHub = new THREE.Mesh(coreHubGeo, innerHubMat);
-  rotatingPart.add(coreHub);
+  rotatingSpool.add(coreHub);
 
-  // Concentric Hub Rings
+  // Concentric Hub Rings on front face
   const hubRingGeo = new THREE.TorusGeometry(coreHubR * 0.75, 0.008, 12, 32);
   ownedGeometries.push(hubRingGeo);
 
   const frontHubRing = new THREE.Mesh(hubRingGeo, agedBrassRimMat);
-  frontHubRing.position.z = 0.082;
-  rotatingPart.add(frontHubRing);
+  frontHubRing.position.z = flangeOuterFrontZ;
+  rotatingSpool.add(frontHubRing);
 
-  // 3. Wound Film Pack on Spool (physical film loaded on the reel)
-  const woundFilmR = 0.92; // film wound partway out toward the cutouts
-  const woundFilmGeo = new THREE.CylinderGeometry(woundFilmR, woundFilmR, coreHubWidth * 0.96, 48);
+  // =========================================================
+  // Wound Film Pack on Spool (loaded between the flanges)
+  // =========================================================
+  const woundFilmR = 0.92; // Winding circle radius
+  const woundFilmWidth = flangeClearance * 0.96; // 0.126m, clears both flanges
+  const woundFilmGeo = new THREE.CylinderGeometry(woundFilmR, woundFilmR, woundFilmWidth, 48);
   woundFilmGeo.rotateX(Math.PI / 2);
   ownedGeometries.push(woundFilmGeo);
 
   const woundFilm = new THREE.Mesh(woundFilmGeo, woundFilmMat);
-  rotatingPart.add(woundFilm);
+  rotatingSpool.add(woundFilm);
 
-  // 4. Center Drive Spindle & Cap (Stationary mount / hub axle)
-  const axleR = 0.16;
-  const axleGeo = new THREE.CylinderGeometry(axleR, axleR, 0.22, 24);
-  axleGeo.rotateX(Math.PI / 2);
+  // =========================================================
+  // Stationary Mount: Coaxial Central Axle & Front Cap
+  // =========================================================
+  const axleR = 0.14;
+  const axleLength = flangeOuterFrontZ * 2 + 0.06; // 0.256m
+  const axleGeo = new THREE.CylinderGeometry(axleR, axleR, axleLength, 24);
+  axleGeo.rotateX(Math.PI / 2); // Cylinder along Z
   ownedGeometries.push(axleGeo);
 
   const axle = new THREE.Mesh(axleGeo, agedBrassRimMat);
-  group.add(axle); // stationary center mounting spindle
+  stationaryMount.add(axle);
 
-  const capGeo = new THREE.SphereGeometry(0.12, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-  capGeo.rotateX(Math.PI / 2);
+  // Front Retaining Collar & Cap:
+  // Cap dome must face OUTWARDS (+Z toward viewer), with base seated flush on flange front face
+  const capRadius = 0.13;
+  // Hemisphere with apex at +Y in local geometry, rotated around X by +PI/2 maps apex to +Z
+  const capGeo = new THREE.SphereGeometry(capRadius, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+  capGeo.rotateX(Math.PI / 2); // Dome apex now points along +Z, base is at Z = 0
   ownedGeometries.push(capGeo);
 
   const frontCap = new THREE.Mesh(capGeo, champagneGoldMat);
-  frontCap.position.z = 0.11;
-  group.add(frontCap);
+  // Position base exactly at flange outer front face (no gap, not embedded)
+  frontCap.position.z = flangeOuterFrontZ;
+  stationaryMount.add(frontCap);
+
+  // Decorative brass collar seated flush against flange face
+  const collarGeo = new THREE.CylinderGeometry(axleR * 1.18, axleR * 1.18, 0.010, 24);
+  collarGeo.rotateX(Math.PI / 2);
+  ownedGeometries.push(collarGeo);
+
+  const frontCollar = new THREE.Mesh(collarGeo, agedBrassRimMat);
+  frontCollar.position.z = flangeOuterFrontZ + 0.005;
+  stationaryMount.add(frontCollar);
+
+  const parameters: ReelGeometryParameters = {
+    windingRadius: woundFilmR,
+    filmPackWidth: woundFilmWidth,
+    spindleAxis: new THREE.Vector3(0, 0, 1),
+    flangeFrontZ: flangeInnerFrontZ,
+    flangeRearZ: flangeInnerRearZ,
+    flangeClearance,
+  };
 
   const dispose = () => {
     ownedGeometries.forEach((g) => g.dispose());
@@ -158,10 +224,14 @@ export function createGoldenReel(): ReelAssembly {
 
   return {
     group,
-    rotatingPart,
+    rotatingSpool,
+    stationaryMount,
+    get rotatingPart() {
+      return rotatingSpool;
+    },
+    parameters,
     effectiveWindingRadius: woundFilmR,
     outerRadius: outerR,
     dispose,
   };
 }
-

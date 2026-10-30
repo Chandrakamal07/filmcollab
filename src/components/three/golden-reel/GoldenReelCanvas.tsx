@@ -105,15 +105,16 @@ export const GoldenReelCanvas: React.FC<GoldenReelCanvasProps> = React.memo(
           getSequenceSample: () => controller.getSequenceSample(),
           getActiveTime: () => controller.getActiveTime(),
           seekTime: (t: number) => controller.seekTime(t),
+          toggleHelpers: (visible?: boolean) => controller.toggleHelpers(visible),
           getCameraPosition: () => ({
             x: controller.camera.position.x,
             y: controller.camera.position.y,
             z: controller.camera.position.z,
           }),
-          getReelRotation: () => controller.reel.rotatingPart.rotation.z,
+          getReelRotation: () => controller.reel.rotatingSpool.rotation.z,
           getRollerRotations: () => ({
-            upper: controller.filmSystem.upperRoller.rotation.z,
-            lower: controller.filmSystem.lowerRoller.rotation.z,
+            upper: controller.filmSystem.upperRoller.rotation.y,
+            lower: controller.filmSystem.lowerRoller.rotation.y,
           }),
           isReady: () => controller.isReady(),
         };

@@ -13,6 +13,7 @@ export interface GoldenReelController {
   atlas: SilhouetteAtlasManager;
   update: (deltaSeconds: number, isRunning: boolean, pointer: THREE.Vector2, isMobile: boolean) => void;
   seekTime: (targetSeconds: number) => void;
+  toggleHelpers: (visible?: boolean) => boolean;
   dispose: () => void;
   isReady: () => boolean;
   getActiveTime: () => number;
@@ -65,32 +66,28 @@ export function createGoldenReelScene(
   const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 40);
   const baseCamPos = new THREE.Vector3(0.15, 0.0, 5.8);
   camera.position.copy(baseCamPos);
-  const cameraTarget = new THREE.Vector3(0.70, -0.05, 0.0);
+  const cameraTarget = new THREE.Vector3(0.50, -0.05, 0.0);
   camera.lookAt(cameraTarget);
 
   // 3. Cinematic Studio Lighting for Warm Gold Reel & Depth
-  // Warm Key Light grazing from upper right across brushed gold reel
   const keyLight = new THREE.DirectionalLight("#FFE8C4", 2.2);
   keyLight.position.set(4.5, 3.8, 2.5);
   scene.add(keyLight);
 
-  // Soft Warm Rim Light catching reel edge bevels
   const rimLight = new THREE.SpotLight("#F5D28A", 2.8, 10, Math.PI / 3, 0.6, 1.2);
   rimLight.position.set(1.2, 3.0, -1.0);
   rimLight.target.position.set(2.4, 0.45, -0.6);
   scene.add(rimLight);
   scene.add(rimLight.target);
 
-  // Cool Deep Ambient Light for rich contrast
   const ambientLight = new THREE.AmbientLight("#0A0C10", 0.95);
   scene.add(ambientLight);
 
-  // Warm Projector Gate Fill Light
   const gateFillLight = new THREE.PointLight("#FFE0B2", 1.4, 6.0, 1.5);
   gateFillLight.position.set(1.5, 0.6, 0.8);
   scene.add(gateFillLight);
 
-  // 4. Silhouette Atlas & Filmstrip
+  // 4. Silhouette Atlas & Textures
   let atlas: SilhouetteAtlasManager;
   try {
     atlas = createSilhouetteAtlas();
@@ -100,24 +97,59 @@ export function createGoldenReelScene(
     throw err;
   }
 
-  // 5. Filmstrip Ribbon & Rollers System
-  const filmSystem = createFilmSystem(atlas.texture);
-  scene.add(filmSystem.group);
-
-  // 6. Vintage Golden Reel Assembly
+  // 5. Vintage Golden Reel Assembly (Created & positioned first to derive contact tangents)
   const reel = createGoldenReel();
   reel.group.position.set(2.40, 0.48, -0.55);
   reel.group.rotation.set(0.16, -0.36, 0.06);
+  reel.group.updateWorldMatrix(true, false);
   scene.add(reel.group);
 
   const initialReelAngle = 0.45;
-  reel.rotatingPart.rotation.z = initialReelAngle;
+  reel.rotatingSpool.rotation.z = initialReelAngle;
 
-  // 7. Time & Sequence State
+  // 6. Filmstrip Ribbon & Rollers System (Derived tangentially from the reel)
+  const filmSystem = createFilmSystem(atlas.texture, reel.group, reel.parameters);
+  scene.add(filmSystem.group);
+
+  // =========================================================
+  // 7. Development-Only Inspection Helpers (Dev & Verification)
+  // =========================================================
+  const helpersGroup = new THREE.Group();
+  helpersGroup.name = "inspectionHelpers";
+  helpersGroup.visible = false;
+  scene.add(helpersGroup);
+
+  // Spindle Axis Helper (Cyan line along reel local Z)
+  const spindleGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, -0.6).applyEuler(reel.group.rotation).add(reel.group.position),
+    new THREE.Vector3(0, 0, 0.6).applyEuler(reel.group.rotation).add(reel.group.position),
+  ]);
+  ownedGeometries.add(spindleGeo);
+  const spindleLine = new THREE.Line(spindleGeo, new THREE.LineBasicMaterial({ color: "#00E5FF" }));
+  helpersGroup.add(spindleLine);
+
+  // Gate Boundary Helper (Green outline)
+  const gateBoxGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.70, 0.556, 0.05),
+    new THREE.Vector3(1.10, 0.556, 0.05),
+    new THREE.Vector3(1.10, -0.456, 0.05),
+    new THREE.Vector3(-0.70, -0.456, 0.05),
+    new THREE.Vector3(-0.70, 0.556, 0.05),
+  ]);
+  ownedGeometries.add(gateBoxGeo);
+  const gateBox = new THREE.Line(gateBoxGeo, new THREE.LineBasicMaterial({ color: "#00E676" }));
+  helpersGroup.add(gateBox);
+
+  const toggleHelpers = (visible?: boolean): boolean => {
+    helpersGroup.visible = visible ?? !helpersGroup.visible;
+    renderer.render(scene, camera);
+    return helpersGroup.visible;
+  };
+
+  // 8. Time & Sequence State
   let activeTime = 0.0;
   let currentSample: SequenceSample = sampleSequence(0.0);
 
-  // Prime the initial frame alignment
   filmSystem.updateTransport(0.0);
   atlas.update(currentSample);
   isReady = true;
@@ -135,21 +167,20 @@ export function createGoldenReelScene(
       activeTime += dt;
     }
 
-    // Sample deterministic sequence state
     currentSample = sampleSequence(activeTime);
 
     // Update 2D silhouette animation on active frame
     atlas.update(currentSample);
 
-    // Synchronize film transport through the viewing gate
+    // Synchronize film transport through viewing gate
     filmSystem.updateTransport(currentSample.transportInFrames);
 
-    // Synchronize reel rotation derived from actual travelled distance
+    // Synchronize reel rotation derived from unwrapped travelled distance
     const filmDistance = currentSample.transportInFrames * filmSystem.framePitch;
     const reelAngle = initialReelAngle - filmDistance / reel.effectiveWindingRadius;
-    reel.rotatingPart.rotation.z = reelAngle;
+    reel.rotatingSpool.rotation.z = reelAngle;
 
-    // Subtle pointer parallax (restrained, does not disrupt mechanical transport)
+    // Subtle pointer parallax
     const parallaxX = pointer.x * (isMobile ? 0.05 : 0.16);
     const parallaxY = pointer.y * (isMobile ? 0.03 : 0.10);
 
@@ -175,7 +206,7 @@ export function createGoldenReelScene(
     filmSystem.updateTransport(currentSample.transportInFrames);
     const filmDistance = currentSample.transportInFrames * filmSystem.framePitch;
     const reelAngle = initialReelAngle - filmDistance / reel.effectiveWindingRadius;
-    reel.rotatingPart.rotation.z = reelAngle;
+    reel.rotatingSpool.rotation.z = reelAngle;
     renderer.render(scene, camera);
   };
 
@@ -222,10 +253,10 @@ export function createGoldenReelScene(
     atlas,
     update,
     seekTime,
+    toggleHelpers,
     dispose,
     isReady: () => isReady,
     getActiveTime: () => activeTime,
     getSequenceSample: () => currentSample,
   };
 }
-

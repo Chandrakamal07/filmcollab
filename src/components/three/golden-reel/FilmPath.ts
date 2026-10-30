@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FRAME_COUNT } from "./silhouette-atlas";
+import { ReelGeometryParameters } from "./ReelGeometry";
 
 export interface FilmSystem {
   group: THREE.Group;
@@ -14,19 +15,45 @@ export interface FilmSystem {
   dispose: () => void;
 }
 
-export function createFilmSystem(atlasTexture: THREE.CanvasTexture): FilmSystem {
+/**
+ * Calculates the two tangent points on a 2D circle from an external point.
+ */
+export function calculateCircleTangents(
+  externalPoint: THREE.Vector2,
+  radius: number
+): [THREE.Vector2, THREE.Vector2] {
+  const distanceSquared = externalPoint.lengthSq();
+  if (distanceSquared <= radius * radius) {
+    throw new Error("Guide point must be outside the winding circle");
+  }
+
+  const base = externalPoint.clone().multiplyScalar((radius * radius) / distanceSquared);
+  const perpendicular = new THREE.Vector2(-externalPoint.y, externalPoint.x);
+  const factor = (radius * Math.sqrt(distanceSquared - radius * radius)) / distanceSquared;
+
+  return [
+    base.clone().addScaledVector(perpendicular, factor),
+    base.clone().addScaledVector(perpendicular, -factor),
+  ];
+}
+
+export function createFilmSystem(
+  atlasTexture: THREE.CanvasTexture,
+  reelGroup: THREE.Group,
+  reelParams: ReelGeometryParameters
+): FilmSystem {
   const group = new THREE.Group();
+  group.name = "filmSystem";
 
   const ownedGeometries: THREE.BufferGeometry[] = [];
   const ownedMaterials: THREE.Material[] = [];
 
   // Frame dimensions in 3D world units (16:9 widescreen cinematic gate)
-  const frameWidth = 2.00;
-  const frameHeight = 1.125;
-  const framePitch = frameWidth; // exact 1-to-1 frame pitch
+  const gateWidth = 1.80;
+  const gateHeight = 1.0125; // exact 16:9 ratio (1.80 / 1.0125 = 1.777)
+  const framePitch = gateWidth; // exact 1-to-1 frame pitch
 
   // 1. Filmstrip Material
-  // MeshBasicMaterial with toneMapped: false so the silhouettes and warm backlight glow are rich and unwashed
   const filmMaterial = new THREE.MeshBasicMaterial({
     map: atlasTexture,
     toneMapped: false,
@@ -37,74 +64,144 @@ export function createFilmSystem(atlasTexture: THREE.CanvasTexture): FilmSystem 
   });
   ownedMaterials.push(filmMaterial);
 
-  // Set repeat for atlas: each frame is 1 / FRAME_COUNT width
   atlasTexture.repeat.set(1 / FRAME_COUNT, 1);
   atlasTexture.offset.set(0, 0);
 
-  // 2. Filmstrip Path & Ribbon Geometry
-  // The path curves from lower shadow -> lower roller -> horizontal viewing gate -> upper roller -> reel spool
-  // Viewing gate is from x = 0.00 to x = 2.00 at y = 0.05, z = 0.05 (prominent, flat, un-twisted)
-  const curvePoints = [
-    new THREE.Vector3(-0.45, -0.95, -0.30), // 0: Lower take-up area (shadow)
-    new THREE.Vector3(-0.18, -0.38, -0.10), // 1: Lower tension roller
-    new THREE.Vector3(0.00, 0.05, 0.05),    // 2: Entering viewing gate
-    new THREE.Vector3(1.00, 0.05, 0.05),    // 3: CENTER OF VIEWING GATE (flat, prominent)
-    new THREE.Vector3(2.00, 0.05, 0.05),    // 4: Leaving viewing gate
-    new THREE.Vector3(2.18, 0.50, -0.15),   // 5: Upper guide roller
-    new THREE.Vector3(2.35, 1.05, -0.38),   // 6: Tangent to Golden Reel spool
+  // =========================================================
+  // 2. Guide Roller Positions & Departure Tangent Calculation
+  // =========================================================
+  const upperRollerRadius = 0.12;
+  const upperRollerPos = new THREE.Vector3(1.30, 0.75, -0.15);
+
+  const lowerRollerRadius = 0.10;
+  const lowerRollerPos = new THREE.Vector3(-0.95, -0.38, -0.10);
+
+  // Calculate tangent departure from reel in reel-local coordinates
+  reelGroup.updateWorldMatrix(true, false);
+  const guideInReel = reelGroup.worldToLocal(upperRollerPos.clone());
+  const guide2D = new THREE.Vector2(guideInReel.x, guideInReel.y);
+
+  const candidates = calculateCircleTangents(guide2D, reelParams.windingRadius);
+  // Select the upper tangent point exiting towards the guide roller
+  const chosenLocal = candidates[0].y > candidates[1].y ? candidates[0] : candidates[1];
+
+  // Local departure point is at Z = 0 (centered between the front and rear flanges)
+  const exitInReel = new THREE.Vector3(chosenLocal.x, chosenLocal.y, 0.0);
+  const spoolExitWorld = reelGroup.localToWorld(exitInReel.clone());
+
+  // Spool tangent departure direction
+  const spoolDepartureDir = upperRollerPos.clone().sub(spoolExitWorld).normalize();
+
+  // Width direction at spool matches reel's local spindle axis (Z in reel local space)
+  const spoolWidthDir = new THREE.Vector3(0, 0, 1).applyQuaternion(reelGroup.quaternion).normalize();
+  const spoolWidth = reelParams.filmPackWidth; // 0.126m
+
+  // =========================================================
+  // 3. Piecewise Path Construction
+  // Spool Tangent -> Upper Roller Arc -> Transition -> Viewing Gate -> Lower Roller Arc -> Outgoing
+  // =========================================================
+  const gateStartX = -0.70;
+  const gateEndX = 1.10;
+  const gateY = 0.05;
+  const gateZ = 0.05;
+
+  const gateStart = new THREE.Vector3(gateStartX, gateY, gateZ);
+  const gateEnd = new THREE.Vector3(gateEndX, gateY, gateZ);
+
+  // Upper roller contact tangent points
+  const upperContactIn = upperRollerPos.clone().add(new THREE.Vector3(0, upperRollerRadius, 0));
+  const upperContactOut = upperRollerPos.clone().add(new THREE.Vector3(-upperRollerRadius * 0.7, upperRollerRadius * 0.7, 0.05));
+
+  // Lower roller contact tangent points
+  const lowerContactIn = lowerRollerPos.clone().add(new THREE.Vector3(lowerRollerRadius * 0.5, lowerRollerRadius * 0.8, 0.02));
+  const lowerContactOut = lowerRollerPos.clone().add(new THREE.Vector3(-lowerRollerRadius, 0, -0.05));
+  const outgoingEnd = new THREE.Vector3(-1.25, -0.90, -0.28);
+
+  // Explicit path definition from lower outgoing to spool
+  // Parameterized from left (-X, outgoing) to right (+X, spool)
+  const controlPoints = [
+    outgoingEnd,                                            // 0: take-up shadow
+    lowerContactOut,                                        // 1: leaving lower roller
+    lowerRollerPos.clone().add(new THREE.Vector3(0, -lowerRollerRadius * 0.2, -0.05)), // 2: around lower roller
+    lowerContactIn,                                         // 3: entering lower roller
+    gateStart.clone().add(new THREE.Vector3(-0.12, -0.15, -0.02)), // 4: transition into gate
+    gateStart,                                              // 5: GATE START (-0.70, 0.05, 0.05)
+    new THREE.Vector3((gateStartX + gateEndX) * 0.5, gateY, gateZ), // 6: GATE CENTER (0.20, 0.05, 0.05)
+    gateEnd,                                                // 7: GATE END (1.10, 0.05, 0.05)
+    upperContactOut,                                        // 8: leaving upper roller
+    upperContactIn,                                         // 9: contact top of upper roller
+    spoolExitWorld,                                         // 10: SPOOL EXIT (tangent on winding circumference)
   ];
 
-  const curve = new THREE.CatmullRomCurve3(curvePoints, false, "centripetal", 0.4);
+  const curve = new THREE.CatmullRomCurve3(controlPoints, false, "centripetal", 0.35);
 
-  const segments = 120;
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
+  const segments = 160;
   const points = curve.getPoints(segments);
 
-  // Calculate cumulative arc lengths along the sampled points
+  // Calculate cumulative arc length along sampled points
   const cumDist: number[] = [0];
   for (let i = 1; i <= segments; i++) {
     cumDist[i] = cumDist[i - 1] + points[i].distanceTo(points[i - 1]);
   }
 
-  // Find the exact arc length at the start of the viewing gate (where x crosses 0.00)
-  let gateStartDist = 0;
+  // Find exact sample index corresponding to gateStart
+  let gateStartIndex = 0;
   for (let i = 0; i < segments; i++) {
-    if (points[i].x <= 0.00 && points[i + 1].x >= 0.00) {
-      const frac = (0.00 - points[i].x) / Math.max(points[i + 1].x - points[i].x, 0.001);
-      gateStartDist = cumDist[i] + frac * (cumDist[i + 1] - cumDist[i]);
+    if (points[i].x <= gateStartX && points[i + 1].x >= gateStartX) {
+      gateStartIndex = i;
       break;
     }
   }
+  const gateStartDist = cumDist[gateStartIndex];
 
-  const refNormal = new THREE.Vector3(0, 0, 1);
+  // Ribbon Vertex Attributes
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  const viewingWidthDir = new THREE.Vector3(0, 1, 0); // Along +Y in viewing gate
 
   for (let i = 0; i <= segments; i++) {
     const pt = points[i];
     const t = i / segments;
     const tangent = curve.getTangent(t).normalize();
 
-    // Binormal perpendicular to reference normal and tangent
-    let binormal = new THREE.Vector3().crossVectors(refNormal, tangent).normalize();
-    if (binormal.lengthSq() < 0.1) {
-      binormal = new THREE.Vector3(0, 1, 0);
-    }
-    // Ensure binormal points generally upwards (+Y)
-    if (binormal.y < 0) {
-      binormal.negate();
+    // Determine ribbon width and orientation:
+    // In gate: width = gateHeight (1.0125), direction = +Y
+    // At spool: width = spoolWidth (0.126), direction = spoolWidthDir
+    let currentWidth = gateHeight;
+    const widthDir = viewingWidthDir.clone();
+
+    if (pt.x > gateEndX) {
+      // Transition between gate end and spool
+      const span = Math.max(spoolExitWorld.x - gateEndX, 0.1);
+      const frac = THREE.MathUtils.clamp((pt.x - gateEndX) / span, 0, 1);
+      const ease = frac * frac * (3 - 2 * frac);
+
+      // Width gradually widens/narrows
+      currentWidth = THREE.MathUtils.lerp(gateHeight, spoolWidth, ease);
+      // Direction gradually rotates between +Y and spool spindle axis
+      widthDir.lerp(spoolWidthDir, ease).normalize();
+    } else if (pt.x < gateStartX) {
+      // Transition from gate start down to lower take-up
+      const span = Math.max(gateStartX - outgoingEnd.x, 0.1);
+      const frac = THREE.MathUtils.clamp((gateStartX - pt.x) / span, 0, 1);
+      const ease = frac * frac * (3 - 2 * frac);
+
+      currentWidth = THREE.MathUtils.lerp(gateHeight, spoolWidth * 1.5, ease);
+      widthDir.lerp(new THREE.Vector3(0.3, 0.95, -0.1), ease).normalize();
     }
 
-    const topPt = pt.clone().addScaledVector(binormal, frameHeight * 0.5);
-    const btmPt = pt.clone().addScaledVector(binormal, -frameHeight * 0.5);
+    const halfW = currentWidth * 0.5;
+    const topPt = pt.clone().addScaledVector(widthDir, halfW);
+    const btmPt = pt.clone().addScaledVector(widthDir, -halfW);
 
     positions.push(topPt.x, topPt.y, topPt.z);
     positions.push(btmPt.x, btmPt.y, btmPt.z);
 
-    // UVs: u advances along ribbon length (1.0 = 1 frame pitch = frameWidth)
-    // topPt: v = 1 (top of canvas, heads, top sprocket holes)
-    // btmPt: v = 0 (bottom of canvas, feet on ground, bottom sprocket holes)
+    // UVs: u advances along ribbon length with exact 1-to-1 gate registration
+    // topPt: v = 1 (top of frame, heads, top sprocket holes)
+    // btmPt: v = 0 (bottom of frame, ground, bottom sprocket holes)
     const u = (cumDist[i] - gateStartDist) / framePitch;
     uvs.push(u, 1);
     uvs.push(u, 0);
@@ -130,7 +227,9 @@ export function createFilmSystem(atlasTexture: THREE.CanvasTexture): FilmSystem 
   const filmMesh = new THREE.Mesh(filmGeo, filmMaterial);
   group.add(filmMesh);
 
-  // 3. Brass Guide Rollers
+  // =========================================================
+  // 4. Brass Guide Rollers (Oriented to match film width at contact)
+  // =========================================================
   const rollerBrassMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#C8A258"),
     metalness: 0.90,
@@ -138,39 +237,40 @@ export function createFilmSystem(atlasTexture: THREE.CanvasTexture): FilmSystem 
   });
   ownedMaterials.push(rollerBrassMat);
 
-  const upperRollerRadius = 0.14;
-  const lowerRollerRadius = 0.12;
-  const rollerWidth = frameHeight * 1.08;
-
-  // Upper Roller Geometry
-  const upperGeo = new THREE.CylinderGeometry(upperRollerRadius, upperRollerRadius, rollerWidth, 24);
-  upperGeo.rotateX(Math.PI / 2);
+  const upperRollerWidth = 0.28;
+  const upperGeo = new THREE.CylinderGeometry(upperRollerRadius, upperRollerRadius, upperRollerWidth, 24);
   ownedGeometries.push(upperGeo);
 
   const upperRoller = new THREE.Mesh(upperGeo, rollerBrassMat);
-  upperRoller.position.set(2.18, 0.50, -0.15);
+  upperRoller.position.copy(upperRollerPos);
+  // Align cylinder local axis (Y) with film width vector at upper contact
+  const upperContactWidth = spoolWidthDir.clone().lerp(viewingWidthDir, 0.4).normalize();
+  upperRoller.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), upperContactWidth);
   group.add(upperRoller);
 
-  // Lower Roller Geometry
-  const lowerGeo = new THREE.CylinderGeometry(lowerRollerRadius, lowerRollerRadius, rollerWidth, 24);
-  lowerGeo.rotateX(Math.PI / 2);
+  const lowerRollerWidth = 0.32;
+  const lowerGeo = new THREE.CylinderGeometry(lowerRollerRadius, lowerRollerRadius, lowerRollerWidth, 24);
   ownedGeometries.push(lowerGeo);
 
   const lowerRoller = new THREE.Mesh(lowerGeo, rollerBrassMat);
-  lowerRoller.position.set(-0.18, -0.38, -0.10);
+  lowerRoller.position.copy(lowerRollerPos);
+  // Align cylinder local axis (Y) with film width vector at lower contact
+  const lowerContactWidth = viewingWidthDir.clone().lerp(new THREE.Vector3(0.3, 0.95, -0.1), 0.5).normalize();
+  lowerRoller.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), lowerContactWidth);
   group.add(lowerRoller);
 
-  // 4. Update Transport Sync
+  // =========================================================
+  // 5. Update Transport Sync (6-Frame repeating atlas)
+  // =========================================================
   const updateTransport = (transportInFrames: number) => {
-    // Advances exactly 1 frame (1/FRAME_COUNT in atlas UV space) per frame transported
-    const frameFraction = 1 / FRAME_COUNT;
-    const uOffset = (transportInFrames * frameFraction) % 1.0;
-    atlasTexture.offset.x = uOffset;
+    // 6-frame repeating atlas offset
+    const wrappedFrames = THREE.MathUtils.euclideanModulo(transportInFrames, FRAME_COUNT);
+    atlasTexture.offset.x = wrappedFrames / FRAME_COUNT;
 
-    // Rollers rotate synchronously with distance traveled
+    // Rollers rotate synchronously with unwrapped travelled distance
     const distance = transportInFrames * framePitch;
-    upperRoller.rotation.z = distance / upperRollerRadius;
-    lowerRoller.rotation.z = -distance / lowerRollerRadius;
+    upperRoller.rotation.y = distance / upperRollerRadius;
+    lowerRoller.rotation.y = -distance / lowerRollerRadius;
   };
 
   const dispose = () => {

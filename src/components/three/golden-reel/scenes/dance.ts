@@ -1,21 +1,25 @@
 import { GenreDefinition } from "../types";
+import { CharacterPose } from "./rig/pose-types";
+import { drawCharacterSilhouette } from "./rig/draw-silhouette";
+import { smootherstep } from "./rig/sample-pose";
 
 export const danceScene: GenreDefinition = {
   id: "dance",
   title: "Romance / Musical",
   render: (ctx: CanvasRenderingContext2D, width: number, height: number, progress: number) => {
     const groundY = height * 0.82;
+    const charHeight = height * 0.54;
     const centerX = width * 0.50;
 
     ctx.save();
 
-    // Warm romantic rose-gold sunset backlight
+    // Warm romantic sunset / amber rose backlight
     const bgGrad = ctx.createRadialGradient(
       centerX,
       height * 0.45,
       width * 0.05,
       centerX,
-      height * 0.52,
+      height * 0.50,
       width * 0.65
     );
     bgGrad.addColorStop(0, "#FFF5EB");
@@ -25,159 +29,115 @@ export const danceScene: GenreDefinition = {
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Warm stage floor
+    // Warm wooden stage floor
     ctx.fillStyle = "#110E12";
-    ctx.beginPath();
-    ctx.rect(0, groundY, width, height - groundY);
-    ctx.fill();
+    ctx.fillRect(0, groundY, width, height - groundY);
 
-    // Silhouettes in rich charcoal
-    ctx.fillStyle = "#0C0A0E";
-    ctx.strokeStyle = "#0C0A0E";
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    // Timing breakdown:
+    // 0.00 - 0.25: Approach with steps, reach out and clasp hands at shared target
+    // 0.25 - 0.65: Full coordinated 360-degree spin turn with shared hands target
+    // 0.65 - 1.00: Lead lunges onto planted support foot; Follower extends into ballroom dip
+    let leadX = centerX - width * 0.16;
+    let followX = centerX + width * 0.16;
+    let leadFacing: 1 | -1 = 1;
+    let followFacing: 1 | -1 = -1;
+    let dipProgress = 0;
+    let spinAngle = 0;
 
-    // Timing phases:
-    // 0.0 - 0.25: Walk toward each other, reach out
-    // 0.25 - 0.70: Join hands, perform full graceful spinning turn
-    // 0.70 - 1.00: Settle into deep elegant dip / ballroom extension pose
-
-    const dX = centerX;
-    let turnAngle = 0;
-    let dipAmount = 0;
-    let separation = 0;
+    // Shared hands clasping target in canvas coordinates
+    let sharedHandsX = (leadX + followX) * 0.5;
+    let sharedHandsY = groundY - charHeight * 0.48;
 
     if (progress < 0.25) {
-      const p = progress / 0.25;
-      separation = (1 - p) * width * 0.28 + width * 0.12;
-      turnAngle = 0;
-      dipAmount = 0;
-    } else if (progress < 0.70) {
-      const p = (progress - 0.25) / 0.45;
-      separation = width * 0.12;
-      turnAngle = p * Math.PI * 2; // full 360 degree spin
-      dipAmount = 0;
+      const p = smootherstep(progress / 0.25);
+      leadX = centerX - width * (0.24 - 0.10 * p);
+      followX = centerX + width * (0.24 - 0.10 * p);
+      sharedHandsX = (leadX + followX) * 0.5;
+      sharedHandsY = groundY - charHeight * (0.42 + 0.06 * p);
+    } else if (progress < 0.65) {
+      const p = (progress - 0.25) / 0.40;
+      spinAngle = p * Math.PI * 2; // full 360 degree spin
+      const orbitR = width * 0.08;
+      leadX = centerX - Math.cos(spinAngle) * orbitR;
+      followX = centerX + Math.cos(spinAngle) * orbitR;
+      leadFacing = Math.cos(spinAngle) >= 0 ? 1 : -1;
+      followFacing = Math.cos(spinAngle) >= 0 ? -1 : 1;
+      sharedHandsX = centerX;
+      sharedHandsY = groundY - charHeight * 0.48;
     } else {
-      const p = (progress - 0.70) / 0.30;
-      const ease = Math.sin(p * Math.PI * 0.5);
-      separation = width * 0.12 + ease * width * 0.06;
-      turnAngle = Math.PI * 2;
-      dipAmount = ease;
+      const p = smootherstep((progress - 0.65) / 0.35);
+      dipProgress = p;
+      leadX = centerX - width * 0.07;
+      followX = centerX + width * (0.07 + 0.07 * p);
+      leadFacing = 1;
+      followFacing = -1;
+      sharedHandsX = leadX + width * 0.07;
+      sharedHandsY = groundY - charHeight * (0.48 - 0.12 * p);
     }
 
-    const leadX = dX - separation * 0.5 * Math.cos(turnAngle);
-    const followX = dX + separation * 0.5 * Math.cos(turnAngle);
-    const leadZ = Math.sin(turnAngle); // for z-order layering during spin
-    const followZ = -leadZ;
-
-    // Helper for lead (male in tailcoat/tuxedo)
-    const drawLead = () => {
-      ctx.save();
-      ctx.translate(leadX, groundY);
-
-      const lean = dipAmount * -0.15;
-      ctx.rotate(lean);
-
-      // Head with fedora/hairline
-      ctx.beginPath();
-      ctx.arc(0, -height * 0.44, height * 0.046, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Slender tailored torso / waistcoat
-      ctx.lineWidth = width * 0.038;
-      ctx.beginPath();
-      ctx.moveTo(0, -height * 0.38);
-      ctx.lineTo(width * 0.01, -height * 0.20);
-      ctx.stroke();
-
-      // Tailcoat tails
-      ctx.lineWidth = width * 0.022;
-      ctx.beginPath();
-      ctx.moveTo(0, -height * 0.22);
-      ctx.quadraticCurveTo(-width * 0.05, -height * 0.14, -width * 0.07, -height * 0.06);
-      ctx.stroke();
-
-      // Legs in ballroom stride
-      ctx.lineWidth = width * 0.028;
-      ctx.beginPath();
-      ctx.moveTo(width * 0.01, -height * 0.20);
-      ctx.lineTo(-width * 0.04 - dipAmount * width * 0.04, -height * 0.10);
-      ctx.lineTo(-width * 0.06 - dipAmount * width * 0.06, 0);
-
-      ctx.moveTo(width * 0.01, -height * 0.20);
-      ctx.lineTo(width * 0.04, -height * 0.08);
-      ctx.lineTo(width * 0.05, 0);
-      ctx.stroke();
-
-      // Lead Arms (supporting partner's waist and holding hand)
-      ctx.lineWidth = width * 0.022;
-      ctx.beginPath();
-      ctx.moveTo(0, -height * 0.36);
-      ctx.lineTo(width * 0.07, -height * 0.26);
-      ctx.lineTo(width * 0.12, -height * 0.24); // Hand to partner waist
-      ctx.moveTo(0, -height * 0.36);
-      ctx.lineTo(-width * 0.04, -height * 0.30);
-      ctx.lineTo(width * 0.06, -height * 0.38); // Raised clasped hand
-      ctx.stroke();
-
-      ctx.restore();
+    // =========================================================
+    // LEAD (Tuxedo, Male Partner)
+    // =========================================================
+    const leadSpine = dipProgress > 0 ? 0.28 * dipProgress : 0.05;
+    const leadPose: CharacterPose = {
+      root: { x: leadX, y: groundY - charHeight * (0.46 - 0.06 * dipProgress) },
+      characterHeight: charHeight,
+      facing: leadFacing,
+      spineAngle: leadSpine,
+      // Left leg (back) planted
+      leftHipAngle: dipProgress > 0 ? 0.35 : -0.15,
+      leftKneeAngle: dipProgress > 0 ? 0.45 : 0.20,
+      leftFootAngle: 0,
+      // Right leg (front) lunge
+      rightHipAngle: dipProgress > 0 ? -0.45 : 0.15,
+      rightKneeAngle: dipProgress > 0 ? 0.60 : 0.20,
+      rightFootAngle: 0,
+      // Hands locked to shared clasp target
+      rightHandTarget: { x: sharedHandsX, y: sharedHandsY },
+      rightElbowBend: 1,
+      leftShoulderAngle: -0.4,
+      leftElbowAngle: 0.8,
+      clothing: { type: "tuxedo" },
     };
 
-    // Helper for follow (female in flowing gown)
-    const drawFollow = () => {
-      ctx.save();
-      ctx.translate(followX, groundY);
-
-      const arch = dipAmount * 0.55; // arch back during dip
-      ctx.rotate(arch);
-
-      // Head with chignon
-      ctx.beginPath();
-      ctx.arc(0, -height * 0.41, height * 0.042, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Slim bodice
-      ctx.lineWidth = width * 0.030;
-      ctx.beginPath();
-      ctx.moveTo(0, -height * 0.36);
-      ctx.lineTo(-width * 0.01, -height * 0.20);
-      ctx.stroke();
-
-      // Flowing Ballgown skirt flare
-      ctx.beginPath();
-      ctx.moveTo(-width * 0.01, -height * 0.20);
-      const skirtWave = Math.sin(turnAngle * 2) * width * 0.04;
-      ctx.quadraticCurveTo(
-        width * 0.08 + skirtWave,
-        -height * 0.10,
-        width * 0.12 + skirtWave * 1.5,
-        0
-      );
-      ctx.lineTo(-width * 0.08, 0);
-      ctx.quadraticCurveTo(-width * 0.05, -height * 0.10, -width * 0.01, -height * 0.20);
-      ctx.fill();
-
-      // Arms: one on lead's shoulder, one raised in hand clasp
-      ctx.lineWidth = width * 0.020;
-      ctx.beginPath();
-      ctx.moveTo(0, -height * 0.34);
-      ctx.lineTo(-width * 0.06, -height * 0.28);
-      ctx.lineTo(-width * 0.10, -height * 0.34); // On lead shoulder
-      ctx.moveTo(0, -height * 0.34);
-      ctx.lineTo(width * 0.05, -height * 0.32);
-      ctx.lineTo(-width * 0.04, -height * 0.40); // Clasped high
-      ctx.stroke();
-
-      ctx.restore();
+    // =========================================================
+    // FOLLOWER (Gown, Female Partner)
+    // =========================================================
+    // During dip, spine arches gracefully back around hips
+    const followSpine = dipProgress > 0 ? -0.75 * dipProgress : -0.05;
+    const followPose: CharacterPose = {
+      root: { x: followX, y: groundY - charHeight * (0.45 - 0.14 * dipProgress) },
+      characterHeight: charHeight * 0.94,
+      facing: followFacing,
+      spineAngle: followSpine,
+      headAngle: dipProgress > 0 ? -0.35 * dipProgress : 0,
+      // Planted support foot
+      rightHipAngle: dipProgress > 0 ? -0.20 : 0.15,
+      rightKneeAngle: dipProgress > 0 ? 0.35 : 0.20,
+      rightFootAngle: 0,
+      // Extended leg in ballroom dip
+      leftHipAngle: dipProgress > 0 ? 0.65 : -0.15,
+      leftKneeAngle: dipProgress > 0 ? 0.15 : 0.20,
+      leftFootAngle: dipProgress > 0 ? 0.4 : 0,
+      // Hands clasp with partner
+      leftHandTarget: { x: sharedHandsX, y: sharedHandsY },
+      leftElbowBend: -1,
+      rightShoulderAngle: dipProgress > 0 ? 0.85 : 0.2,
+      rightElbowAngle: dipProgress > 0 ? 0.3 : 0.4,
+      clothing: {
+        type: "gown",
+        dressDip: dipProgress,
+        dressAngle: dipProgress * 0.3,
+      },
     };
 
-    // Render with correct depth order during turn
-    if (leadZ >= 0) {
-      drawFollow();
-      drawLead();
+    // Z-layering: during spin, one partner passes in front of the other
+    if (spinAngle > Math.PI * 0.5 && spinAngle < Math.PI * 1.5) {
+      drawCharacterSilhouette(ctx, leadPose);
+      drawCharacterSilhouette(ctx, followPose);
     } else {
-      drawLead();
-      drawFollow();
+      drawCharacterSilhouette(ctx, followPose);
+      drawCharacterSilhouette(ctx, leadPose);
     }
 
     ctx.restore();

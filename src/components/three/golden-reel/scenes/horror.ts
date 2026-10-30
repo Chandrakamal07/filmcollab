@@ -1,220 +1,183 @@
 import { GenreDefinition } from "../types";
+import { CharacterPose } from "./rig/pose-types";
+import { drawCharacterSilhouette } from "./rig/draw-silhouette";
+import { smootherstep } from "./rig/sample-pose";
 
 export const horrorScene: GenreDefinition = {
   id: "horror",
   title: "Horror / Suspense",
   render: (ctx: CanvasRenderingContext2D, width: number, height: number, progress: number) => {
-    const floorY = height * 0.82;
-    const doorX = width * 0.72;
+    const groundY = height * 0.82;
+    const charHeight = height * 0.54;
 
     ctx.save();
 
-    // Eerie monochromatic pale-green/amber backlight
+    // Cold gothic moonlight with sickly greenish-amber ambient tone
     const bgGrad = ctx.createRadialGradient(
-      doorX,
-      height * 0.45,
+      width * 0.60,
+      height * 0.40,
       width * 0.05,
-      doorX,
-      height * 0.50,
-      width * 0.70
+      width * 0.55,
+      height * 0.45,
+      width * 0.65
     );
-    bgGrad.addColorStop(0, "#F2E8DC");
-    bgGrad.addColorStop(0.35, "#D8C7B0");
-    bgGrad.addColorStop(0.70, "#6E685C");
-    bgGrad.addColorStop(1, "#181A16");
+    bgGrad.addColorStop(0, "#DDF5E6");
+    bgGrad.addColorStop(0.35, "#8EBAA0");
+    bgGrad.addColorStop(0.70, "#375442");
+    bgGrad.addColorStop(1, "#101F16");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Dark gothic corridor floor
-    ctx.fillStyle = "#0A0B09";
-    ctx.fillRect(0, floorY, width, height - floorY);
-
-    // Gothic door frame / arch
+    // Gothic Stone Wall with Arched Doorway on the right
+    const doorX = width * 0.65;
     const doorW = width * 0.22;
-    const doorH = height * 0.58;
-    const doorTop = floorY - doorH;
+    const doorH = height * 0.62;
+    const doorY = groundY - doorH;
 
-    // Door wall silhouette
-    ctx.fillStyle = "#0C0E0B";
-    ctx.fillRect(doorX - doorW * 0.1, 0, width - (doorX - doorW * 0.1), height);
-
-    // Archway cutout opening (illuminated from within)
-    const doorLightGrad = ctx.createLinearGradient(doorX, 0, doorX + doorW, 0);
-    doorLightGrad.addColorStop(0, "#F5EFE6");
-    doorLightGrad.addColorStop(1, "#D6C7B2");
-    ctx.fillStyle = doorLightGrad;
+    // Stone doorway arch frame
+    ctx.fillStyle = "#0A0D0A";
     ctx.beginPath();
-    ctx.moveTo(doorX, floorY);
-    ctx.lineTo(doorX, doorTop + doorW * 0.5);
-    ctx.arc(doorX + doorW * 0.5, doorTop + doorW * 0.5, doorW * 0.5, Math.PI, 0);
-    ctx.lineTo(doorX + doorW, floorY);
-    ctx.closePath();
+    ctx.rect(doorX - 10, doorY, doorW + 20, doorH);
+    ctx.arc(doorX + doorW * 0.5, doorY, doorW * 0.5 + 10, Math.PI, 0);
     ctx.fill();
 
-    // Door panel opening inward: angle progresses from 0 to 0.75
-    // 0.0 - 0.40: door opens slowly
-    let doorOpen = 0;
-    if (progress < 0.40) {
-      doorOpen = (progress / 0.40) * 0.85;
-    } else {
-      doorOpen = 0.85;
+    // Door opening perspective:
+    // 0.00 - 0.35: Closed door with cracked seam
+    // 0.35 - 0.65: Door creaks open inwards
+    // 0.65 - 1.00: Door wide open into black void
+    let doorOpenFrac = 0;
+    if (progress >= 0.35 && progress < 0.65) {
+      doorOpenFrac = smootherstep((progress - 0.35) / 0.30);
+    } else if (progress >= 0.65) {
+      doorOpenFrac = 1.0;
     }
 
-    // Door slab silhouette
-    ctx.fillStyle = "#121511";
+    // Interior black void
+    ctx.fillStyle = "#020302";
     ctx.beginPath();
-    ctx.moveTo(doorX, floorY);
-    ctx.lineTo(doorX, doorTop);
-    const slabW = doorW * Math.cos(doorOpen);
-    ctx.lineTo(doorX + slabW, doorTop + height * 0.04 * Math.sin(doorOpen));
-    ctx.lineTo(doorX + slabW, floorY - height * 0.02 * Math.sin(doorOpen));
-    ctx.closePath();
+    ctx.rect(doorX, doorY, doorW, doorH);
+    ctx.arc(doorX + doorW * 0.5, doorY, doorW * 0.5, Math.PI, 0);
     ctx.fill();
 
-    // Timing of character and looming shadow:
-    // 0.0 - 0.45: Lone investigator creeps toward the doorway with flashlight/candle
-    // 0.45 - 0.75: Looming monstrous/tall shadow stretches across the doorway from within
-    // 0.75 - 1.00: Investigator freezes, recoils backward, dropping arm in horror
-
-    let charX = width * 0.28;
-    let charLean = 0.12; // creeping forward
-    let charArmAngle = 0;
-    let recoil = 0;
-
-    if (progress < 0.45) {
-      const p = progress / 0.45;
-      charX = width * 0.25 + p * width * 0.18;
-      charLean = 0.12;
-      charArmAngle = -0.15;
-    } else if (progress < 0.75) {
-      const p = (progress - 0.45) / 0.30;
-      charX = width * 0.43 - p * width * 0.04;
-      charLean = 0.12 - p * 0.30; // starts pulling back
-      charArmAngle = -0.15 - p * 0.35; // raises hand defensively
-      recoil = p;
-    } else {
-      const p = (progress - 0.75) / 0.25;
-      charX = width * 0.39 - p * width * 0.03;
-      charLean = -0.18; // recoiling back
-      charArmAngle = -0.50; // hands up in fright
-      recoil = 1.0;
+    // Door slab swinging open
+    if (doorOpenFrac < 1.0) {
+      const swingWidth = doorW * (1 - doorOpenFrac * 0.85);
+      ctx.fillStyle = "#162018";
+      ctx.fillRect(doorX, doorY, swingWidth, doorH);
     }
 
-    // Looming ominous shadow emerging through the doorway
-    if (progress > 0.35) {
-      const shadowP = Math.min((progress - 0.35) / 0.35, 1.0);
+    // Looming Shadow emerging from doorway
+    if (progress > 0.40) {
+      const shadowFrac = smootherstep((progress - 0.40) / 0.40);
       ctx.save();
-      ctx.fillStyle = "rgba(10, 12, 10, 0.88)";
-      ctx.translate(doorX + doorW * 0.45, floorY);
+      ctx.fillStyle = "rgba(4, 8, 5, 0.94)";
+      const shadowX = doorX + doorW * (0.25 - 0.15 * shadowFrac);
+      const shadowH = charHeight * (1.15 + 0.15 * shadowFrac);
+      const shadowY = groundY - shadowH;
 
-      // Elongated towering shadow body
-      const shadowHeight = height * 0.52 * shadowP;
+      // Tall shadowy torso and head
       ctx.beginPath();
-      // Ominous hooded / horned head
-      ctx.arc(0, -shadowHeight, height * 0.065, 0, Math.PI * 2);
+      ctx.ellipse(shadowX, shadowY + shadowH * 0.12, 18, 26, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Slender tall shoulders and looming torso
-      ctx.lineWidth = width * 0.065;
-      ctx.strokeStyle = "rgba(10, 12, 10, 0.90)";
       ctx.beginPath();
-      ctx.moveTo(0, -shadowHeight);
-      ctx.lineTo(0, 0);
-      ctx.stroke();
+      ctx.moveTo(shadowX - 25, shadowY + shadowH * 0.25);
+      ctx.lineTo(shadowX + 25, shadowY + shadowH * 0.25);
+      ctx.lineTo(shadowX + 35, groundY);
+      ctx.lineTo(shadowX - 35, groundY);
+      ctx.closePath();
+      ctx.fill();
 
-      // Long creeping fingers/arms extending into the room toward character
-      ctx.lineWidth = width * 0.022;
+      // Long reaching claw fingers
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(4, 8, 5, 0.94)";
       ctx.beginPath();
-      ctx.moveTo(-width * 0.03, -shadowHeight * 0.80);
-      ctx.lineTo(-width * 0.12 * shadowP, -shadowHeight * 0.60);
-      ctx.lineTo(-width * 0.18 * shadowP, -shadowHeight * 0.50);
-
-      ctx.moveTo(width * 0.02, -shadowHeight * 0.80);
-      ctx.lineTo(width * 0.08 * shadowP, -shadowHeight * 0.65);
+      ctx.moveTo(shadowX - 20, shadowY + shadowH * 0.30);
+      ctx.lineTo(shadowX - 60 * shadowFrac, shadowY + shadowH * (0.35 + 0.05 * shadowFrac));
       ctx.stroke();
-
       ctx.restore();
     }
 
-    // Draw Investigator Character
-    ctx.save();
-    ctx.translate(charX, floorY);
-    ctx.rotate(charLean);
+    // Ground floor with cobblestone line
+    ctx.fillStyle = "#0A0E0B";
+    ctx.fillRect(0, groundY, width, height - groundY);
 
-    ctx.fillStyle = "#0A0C09";
-    ctx.strokeStyle = "#0A0C09";
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    // =========================================================
+    // DETECTIVE (Investigator with Lantern)
+    // 0.00 - 0.40: Creeping forward step
+    // 0.40 - 0.70: Freezes as door opens
+    // 0.70 - 1.00: Controlled recoil step back, raising lantern
+    // =========================================================
+    let detX = width * 0.30;
+    let spineLean = 0.12; // creeping forward
+    let recoil = 0;
+    let walkPhase = 0;
 
-    // Head / fedora / hat
-    ctx.beginPath();
-    ctx.arc(0, -height * 0.40, height * 0.044, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Trenchcoat Torso
-    ctx.lineWidth = width * 0.038;
-    ctx.beginPath();
-    ctx.moveTo(0, -height * 0.35);
-    ctx.lineTo(0, -height * 0.18);
-    ctx.stroke();
-
-    // Coat flare
-    ctx.beginPath();
-    ctx.moveTo(-width * 0.02, -height * 0.20);
-    ctx.lineTo(width * 0.02, -height * 0.20);
-    ctx.lineTo(width * 0.04 - recoil * width * 0.03, -height * 0.06);
-    ctx.lineTo(-width * 0.04 - recoil * width * 0.03, -height * 0.06);
-    ctx.closePath();
-    ctx.fill();
-
-    // Creeping / Bracing Legs
-    ctx.lineWidth = width * 0.028;
-    ctx.beginPath();
-    if (recoil > 0.5) {
-      // Braced back in recoil
-      ctx.moveTo(0, -height * 0.18);
-      ctx.lineTo(-width * 0.07, -height * 0.08);
-      ctx.lineTo(-width * 0.10, 0);
-      ctx.moveTo(0, -height * 0.18);
-      ctx.lineTo(width * 0.03, -height * 0.09);
-      ctx.lineTo(width * 0.05, 0);
+    if (progress < 0.40) {
+      const p = progress / 0.40;
+      detX = width * (0.24 + 0.12 * p);
+      walkPhase = p * Math.PI * 2;
+      spineLean = 0.16;
+    } else if (progress < 0.70) {
+      detX = width * 0.36;
+      spineLean = 0.12;
+      walkPhase = 0;
     } else {
-      // Cautious forward step
-      ctx.moveTo(0, -height * 0.18);
-      ctx.lineTo(width * 0.04, -height * 0.09);
-      ctx.lineTo(width * 0.07, 0);
-      ctx.moveTo(0, -height * 0.18);
-      ctx.lineTo(-width * 0.04, -height * 0.09);
-      ctx.lineTo(-width * 0.06, 0);
+      recoil = smootherstep((progress - 0.70) / 0.30);
+      detX = width * (0.36 - 0.08 * recoil);
+      spineLean = 0.12 - 0.32 * recoil; // leaning back in shock
+      walkPhase = recoil * Math.PI;
     }
-    ctx.stroke();
 
-    // Arms: holding lantern / raising in dread
-    ctx.lineWidth = width * 0.022;
+    // Lantern coordinates held in front hand
+    const lanternX = detX + charHeight * (0.22 - 0.06 * recoil);
+    const lanternY = groundY - charHeight * (0.42 + 0.14 * recoil);
+
+    // Warm radial lantern glow illuminating the detective and stone
+    const glowGrad = ctx.createRadialGradient(
+      lanternX,
+      lanternY + 15,
+      4,
+      lanternX,
+      lanternY + 15,
+      120
+    );
+    glowGrad.addColorStop(0, "rgba(255, 225, 140, 0.35)");
+    glowGrad.addColorStop(0.5, "rgba(255, 200, 100, 0.12)");
+    glowGrad.addColorStop(1, "rgba(255, 180, 80, 0.0)");
+    ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.moveTo(0, -height * 0.33);
-    ctx.lineTo(width * 0.08, -height * 0.26 + charArmAngle * height * 0.25);
-    ctx.lineTo(width * 0.11, -height * 0.30 + charArmAngle * height * 0.35);
-    ctx.stroke();
+    ctx.arc(lanternX, lanternY + 15, 120, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Lantern hanging from hand
-    if (recoil < 0.6) {
-      const lanternX = width * 0.11;
-      const lanternY = -height * 0.30 + charArmAngle * height * 0.35;
-      ctx.fillStyle = "#FFDD99";
-      ctx.fillRect(lanternX - 3, lanternY + 6, 6, 9);
-      ctx.strokeStyle = "#0A0C09";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(lanternX - 3, lanternY + 6, 6, 9);
-      ctx.beginPath();
-      ctx.moveTo(lanternX, lanternY);
-      ctx.lineTo(lanternX, lanternY + 6);
-      ctx.stroke();
-    }
+    const detPose: CharacterPose = {
+      root: { x: detX, y: groundY - charHeight * 0.46 },
+      characterHeight: charHeight,
+      facing: 1,
+      spineAngle: spineLean,
+      headAngle: -spineLean * 0.5,
+      // Leg walk cycle with grounded foot placement
+      leftHipAngle: Math.sin(walkPhase) * 0.28,
+      leftKneeAngle: Math.max(0, -Math.sin(walkPhase) * 0.45),
+      leftFootAngle: 0,
+      rightHipAngle: -Math.sin(walkPhase) * 0.28,
+      rightKneeAngle: Math.max(0, Math.sin(walkPhase) * 0.45),
+      rightFootAngle: 0,
+      // Hand holding lantern
+      rightHandTarget: { x: lanternX, y: lanternY },
+      rightElbowBend: 1,
+      leftShoulderAngle: -0.3,
+      leftElbowAngle: 0.7,
+      clothing: {
+        type: "trenchcoat",
+        coatFlare: recoil * 0.4,
+        hatOnHead: true,
+        lanternPos: { x: lanternX, y: lanternY },
+      },
+    };
 
-    ctx.restore();
+    drawCharacterSilhouette(ctx, detPose);
 
     ctx.restore();
   },
 };
-
