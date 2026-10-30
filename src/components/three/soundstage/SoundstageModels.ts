@@ -1,5 +1,17 @@
 import * as THREE from "three";
 
+export const TRACK_CONFIG = {
+  centerX: 0,
+  centerZ: 0,
+  centerlineRadius: 2.35,
+  gauge: 0.65,
+  minAngle: THREE.MathUtils.degToRad(-66),
+  maxAngle: THREE.MathUtils.degToRad(66),
+  railTubeRadius: 0.022,
+  railHeight: 0.055,
+  wheelRadius: 0.055,
+};
+
 export function createDirectorChair(): THREE.Group {
   const chair = new THREE.Group();
   chair.name = "DirectorsChair";
@@ -172,7 +184,6 @@ export function createCameraRig(): THREE.Group {
   cameraRig.name = "CinemaCameraRig";
   cameraRig.userData = { componentId: "camera" };
 
-  // Calibrated materials: painted graphite body (low metalness, soft matte specular)
   const chassisMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color("#22252C"),
     metalness: 0.28,
@@ -181,9 +192,9 @@ export function createCameraRig(): THREE.Group {
   });
 
   const machinedSteelMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#686E7C"),
-    metalness: 0.88,
-    roughness: 0.22,
+    color: new THREE.Color("#788090"),
+    metalness: 0.9,
+    roughness: 0.2,
     name: "MachinedSteel",
   });
 
@@ -201,77 +212,130 @@ export function createCameraRig(): THREE.Group {
     name: "CoatedOpticalGlass",
   });
 
-  const rubberMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#1E2026"),
-    roughness: 0.85,
-    metalness: 0.08,
-    name: "RubberWheelsGrip",
+  const rubberWheelMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#15171C"),
+    roughness: 0.82,
+    metalness: 0.12,
+    name: "TrackDollyWheelRubber",
   });
 
-  // --- 1. DOLLY BASE PLATFORM ---
-  const dollyBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 1.1), chassisMat);
-  dollyBase.position.set(0, 0.12, 0);
-  cameraRig.add(dollyBase);
+  // --- 1. DOLLY CHASSIS ROOT ---
+  const dollyChassis = new THREE.Group();
+  dollyChassis.name = "DollyChassis";
+  cameraRig.add(dollyChassis);
 
-  // 4 Skate dolly wheel sets
-  for (const wx of [-0.4, 0.4]) {
-    for (const wz of [-0.42, 0.42]) {
-      const wheelPair = new THREE.Group();
-      wheelPair.position.set(wx, 0.06, wz);
+  // Platform deck: positioned at y = 0.14m (clearing wheels and rails)
+  const platform = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.06, 0.95), chassisMat);
+  platform.position.set(0, 0.14, 0);
+  dollyChassis.add(platform);
 
-      const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.18, 12), machinedSteelMat);
-      axle.rotateZ(Math.PI / 2);
-      wheelPair.add(axle);
-
-      for (const side of [-0.07, 0.07]) {
-        const tireGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.035, 16);
-        tireGeo.rotateZ(Math.PI / 2);
-        const tire = new THREE.Mesh(tireGeo, rubberMat);
-        tire.position.x = side;
-        wheelPair.add(tire);
-      }
-      cameraRig.add(wheelPair);
-    }
+  // Skid grip footpads on deck
+  for (const side of [-0.22, 0.22]) {
+    const pad = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.008, 0.75),
+      new THREE.MeshStandardMaterial({ color: "#16181E", roughness: 0.9 })
+    );
+    pad.position.set(side, 0.174, 0);
+    dollyChassis.add(pad);
   }
 
-  // --- 2. HYDRAULIC RISER COLUMN ---
-  const riserOuter = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.65, 24), chassisMat);
-  riserOuter.position.set(0, 0.48, 0);
-  cameraRig.add(riserOuter);
+  // --- 2. ARTICULATED WHEEL BOGIES ---
+  const wheelRadius = TRACK_CONFIG.wheelRadius;
+  const halfGauge = TRACK_CONFIG.gauge / 2;
+  const bogieOffsetZ = 0.28;
 
-  const riserInner = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 24), machinedSteelMat);
-  riserInner.position.set(0, 0.88, 0);
-  cameraRig.add(riserInner);
+  // Chord angle compensation for circular track curvature
+  const chordAngle = Math.asin(bogieOffsetZ / TRACK_CONFIG.centerlineRadius);
 
-  const columnLockRing = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 24), amberAccentMat);
-  columnLockRing.position.set(0, 0.78, 0);
-  cameraRig.add(columnLockRing);
+  // A. Front Bogie Assembly (Z = +0.28)
+  const frontBogie = new THREE.Group();
+  frontBogie.name = "Bogie_Front";
+  frontBogie.position.set(0, 0.11, bogieOffsetZ);
+  frontBogie.rotation.y = chordAngle;
+  dollyChassis.add(frontBogie);
 
-  // --- 3. FLUID HEAD PLATFORM ---
+  // B. Rear Bogie Assembly (Z = -0.28)
+  const rearBogie = new THREE.Group();
+  rearBogie.name = "Bogie_Rear";
+  rearBogie.position.set(0, 0.11, -bogieOffsetZ);
+  rearBogie.rotation.y = -chordAngle;
+  dollyChassis.add(rearBogie);
+
+  // Helper to create a dual flanged skate wheel assembly on axle
+  function createAxleAssembly(isFront: boolean): THREE.Group {
+    const axleGroup = new THREE.Group();
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, TRACK_CONFIG.gauge + 0.08, 16), machinedSteelMat);
+    axle.rotateZ(Math.PI / 2);
+    axleGroup.add(axle);
+
+    for (const sideX of [-halfGauge, halfGauge]) {
+      const wheelHub = new THREE.Group();
+      wheelHub.name = `Wheel_${isFront ? "F" : "R"}_${sideX < 0 ? "Left" : "Right"}`;
+      wheelHub.position.x = sideX;
+
+      const tireGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.038, 24);
+      tireGeo.rotateZ(Math.PI / 2);
+      const tire = new THREE.Mesh(tireGeo, rubberWheelMat);
+      tire.name = "WheelTireMesh";
+      wheelHub.add(tire);
+
+      const hubcap = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.042, 16), machinedSteelMat);
+      hubcap.rotateZ(Math.PI / 2);
+      wheelHub.add(hubcap);
+
+      axleGroup.add(wheelHub);
+    }
+    return axleGroup;
+  }
+
+  frontBogie.add(createAxleAssembly(true));
+  rearBogie.add(createAxleAssembly(false));
+
+  // --- 3. HYDRAULIC RISER COLUMN ---
+  const riserOuter = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.55, 24), chassisMat);
+  riserOuter.position.set(0, 0.44, 0);
+  dollyChassis.add(riserOuter);
+
+  const riserInner = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.52, 24), machinedSteelMat);
+  riserInner.position.set(0, 0.82, 0);
+  dollyChassis.add(riserInner);
+
+  const columnLockRing = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.05, 24), amberAccentMat);
+  columnLockRing.position.set(0, 0.72, 0);
+  dollyChassis.add(columnLockRing);
+
+  // --- 4. ARTICULATED PAN-TILT FLUID HEAD GROUP ---
+  const panHeadGroup = new THREE.Group();
+  panHeadGroup.name = "PanHeadGroup";
+  panHeadGroup.position.set(0, 1.1, 0);
+  cameraRig.add(panHeadGroup);
+
   const headBase = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.12, 24), chassisMat);
-  headBase.position.set(0, 1.18, 0);
-  cameraRig.add(headBase);
+  headBase.position.set(0, 0, 0);
+  panHeadGroup.add(headBase);
 
   // Pan / Tilt knobs
   const panKnob = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.06, 16), amberAccentMat);
   panKnob.rotateZ(Math.PI / 2);
-  panKnob.position.set(0.15, 1.18, 0.06);
-  cameraRig.add(panKnob);
+  panKnob.position.set(0.15, 0, 0.06);
+  panHeadGroup.add(panKnob);
 
-  // Pan Handle (curved arm extending back)
+  // Pan Handle extending backwards
   const handleBar = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.55, 16), machinedSteelMat);
-  handleBar.position.set(-0.16, 1.25, -0.28);
+  handleBar.position.set(-0.16, 0.06, -0.28);
   handleBar.rotation.x = -0.55;
-  cameraRig.add(handleBar);
+  panHeadGroup.add(handleBar);
 
-  const handleGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.18, 16), rubberMat);
-  handleGrip.position.set(-0.16, 1.12, -0.48);
+  const handleGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.18, 16), rubberWheelMat);
+  handleGrip.position.set(-0.16, -0.07, -0.48);
   handleGrip.rotation.x = -0.55;
-  cameraRig.add(handleGrip);
+  panHeadGroup.add(handleGrip);
 
-  // --- 4. CAMERA BODY (Cinema 35mm Form Factor) ---
+  // --- 5. CAMERA BODY (Cinema 35mm Form Factor) ---
   const bodyGroup = new THREE.Group();
-  bodyGroup.position.set(0, 1.34, 0);
+  bodyGroup.name = "CameraBodyGroup";
+  bodyGroup.position.set(0, 0.18, 0);
+  panHeadGroup.add(bodyGroup);
 
   const mainBody = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.44), chassisMat);
   bodyGroup.add(mainBody);
@@ -322,8 +386,7 @@ export function createCameraRig(): THREE.Group {
   monitorScreen.rotation.y = -0.35;
   bodyGroup.add(monitorScreen);
 
-  // --- 5. 15MM RODS & LENS SYSTEM ---
-  // Dual 15mm Base Rods
+  // --- 6. 15MM RODS & LENS SYSTEM ---
   for (const rx of [-0.08, 0.08]) {
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.65, 16), machinedSteelMat);
     rod.rotateX(Math.PI / 2);
@@ -332,10 +395,10 @@ export function createCameraRig(): THREE.Group {
   }
 
   // Anamorphic Prime Lens Barrel
-  const lensBarrel1 = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 0.18, 24), chassisMat);
-  lensBarrel1.rotateX(Math.PI / 2);
-  lensBarrel1.position.set(0, 0, 0.31);
-  bodyGroup.add(lensBarrel1);
+  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 0.18, 24), chassisMat);
+  lensBarrel.rotateX(Math.PI / 2);
+  lensBarrel.position.set(0, 0, 0.31);
+  bodyGroup.add(lensBarrel);
 
   // Focus Gear Ring - Named explicitly as FocusRing
   const focusRing = new THREE.Mesh(new THREE.CylinderGeometry(0.108, 0.108, 0.05, 32), machinedSteelMat);
@@ -366,8 +429,6 @@ export function createCameraRig(): THREE.Group {
   topFlag.rotation.x = -0.22;
   bodyGroup.add(topFlag);
 
-  cameraRig.add(bodyGroup);
-
   // Cast and receive shadows
   cameraRig.traverse((child) => {
     if (child instanceof THREE.Mesh) {
@@ -386,68 +447,90 @@ export function createDollyTrack(): THREE.Group {
   track.userData = { componentId: "track" };
 
   const steelRailMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#757D8E"),
-    metalness: 0.9,
-    roughness: 0.2,
+    color: new THREE.Color("#828B9C"),
+    metalness: 0.92,
+    roughness: 0.18,
     name: "SteelRailTubing",
   });
 
   const sleeperMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#20232B"),
+    color: new THREE.Color("#1C1E24"),
     metalness: 0.12,
-    roughness: 0.75,
+    roughness: 0.78,
     name: "TrackCrossSleeper",
   });
 
-  // Track arc curve: gentle sweep across floor
-  const radius = 6.2;
-  const startAngle = -0.35;
-  const endAngle = 0.55;
-  const segments = 36;
-  const gauge = 0.68; // distance between rails
+  const bufferStopMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#E9B457"),
+    metalness: 0.8,
+    roughness: 0.3,
+    name: "TrackBufferStop",
+  });
 
-  const innerRadius = radius - gauge / 2;
-  const outerRadius = radius + gauge / 2;
+  const R = TRACK_CONFIG.centerlineRadius;
+  const gauge = TRACK_CONFIG.gauge;
+  const minA = TRACK_CONFIG.minAngle;
+  const maxA = TRACK_CONFIG.maxAngle;
+  const segments = 48;
+  const tubeRadius = TRACK_CONFIG.railTubeRadius;
+  const railY = TRACK_CONFIG.railHeight;
 
-  // Rail 1 (Inner tubular rail)
-  const innerCurvePoints: THREE.Vector3[] = [];
-  const outerCurvePoints: THREE.Vector3[] = [];
+  const innerRadius = R - gauge / 2;
+  const outerRadius = R + gauge / 2;
+
+  // Rail curves in 3D
+  const innerPoints: THREE.Vector3[] = [];
+  const outerPoints: THREE.Vector3[] = [];
 
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    const a = startAngle + t * (endAngle - startAngle);
-    const cx = -0.8;
-    const cz = -3.8;
-    innerCurvePoints.push(new THREE.Vector3(cx + Math.sin(a) * innerRadius, 0.038, cz + Math.cos(a) * innerRadius));
-    outerCurvePoints.push(new THREE.Vector3(cx + Math.sin(a) * outerRadius, 0.038, cz + Math.cos(a) * outerRadius));
+    const a = minA + t * (maxA - minA);
+    const sinA = Math.sin(a);
+    const cosA = Math.cos(a);
+    innerPoints.push(new THREE.Vector3(TRACK_CONFIG.centerX + sinA * innerRadius, railY, TRACK_CONFIG.centerZ + cosA * innerRadius));
+    outerPoints.push(new THREE.Vector3(TRACK_CONFIG.centerX + sinA * outerRadius, railY, TRACK_CONFIG.centerZ + cosA * outerRadius));
   }
 
-  const innerCurve = new THREE.CatmullRomCurve3(innerCurvePoints);
-  const outerCurve = new THREE.CatmullRomCurve3(outerCurvePoints);
+  const innerCurve = new THREE.CatmullRomCurve3(innerPoints);
+  const outerCurve = new THREE.CatmullRomCurve3(outerPoints);
 
-  const railInnerMesh = new THREE.Mesh(new THREE.TubeGeometry(innerCurve, 48, 0.024, 12, false), steelRailMat);
+  const railInnerMesh = new THREE.Mesh(new THREE.TubeGeometry(innerCurve, 64, tubeRadius, 14, false), steelRailMat);
   track.add(railInnerMesh);
 
-  const railOuterMesh = new THREE.Mesh(new THREE.TubeGeometry(outerCurve, 48, 0.024, 12, false), steelRailMat);
+  const railOuterMesh = new THREE.Mesh(new THREE.TubeGeometry(outerCurve, 64, tubeRadius, 14, false), steelRailMat);
   track.add(railOuterMesh);
 
-  // Cross sleepers
-  const tieCount = 18;
+  // Sleepers (Cross ties spaced every ~3.5 degrees)
+  const tieCount = 36;
   for (let i = 0; i <= tieCount; i++) {
     const t = i / tieCount;
-    const a = startAngle + t * (endAngle - startAngle);
-    const pIn = innerCurve.getPointAt(t);
-    const pOut = outerCurve.getPointAt(t);
+    const a = minA + t * (maxA - minA);
+    const sinA = Math.sin(a);
+    const cosA = Math.cos(a);
 
-    const mid = new THREE.Vector3().addVectors(pIn, pOut).multiplyScalar(0.5);
-    const tieGeo = new THREE.BoxGeometry(gauge + 0.18, 0.025, 0.08);
+    const midX = TRACK_CONFIG.centerX + sinA * R;
+    const midZ = TRACK_CONFIG.centerZ + cosA * R;
+
+    const tieGeo = new THREE.BoxGeometry(gauge + 0.16, 0.02, 0.075);
     const tie = new THREE.Mesh(tieGeo, sleeperMat);
-    tie.position.set(mid.x, 0.014, mid.z);
-
-    const angle = Math.atan2(pOut.x - pIn.x, pOut.z - pIn.z);
-    tie.rotation.y = angle - Math.PI / 2;
+    tie.position.set(midX, 0.01, midZ);
+    tie.rotation.y = a;
 
     track.add(tie);
+  }
+
+  // End stops / Buffers at track terminals (-66° and +66°)
+  for (const endAngle of [minA, maxA]) {
+    const sinA = Math.sin(endAngle);
+    const cosA = Math.cos(endAngle);
+
+    for (const sideR of [innerRadius, outerRadius]) {
+      const stopX = TRACK_CONFIG.centerX + sinA * sideR;
+      const stopZ = TRACK_CONFIG.centerZ + cosA * sideR;
+      const stopMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.042, 0.065, 16), bufferStopMat);
+      stopMesh.position.set(stopX, railY + 0.02, stopZ);
+      track.add(stopMesh);
+    }
   }
 
   track.traverse((child) => {
@@ -467,7 +550,7 @@ export function createOverheadLighting(): THREE.Group {
   rig.userData = { componentId: "rig" };
 
   const trussMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#404652"),
+    color: new THREE.Color("#444B57"),
     metalness: 0.85,
     roughness: 0.28,
     name: "AluminumBoxTruss",
@@ -514,9 +597,9 @@ export function createOverheadLighting(): THREE.Group {
   const fresnelGroup = new THREE.Group();
   fresnelGroup.name = "FresnelLight";
   fresnelGroup.userData = { componentId: "fresnel" };
-  fresnelGroup.position.set(0.6, trussY - 0.55, 0.8);
-  fresnelGroup.rotation.x = -0.55;
-  fresnelGroup.rotation.y = -0.32;
+  fresnelGroup.position.set(0.4, trussY - 0.55, 1.2);
+  fresnelGroup.rotation.x = -0.58;
+  fresnelGroup.rotation.y = -0.25;
 
   // C-Clamp & Yoke
   const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.12), trussMat);

@@ -4,9 +4,8 @@ import { SoundstageScene, SoundstageSceneHandle } from "./SoundstageScene";
 import { SoundstageFallback } from "./SoundstageFallback";
 import { SoundstageControls } from "./SoundstageControls";
 import {
-  LightingPresetId,
   SoundstageComponent,
-  DEFAULT_VIEWPOINT_ANGLE,
+  STATION_LIGHTING_LOOKS,
 } from "./lighting-presets";
 
 export interface SoundstageHeroProps {
@@ -15,8 +14,9 @@ export interface SoundstageHeroProps {
 
 export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => {
   const [isReady, setIsReady] = React.useState(false);
-  const [viewpointAngle, setViewpointAngle] = React.useState(DEFAULT_VIEWPOINT_ANGLE);
-  const [currentPreset, setCurrentPreset] = React.useState<LightingPresetId>("dramatic");
+  const [activeStationIndex, setActiveStationIndex] = React.useState(0);
+  const [sequencePhase, setSequencePhase] = React.useState<"travel" | "dwell">("dwell");
+  const [stationLabel, setStationLabel] = React.useState(STATION_LIGHTING_LOOKS[0].title);
   const [userPaused, setUserPaused] = React.useState(false);
   const [reducedMotion, setReducedMotion] = React.useState(false);
   const [hoveredComponent, setHoveredComponent] = React.useState<SoundstageComponent | null>(null);
@@ -37,10 +37,15 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
     return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
-  // Stable callbacks to ensure SoundstageScene is never recreated on parent renders
-  const handleAngleChange = React.useCallback((angle: number) => {
-    setViewpointAngle(angle);
-  }, []);
+  // Stable callbacks
+  const handleStationChange = React.useCallback(
+    (stationIndex: number, phase: "travel" | "dwell", label: string) => {
+      setActiveStationIndex(stationIndex);
+      setSequencePhase(phase);
+      setStationLabel(label);
+    },
+    []
+  );
 
   const handleReady = React.useCallback(() => {
     setIsReady(true);
@@ -50,31 +55,27 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
     setHoveredComponent(component);
   }, []);
 
-  const handleSelectPreset = React.useCallback((presetId: LightingPresetId) => {
-    setCurrentPreset(presetId);
+  const handleSelectStation = React.useCallback((index: number) => {
+    sceneRef.current?.goToStation(index);
+    setActiveStationIndex(index);
   }, []);
 
-  const handleReset = React.useCallback(() => {
-    sceneRef.current?.resetView();
-    setViewpointAngle(DEFAULT_VIEWPOINT_ANGLE);
+  const handleResetSequence = React.useCallback(() => {
+    sceneRef.current?.resetSequence();
+    setActiveStationIndex(0);
   }, []);
 
   const handleTogglePause = React.useCallback(() => {
     setUserPaused((prev) => !prev);
   }, []);
 
-  const handleSliderAngleChange = React.useCallback((angle: number) => {
-    sceneRef.current?.setAngle(angle);
-    setViewpointAngle(angle);
-  }, []);
-
   return (
     <div
       role="region"
-      aria-label="FilmCollab Infinite Soundstage 3D Interactive Hero"
+      aria-label="FilmCollab Infinite Soundstage Cinematic Track Sequence"
       data-testid="soundstage-hero-container"
       data-webgl-ready={isReady ? "true" : "initializing"}
-      data-lighting-preset={currentPreset}
+      data-active-station={activeStationIndex}
       className={cn(
         "relative w-full h-full overflow-hidden select-none rounded-2xl border border-white/[0.08] bg-[#08090C] shadow-2xl",
         className
@@ -89,17 +90,16 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
       >
         <SoundstageScene
           ref={sceneRef}
-          viewpointAngle={viewpointAngle}
-          onAngleChange={handleAngleChange}
-          presetId={currentPreset}
           isPaused={userPaused}
           reducedMotion={reducedMotion}
+          activeStationIndex={activeStationIndex}
+          onStationChange={handleStationChange}
           onHoverComponent={handleHover}
           onReady={handleReady}
         />
       </div>
 
-      {/* Cinematic Studio Fallback (Visible before/during WebGL load) */}
+      {/* Cinematic Studio Fallback */}
       <div
         className={cn(
           "absolute inset-0 z-0 transition-opacity duration-700 ease-out",
@@ -109,16 +109,16 @@ export const SoundstageHero: React.FC<SoundstageHeroProps> = ({ className }) => 
         <SoundstageFallback />
       </div>
 
-      {/* Soundstage Interactive HUD Controls Overlay */}
+      {/* Interactive HUD Track Sequence Controls Overlay */}
       <SoundstageControls
         isReady={isReady}
         isPaused={userPaused}
-        viewpointAngle={viewpointAngle}
-        currentPreset={currentPreset}
+        activeStationIndex={activeStationIndex}
+        sequencePhase={sequencePhase}
+        stationLabel={stationLabel}
         hoveredComponent={hoveredComponent}
-        onAngleChange={handleSliderAngleChange}
-        onSelectPreset={handleSelectPreset}
-        onResetView={handleReset}
+        onSelectStation={handleSelectStation}
+        onResetSequence={handleResetSequence}
         onTogglePause={handleTogglePause}
       />
     </div>

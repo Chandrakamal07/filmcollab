@@ -3,54 +3,41 @@ import {
   RotateCcw,
   Play,
   Pause,
-  MoveHorizontal,
   Compass,
-  Sparkles,
   Info,
   Sun,
-  Eye,
-  Film,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LightingPresetId,
-  LIGHTING_PRESETS,
+  STATION_LIGHTING_LOOKS,
   SoundstageComponent,
-  MAX_ARC_ANGLE_RAD,
 } from "./lighting-presets";
 
 export interface SoundstageControlsProps {
   isReady: boolean;
   isPaused: boolean;
-  viewpointAngle: number; // in radians, -MAX_ARC_ANGLE_RAD to +MAX_ARC_ANGLE_RAD
-  currentPreset: LightingPresetId;
+  activeStationIndex: number;
+  sequencePhase: "travel" | "dwell";
+  stationLabel: string;
   hoveredComponent: SoundstageComponent | null;
-  onAngleChange: (angle: number) => void;
-  onSelectPreset: (presetId: LightingPresetId) => void;
-  onResetView: () => void;
+  onSelectStation: (index: number) => void;
+  onResetSequence: () => void;
   onTogglePause: () => void;
 }
 
 export const SoundstageControls: React.FC<SoundstageControlsProps> = ({
   isReady,
   isPaused,
-  viewpointAngle,
-  currentPreset,
+  activeStationIndex,
+  sequencePhase,
+  stationLabel,
   hoveredComponent,
-  onAngleChange,
-  onSelectPreset,
-  onResetView,
+  onSelectStation,
+  onResetSequence,
   onTogglePause,
 }) => {
-  // Convert radians to degrees for human-readable display (-18 to +18)
-  const degrees = Math.round((viewpointAngle * 180) / Math.PI);
-  const normalizedSliderValue = (viewpointAngle + MAX_ARC_ANGLE_RAD) / (2 * MAX_ARC_ANGLE_RAD);
-
-  const handleSliderInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fraction = parseFloat(e.target.value);
-    const newRad = (fraction * 2 - 1) * MAX_ARC_ANGLE_RAD;
-    onAngleChange(newRad);
-  };
+  const currentLook = STATION_LIGHTING_LOOKS[activeStationIndex] || STATION_LIGHTING_LOOKS[0];
 
   return (
     <>
@@ -63,7 +50,7 @@ export const SoundstageControls: React.FC<SoundstageControlsProps> = ({
         )}
       >
         {hoveredComponent && (
-          <div className="rounded-xl border border-primary/45 bg-[#090A0E]/90 backdrop-blur-md p-3 shadow-[0_8px_24px_rgba(0,0,0,0.85)]">
+          <div className="rounded-xl border border-primary/45 bg-[#090A0E]/92 backdrop-blur-md p-3 shadow-[0_8px_24px_rgba(0,0,0,0.85)]">
             <div className="flex items-center gap-1.5 mb-1 text-[10px] font-mono tracking-wider text-primary uppercase font-semibold">
               <Info className="w-3.5 h-3.5 text-primary" />
               <span>{hoveredComponent.category}</span>
@@ -78,113 +65,103 @@ export const SoundstageControls: React.FC<SoundstageControlsProps> = ({
         )}
       </div>
 
-      {/* Top-Right: Lighting Presets HUD Selector */}
+      {/* Top-Right: 5-Station Track Waypoints HUD Selector */}
       <div
-        data-testid="soundstage-lighting-presets"
-        className="absolute top-3 right-3 sm:right-4 z-30 flex items-center gap-1 p-1 rounded-xl border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md shadow-noir-sm"
+        data-testid="soundstage-track-stations"
+        className="absolute top-3 right-3 sm:right-4 z-30 flex items-center gap-1 p-1 rounded-xl border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md shadow-noir-sm max-w-full overflow-x-auto"
       >
         <span className="hidden sm:flex items-center gap-1 pl-2 pr-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/80">
-          <Sun className="w-3 h-3 text-primary" />
-          <span>Light</span>
+          <Camera className="w-3 h-3 text-primary" />
+          <span>Track</span>
         </span>
 
-        {(Object.keys(LIGHTING_PRESETS) as LightingPresetId[]).map((presetId) => {
-          const preset = LIGHTING_PRESETS[presetId];
-          const isActive = currentPreset === presetId;
+        {STATION_LIGHTING_LOOKS.map((look, idx) => {
+          const isActive = activeStationIndex === idx;
           return (
             <button
-              key={presetId}
+              key={look.id}
               type="button"
-              onClick={() => onSelectPreset(presetId)}
-              aria-label={`Select ${preset.label} Lighting Preset`}
+              onClick={() => onSelectStation(idx)}
+              aria-label={`Move camera to station ${look.label} (${look.title})`}
               aria-pressed={isActive}
-              title={preset.description}
+              title={`${look.label}: ${look.title} - ${look.description}`}
               className={cn(
-                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+                "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-mono transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary shrink-0",
                 isActive
                   ? "bg-primary/20 text-primary border border-primary/40 font-semibold shadow-[0_0_12px_rgba(233,180,87,0.25)]"
                   : "text-muted-foreground hover:text-foreground hover:bg-white/[0.06] border border-transparent"
               )}
             >
               <span
-                className="w-2 h-2 rounded-full border border-black/50"
-                style={{ backgroundColor: preset.keyColor }}
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full border border-black/50 transition-transform",
+                  isActive ? "scale-125" : "opacity-60"
+                )}
+                style={{ backgroundColor: look.keyColor }}
               />
-              <span>{preset.label}</span>
+              <span>{look.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Bottom Bar: Drag Indicator + Viewpoint Angle Slider + Reset + Pause */}
-      <div className="absolute bottom-3 right-3 sm:right-4 z-30 flex flex-wrap items-center justify-end gap-2 max-w-full">
-        {/* Drag to Explore Indicator */}
+      {/* Bottom Bar: Station Live Status + Reset + Pause / Resume */}
+      <div className="absolute bottom-3 right-3 sm:right-4 left-3 sm:left-auto z-30 flex flex-wrap items-center justify-between sm:justify-end gap-2 pointer-events-auto">
+        {/* Track Sequence Status Indicator */}
         <div
-          data-testid="soundstage-drag-indicator"
+          data-testid="soundstage-sequence-status"
           className={cn(
-            "pointer-events-none inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground transition-opacity duration-300 shadow-noir-sm",
-            isReady ? "opacity-90" : "opacity-0"
+            "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono transition-opacity duration-300 shadow-noir-sm",
+            isReady ? "opacity-95" : "opacity-0"
           )}
         >
-          <MoveHorizontal className="w-3.5 h-3.5 text-primary animate-pulse" />
-          <span className="hidden sm:inline">Drag to explore</span>
-        </div>
-
-        {/* Viewpoint Arc Slider */}
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground shadow-noir-sm">
           <Compass className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="hidden md:inline text-[10px] uppercase tracking-wider text-muted-foreground/80">
-            Angle
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={normalizedSliderValue}
-            onChange={handleSliderInput}
-            aria-label="Soundstage Viewpoint Angle Slider"
-            className="w-16 sm:w-20 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <span className="text-[10px] w-7 text-right font-mono text-foreground/90">
-            {degrees > 0 ? `+${degrees}°` : `${degrees}°`}
-          </span>
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="text-[10px] uppercase font-bold text-primary tracking-wider">
+              {currentLook.label}
+            </span>
+            <span className="text-white/30">•</span>
+            <span className="text-[11px] text-foreground/90 truncate">
+              {sequencePhase === "travel" ? "Dolly Traveling..." : (stationLabel || currentLook.title)}
+            </span>
+          </div>
         </div>
 
-        {/* Reset View Button */}
-        <button
-          type="button"
-          onClick={onResetView}
-          aria-label="Reset Soundstage Camera View"
-          title="Reset to default soundstage viewpoint"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-[#12151C]/90 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-noir-sm group cursor-pointer"
-        >
-          <RotateCcw className="w-3 h-3 text-primary transition-transform group-hover:-rotate-45" />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Restart Sequence Button */}
+          <button
+            type="button"
+            onClick={onResetSequence}
+            aria-label="Restart camera track sequence from start"
+            title="Restart track sequence from -60°"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-[#12151C]/90 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-noir-sm group cursor-pointer"
+          >
+            <RotateCcw className="w-3 h-3 text-primary transition-transform group-hover:-rotate-45" />
+            <span className="hidden sm:inline">Restart</span>
+          </button>
 
-        {/* Pause / Resume Ambient Motion */}
-        <button
-          type="button"
-          onClick={onTogglePause}
-          aria-label={isPaused ? "Resume Soundstage ambient motion" : "Pause Soundstage ambient motion"}
-          aria-pressed={isPaused}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-[#12151C]/90 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-noir-sm group cursor-pointer"
-        >
-          {isPaused ? (
-            <>
-              <Play className="w-3 h-3 text-primary transition-transform group-hover:scale-110" />
-              <span>Resume</span>
-            </>
-          ) : (
-            <>
-              <Pause className="w-3 h-3 text-primary transition-transform group-hover:scale-110" />
-              <span>Pause</span>
-            </>
-          )}
-        </button>
+          {/* Pause / Resume Sequence Button */}
+          <button
+            type="button"
+            onClick={onTogglePause}
+            aria-label={isPaused ? "Resume camera track sequence" : "Pause camera track sequence"}
+            aria-pressed={isPaused}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-[#0A0C10]/85 backdrop-blur-md text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-[#12151C]/90 transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-noir-sm group cursor-pointer"
+          >
+            {isPaused ? (
+              <>
+                <Play className="w-3 h-3 text-primary transition-transform group-hover:scale-110" />
+                <span>Resume</span>
+              </>
+            ) : (
+              <>
+                <Pause className="w-3 h-3 text-primary transition-transform group-hover:scale-110" />
+                <span>Pause</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </>
   );
 };
-

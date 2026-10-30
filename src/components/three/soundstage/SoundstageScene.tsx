@@ -3,12 +3,15 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import {
-  LightingPresetId,
-  LIGHTING_PRESETS,
+  STATION_LIGHTING_LOOKS,
   SoundstageComponent,
   SOUNDSTAGE_COMPONENTS,
-  MAX_ARC_ANGLE_RAD,
 } from "./lighting-presets";
+import {
+  TRACK_CONFIG,
+  createTrackSequence,
+  TrackSequenceState,
+} from "./track-controller";
 import {
   createDirectorChair,
   createCameraRig,
@@ -17,22 +20,21 @@ import {
 } from "./SoundstageModels";
 
 export interface SoundstageSceneHandle {
-  resetView: () => void;
-  setAngle: (angle: number) => void;
+  goToStation: (stationIndex: number) => void;
+  resetSequence: () => void;
   getInitCount: () => number;
 }
 
 export interface SoundstageSceneProps {
-  viewpointAngle: number;
-  onAngleChange: (angle: number) => void;
-  presetId: LightingPresetId;
   isPaused: boolean;
   reducedMotion?: boolean;
+  activeStationIndex: number;
+  onStationChange: (stationIndex: number, phase: "travel" | "dwell", label: string) => void;
   onHoverComponent: (component: SoundstageComponent | null) => void;
   onReady: () => void;
 }
 
-// Helper: Deduplicated disposal of Three.js objects, geometries, materials, and textures
+// Deduplicated disposal helper for Three.js objects
 function disposeOwnedObject(root: THREE.Object3D) {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
@@ -67,11 +69,10 @@ function disposeOwnedObject(root: THREE.Object3D) {
 export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, SoundstageSceneProps>(
   (
     {
-      viewpointAngle,
-      onAngleChange,
-      presetId,
       isPaused,
       reducedMotion = false,
+      activeStationIndex,
+      onStationChange,
       onHoverComponent,
       onReady,
     },
@@ -79,56 +80,54 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
   ) => {
     const mountRef = React.useRef<HTMLDivElement | null>(null);
 
-    // Development lifecycle counter to verify stable scene instance
+    // Lifecycle counter for stability verification
     const initCounterRef = React.useRef(0);
 
-    // Keep event callbacks in a mutable ref so effect identity does not trigger reinitialization
+    // Synchronize callbacks in mutable ref
     const callbacksRef = React.useRef({
-      onAngleChange,
+      onStationChange,
       onHoverComponent,
       onReady,
     });
 
     React.useLayoutEffect(() => {
       callbacksRef.current = {
-        onAngleChange,
+        onStationChange,
         onHoverComponent,
         onReady,
       };
-    }, [onAngleChange, onHoverComponent, onReady]);
+    }, [onStationChange, onHoverComponent, onReady]);
 
-    // Keep mutable props in a synchronized ref for the render loop
+    // Synchronize mutable props in ref
     const propsRef = React.useRef({
-      presetId,
       isPaused,
       reducedMotion,
-      viewpointAngle,
+      activeStationIndex,
     });
 
     React.useEffect(() => {
       propsRef.current = {
-        presetId,
         isPaused,
         reducedMotion,
-        viewpointAngle,
+        activeStationIndex,
       };
-    }, [presetId, isPaused, reducedMotion, viewpointAngle]);
+    }, [isPaused, reducedMotion, activeStationIndex]);
 
-    // External control refs for imperative handle
-    const externalControlRef = React.useRef<{
-      setTargetAngle: ((angle: number) => void) | null;
-      resetView: (() => void) | null;
+    // Track sequence control handles
+    const sequenceActionsRef = React.useRef<{
+      goToStation: ((index: number) => void) | null;
+      resetSequence: (() => void) | null;
     }>({
-      setTargetAngle: null,
-      resetView: null,
+      goToStation: null,
+      resetSequence: null,
     });
 
     React.useImperativeHandle(ref, () => ({
-      resetView: () => {
-        externalControlRef.current.resetView?.();
+      goToStation: (index: number) => {
+        sequenceActionsRef.current.goToStation?.(index);
       },
-      setAngle: (angle: number) => {
-        externalControlRef.current.setTargetAngle?.(angle);
+      resetSequence: () => {
+        sequenceActionsRef.current.resetSequence?.();
       },
       getInitCount: () => initCounterRef.current,
     }));
@@ -147,9 +146,9 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       // 1. Scene, Camera, Renderer
       const scene = new THREE.Scene();
       scene.background = new THREE.Color("#08090C");
-      scene.fog = new THREE.FogExp2(new THREE.Color("#08090C"), 0.028);
+      scene.fog = new THREE.FogExp2(new THREE.Color("#08090C"), 0.025);
 
-      const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 60);
+      const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 50);
 
       let renderer: THREE.WebGLRenderer;
       try {
@@ -174,7 +173,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       container.replaceChildren(renderer.domElement);
       renderer.domElement.style.width = "100%";
       renderer.domElement.style.height = "100%";
-      renderer.domElement.style.cursor = "grab";
+      renderer.domElement.style.cursor = "default";
       renderer.domElement.style.touchAction = "pan-y pinch-zoom";
 
       // 2. Studio Environment Map (PMREM RoomEnvironment)
@@ -182,44 +181,40 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       const environmentScene = new RoomEnvironment();
       const environmentTarget = pmrem.fromScene(environmentScene);
       scene.environment = environmentTarget.texture;
-      scene.environmentIntensity = 0.35;
+      scene.environmentIntensity = 0.32;
 
       // 3. Studio Base Illumination
-      // Hemisphere Light: soft natural top/ground fill
-      const hemisphere = new THREE.HemisphereLight(0xdde6ff, 0x40372f, 0.7);
+      const hemisphere = new THREE.HemisphereLight(0xdde6ff, 0x40372f, 0.65);
       scene.add(hemisphere);
 
-      // Studio Ambient Light: baseline shadow visibility
-      const ambientLight = new THREE.AmbientLight(0x20232c, 0.6);
+      const ambientLight = new THREE.AmbientLight(0x20232c, 0.55);
       scene.add(ambientLight);
 
-      // Directional Studio Fill Light
       const fillLight = new THREE.DirectionalLight(0x9aa3b5, 1.4);
       fillLight.position.set(-4.5, 3.8, 2.8);
       scene.add(fillLight);
 
       // 4. Key 5KW Fresnel Spotlight
-      const keySpot = new THREE.SpotLight(0xffd19a, 0); // starts 0 for smooth entrance
-      keySpot.position.set(0.6, 4.4, 0.9);
-      keySpot.target.position.set(0.05, 0.8, -0.05);
+      const initialLook = STATION_LIGHTING_LOOKS[0];
+      const keySpot = new THREE.SpotLight(new THREE.Color(initialLook.keyColor), initialLook.keyIntensity);
+      keySpot.position.set(...initialLook.keyPosition);
+      keySpot.target.position.set(0, 0.8, 0);
       scene.add(keySpot.target);
       keySpot.angle = 0.48;
       keySpot.penumbra = 0.65;
-      keySpot.decay = 2; // physically realistic inverse-square decay
-      keySpot.distance = 0; // infinite reach with decay
+      keySpot.decay = 2;
+      keySpot.distance = 0;
       keySpot.castShadow = true;
       keySpot.shadow.mapSize.set(1024, 1024);
-      keySpot.shadow.camera.near = 0.5;
-      keySpot.shadow.camera.far = 16;
       keySpot.shadow.bias = -0.0004;
       scene.add(keySpot);
 
-      // 5. Rim / Kicker Spotlight (Behind equipment)
-      const rimSpot = new THREE.SpotLight(0xe9b457, 0);
-      rimSpot.position.set(2.4, 3.2, -2.8);
-      rimSpot.target.position.set(0.5, 0.9, 0.1);
+      // 5. Rim / Kicker Spotlight
+      const rimSpot = new THREE.SpotLight(new THREE.Color(initialLook.rimColor), initialLook.rimIntensity);
+      rimSpot.position.set(...initialLook.rimPosition);
+      rimSpot.target.position.set(0, 0.8, 0);
       scene.add(rimSpot.target);
-      rimSpot.angle = 0.6;
+      rimSpot.angle = 0.58;
       rimSpot.penumbra = 0.8;
       rimSpot.decay = 2;
       rimSpot.distance = 0;
@@ -239,7 +234,6 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       floorMesh.receiveShadow = true;
       scene.add(floorMesh);
 
-      // Studio Cyclorama Wall
       const cycGeo = new THREE.CylinderGeometry(15, 15, 12, 36, 1, true, -Math.PI * 0.75, Math.PI * 1.5);
       const cycMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color("#060709"),
@@ -252,8 +246,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       cycMesh.receiveShadow = true;
       scene.add(cycMesh);
 
-      // 7. Volumetric Atmospheric Spotlight Cone
-      // h = 4.35m; radius matches spotlight angle tan(0.48)*4.35 ≈ 2.26m
+      // 7. Volumetric Atmospheric Spotlight Cone (Softened, low-opacity)
       const coneHeight = 4.35;
       const coneBottomRadius = 2.26;
       const coneGeo = new THREE.CylinderGeometry(0.32, coneBottomRadius, coneHeight, 32, 1, true);
@@ -265,9 +258,9 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         uniforms: {
-          uColor: { value: new THREE.Color("#ffd19a") },
-          uOpacity: { value: 0.28 },
-          uIntensity: { value: 0.0 }, // starts 0 for entrance
+          uColor: { value: new THREE.Color(initialLook.coneColor) },
+          uOpacity: { value: initialLook.coneOpacity },
+          uIntensity: { value: 1.0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -291,15 +284,14 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
           varying vec3 vViewPosition;
 
           void main() {
-            // Correct non-reversed longitudinal fade
-            // vUv.y: 0 is bottom (near floor), 1 is top (at Fresnel lens)
-            float longitudinalFade = smoothstep(0.0, 0.15, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
+            // Soft longitudinal fade: fades out well before the floor intersection
+            float longitudinalFade = smoothstep(0.04, 0.22, vUv.y) * (1.0 - smoothstep(0.72, 0.98, vUv.y));
 
             // Soft silhouette edge falloff
             vec3 normal = normalize(vNormal);
             vec3 viewDir = normalize(vViewPosition);
             float rim = abs(dot(viewDir, normal));
-            float softRim = pow(1.0 - rim, 0.6) * 0.7 + rim * 0.3;
+            float softRim = pow(1.0 - rim, 0.8) * 0.75 + rim * 0.25;
 
             float alpha = uOpacity * longitudinalFade * softRim * uIntensity;
             gl_FragColor = vec4(uColor, alpha);
@@ -308,42 +300,31 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       });
 
       const coneMesh = new THREE.Mesh(coneGeo, coneMat);
-      coneMesh.position.set(0.6, 4.4, 0.9);
-      const lookTarget = new THREE.Vector3(0.05, 0.02, -0.05);
+      coneMesh.position.copy(keySpot.position);
       coneMesh.quaternion.setFromUnitVectors(
         new THREE.Vector3(0, -1, 0),
-        lookTarget.clone().sub(coneMesh.position).normalize()
+        new THREE.Vector3(0, 0.8, 0).sub(coneMesh.position).normalize()
       );
       scene.add(coneMesh);
 
-      // 8. Populate Soundstage Equipment
+      // 8. Populate Soundstage Scene Hierarchy
       const soundstageGroup = new THREE.Group();
       soundstageGroup.name = "SoundstageObjects";
       scene.add(soundstageGroup);
 
-      // A. Director's Chair (Center Focal Point)
+      // A. Director's Chair (Center Focal Point at origin)
       let chairGroup: THREE.Group = createDirectorChair();
-      chairGroup.position.set(0.05, 0, -0.05);
-      chairGroup.rotation.y = 0.32;
+      chairGroup.position.set(0, 0, 0);
+      chairGroup.rotation.y = 0.25; // 3/4 turn towards studio audience
       soundstageGroup.add(chairGroup);
 
-      // B. 35mm Cinema Camera Rig on Hydraulic Dolly
-      let cameraRigGroup: THREE.Group = createCameraRig();
-      cameraRigGroup.position.set(1.9, 0, 0.75);
-      cameraRigGroup.rotation.y = -0.72;
-      soundstageGroup.add(cameraRigGroup);
-
-      // C. Curved Dolly Track on Studio Floor
+      // B. 120° Curved Dolly Track
       const dollyTrackGroup = createDollyTrack();
       soundstageGroup.add(dollyTrackGroup);
 
-      // D. Overhead Rigging & 5KW Fresnel Spotlight
+      // C. Overhead Truss Rigging & Fresnel Housing
       const overheadRigGroup = createOverheadLighting();
       soundstageGroup.add(overheadRigGroup);
-
-      // References for animated nodes
-      let focusRingNode: THREE.Object3D | null = cameraRigGroup.getObjectByName("FocusRing");
-      let focusRingInitialQuat: THREE.Quaternion | null = focusRingNode ? focusRingNode.quaternion.clone() : null;
 
       let fresnelLensMesh: THREE.Mesh | null = null;
       overheadRigGroup.traverse((child) => {
@@ -352,7 +333,24 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         }
       });
 
-      // 9. Safe Asynchronous GLTF Model Loading with Unmount Guard
+      // D. 35mm Cinema Camera Rig on Hydraulic Dolly
+      let cameraRigGroup: THREE.Group = createCameraRig();
+      soundstageGroup.add(cameraRigGroup);
+
+      // Query articulated nodes
+      let panHeadGroup: THREE.Object3D | null = cameraRigGroup.getObjectByName("PanHeadGroup");
+      let focusRingNode: THREE.Object3D | null = cameraRigGroup.getObjectByName("FocusRing");
+      let focusRingInitialQuat: THREE.Quaternion | null = focusRingNode ? focusRingNode.quaternion.clone() : null;
+
+      // Wheel tire meshes for rolling rotation
+      const wheelMeshes: THREE.Mesh[] = [];
+      cameraRigGroup.traverse((child) => {
+        if (child.name === "WheelTireMesh" && child instanceof THREE.Mesh) {
+          wheelMeshes.push(child);
+        }
+      });
+
+      // Async GLTF Loading with unmount protection
       const gltfLoader = new GLTFLoader();
 
       gltfLoader.load(
@@ -394,8 +392,6 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
           }
           const loadedCamera = gltf.scene;
           loadedCamera.name = "CinemaCameraGLB";
-          loadedCamera.position.copy(cameraRigGroup.position);
-          loadedCamera.rotation.copy(cameraRigGroup.rotation);
           loadedCamera.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
@@ -408,9 +404,17 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
           cameraRigGroup = loadedCamera;
           soundstageGroup.add(loadedCamera);
 
-          // Re-query focus ring from newly loaded GLB
+          // Re-query articulated nodes
+          panHeadGroup = loadedCamera.getObjectByName("PanHeadGroup");
           focusRingNode = loadedCamera.getObjectByName("FocusRing");
           focusRingInitialQuat = focusRingNode ? focusRingNode.quaternion.clone() : null;
+
+          wheelMeshes.length = 0;
+          loadedCamera.traverse((child) => {
+            if (child.name === "WheelTireMesh" && child instanceof THREE.Mesh) {
+              wheelMeshes.push(child);
+            }
+          });
         },
         undefined,
         (err) => {
@@ -419,42 +423,27 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         }
       );
 
-      // 10. Per-Instance Animation State
-      const animState = {
-        viewpointAngle: propsRef.current.viewpointAngle,
-        targetAngle: propsRef.current.viewpointAngle,
-        isDragging: false,
-        lastPointerX: 0,
-        entranceTime: 0,
-        isEntranceDone: false,
-        ambientTime: 0,
-        hoveredId: null as string | null,
-      };
+      // 9. Deterministic Track Sequence Controller
+      const trackSequence = createTrackSequence(propsRef.current.activeStationIndex);
 
-      externalControlRef.current = {
-        setTargetAngle: (angle: number) => {
-          const clamped = THREE.MathUtils.clamp(angle, -MAX_ARC_ANGLE_RAD, MAX_ARC_ANGLE_RAD);
-          animState.targetAngle = clamped;
-          // If user interacts during entrance, skip camera travel and finalize entrance
-          if (!animState.isEntranceDone) {
-            animState.entranceTime = 2.4;
-            animState.isEntranceDone = true;
+      sequenceActionsRef.current = {
+        goToStation: (index: number) => {
+          if (propsRef.current.reducedMotion) {
+            trackSequence.jumpToStation(index);
+          } else {
+            trackSequence.goToStation(index);
           }
-          callbacksRef.current.onAngleChange(clamped);
         },
-        resetView: () => {
-          animState.targetAngle = 0;
-          if (!animState.isEntranceDone) {
-            animState.entranceTime = 2.4;
-            animState.isEntranceDone = true;
-          }
-          callbacksRef.current.onAngleChange(0);
+        resetSequence: () => {
+          trackSequence.reset();
         },
       };
 
-      // 11. Interactive Raycasting & Pointer Listeners
+      // 10. Interactive Raycasting & Pointer Parallax
       const raycaster = new THREE.Raycaster();
       const pointer = new THREE.Vector2();
+      const pointerTarget = new THREE.Vector2(0, 0);
+      const pointerSmooth = new THREE.Vector2(0, 0);
 
       const getInteractiveComponent = (e: PointerEvent): SoundstageComponent | null => {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -477,71 +466,32 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         return null;
       };
 
-      const onPointerDown = (e: PointerEvent) => {
-        animState.isDragging = true;
-        animState.lastPointerX = e.clientX;
-        renderer.domElement.style.cursor = "grabbing";
-        renderer.domElement.setPointerCapture(e.pointerId);
-
-        // Cancel entrance camera travel if user drags
-        if (!animState.isEntranceDone) {
-          animState.entranceTime = 2.4;
-          animState.isEntranceDone = true;
-        }
-      };
+      let hoveredId: string | null = null;
 
       const onPointerMove = (e: PointerEvent) => {
-        if (animState.isDragging) {
-          const deltaX = e.clientX - animState.lastPointerX;
-          animState.lastPointerX = e.clientX;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        pointerTarget.set(nx, ny);
 
-          const sensitivity = 0.0032;
-          const deltaRad = -deltaX * sensitivity;
-
-          const newTarget = THREE.MathUtils.clamp(
-            animState.targetAngle + deltaRad,
-            -MAX_ARC_ANGLE_RAD,
-            MAX_ARC_ANGLE_RAD
-          );
-
-          animState.targetAngle = newTarget;
-          animState.viewpointAngle = newTarget;
-          callbacksRef.current.onAngleChange(newTarget);
-        } else {
-          // Hover inspection
-          const comp = getInteractiveComponent(e);
-          if (comp?.id !== animState.hoveredId) {
-            animState.hoveredId = comp ? comp.id : null;
-            callbacksRef.current.onHoverComponent(comp);
-            renderer.domElement.style.cursor = comp ? "pointer" : "grab";
-          }
-        }
-      };
-
-      const onPointerUp = (e: PointerEvent) => {
-        if (animState.isDragging) {
-          animState.isDragging = false;
-          renderer.domElement.style.cursor = "grab";
-          try {
-            renderer.domElement.releasePointerCapture(e.pointerId);
-          } catch (_e) {
-            void _e;
-          }
+        const comp = getInteractiveComponent(e);
+        if (comp?.id !== hoveredId) {
+          hoveredId = comp ? comp.id : null;
+          callbacksRef.current.onHoverComponent(comp);
+          renderer.domElement.style.cursor = comp ? "pointer" : "default";
         }
       };
 
       const onPointerLeave = () => {
-        if (!animState.isDragging && animState.hoveredId) {
-          animState.hoveredId = null;
+        pointerTarget.set(0, 0);
+        if (hoveredId) {
+          hoveredId = null;
           callbacksRef.current.onHoverComponent(null);
-          renderer.domElement.style.cursor = "grab";
+          renderer.domElement.style.cursor = "default";
         }
       };
 
-      renderer.domElement.addEventListener("pointerdown", onPointerDown);
       renderer.domElement.addEventListener("pointermove", onPointerMove);
-      renderer.domElement.addEventListener("pointerup", onPointerUp);
-      renderer.domElement.addEventListener("pointercancel", onPointerUp);
       renderer.domElement.addEventListener("pointerleave", onPointerLeave);
 
       // Context Loss Handling
@@ -556,7 +506,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       renderer.domElement.addEventListener("webglcontextlost", onContextLost);
       renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
 
-      // 12. Responsive Resize Handling
+      // 11. Responsive Resize
       const handleResize = () => {
         if (!container || disposed) return;
         width = container.clientWidth || 800;
@@ -569,14 +519,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       const resizeObserver = new ResizeObserver(handleResize);
       resizeObserver.observe(container);
 
-      // 13. Reusable Color & Vector Allocations (Zero GC per-frame allocations)
-      const targetKeyColor = new THREE.Color();
-      const targetFillColor = new THREE.Color();
-      const targetRimColor = new THREE.Color();
-      const targetAmbientColor = new THREE.Color();
-      const focusTarget = new THREE.Vector3(0.15, 0.95, -0.05);
-
-      // 14. Visibility Observer & RAF Scheduler
+      // 12. Visibility & RAF Scheduler
       let isVisibleOnScreen = true;
       let isTabActive = true;
       let animId = 0;
@@ -609,11 +552,25 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
       };
       document.addEventListener("visibilitychange", onVisibilityChange);
 
-      // 15. Main Animation Loop
+      // Reusable Math and Color Objects (Zero per-frame allocations)
+      const chairTarget = new THREE.Vector3(0, 0.85, 0);
+      const headWorldPos = new THREE.Vector3();
+      const lookDirWorld = new THREE.Vector3();
+      const lookDirLocal = new THREE.Vector3();
+      const focusTarget = new THREE.Vector3(0, 0.75, 0.15);
+
+      const tempColor = new THREE.Color();
+      const tempKeyPos = new THREE.Vector3();
+      const tempRimPos = new THREE.Vector3();
+
+      let wheelRollAngle = 0;
+      let lastReportedStation = -1;
+      let lastReportedPhase = "";
+
+      // 13. Main Animation Loop
       const animate = (time: number) => {
         if (disposed) return;
 
-        // Stop loop when completely offscreen or tab hidden to conserve GPU/battery
         if (!isVisibleOnScreen || !isTabActive) {
           animId = 0;
           return;
@@ -625,117 +582,120 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         lastTime = time;
 
         const currentProps = propsRef.current;
-        const reducedMotion = currentProps.reducedMotion;
+        const isRunning = !currentProps.isPaused && !currentProps.reducedMotion;
 
-        // A. Directed 2.4s Entrance Sequence
-        let entranceProgress = 1.0;
-        let entranceCameraOffset = 0;
+        // A. Update Track Sequence Timeline
+        const seq: TrackSequenceState = trackSequence.update(deltaSeconds, isRunning);
 
-        if (!animState.isEntranceDone) {
-          animState.entranceTime += deltaSeconds;
-          const progress = Math.min(animState.entranceTime / 2.4, 1.0);
-          // Cubic ease-out
-          const eased = 1.0 - Math.pow(1.0 - progress, 3);
-          entranceProgress = eased;
-          entranceCameraOffset = (1.0 - eased) * 0.45;
+        // Report station and phase changes to HUD
+        if (seq.station !== lastReportedStation || seq.phase !== lastReportedPhase) {
+          lastReportedStation = seq.station;
+          lastReportedPhase = seq.phase;
+          const currentLook = STATION_LIGHTING_LOOKS[seq.station];
+          callbacksRef.current.onStationChange(seq.station, seq.phase, currentLook.title);
+        }
 
-          if (progress >= 1.0) {
-            animState.isEntranceDone = true;
+        // B. Position and Orient Cinema Camera Dolly along the Rail Curve
+        const R = TRACK_CONFIG.centerlineRadius;
+        const dollyX = TRACK_CONFIG.centerX + Math.sin(seq.angle) * R;
+        const dollyZ = TRACK_CONFIG.centerZ + Math.cos(seq.angle) * R;
+
+        cameraRigGroup.position.set(dollyX, 0, dollyZ);
+        // Chassis follows the track tangent: angle + 90 degrees
+        cameraRigGroup.rotation.y = seq.angle + Math.PI / 2;
+
+        // C. Rotate Camera Head to Track the Director's Chair
+        if (panHeadGroup) {
+          panHeadGroup.getWorldPosition(headWorldPos);
+          lookDirWorld.subVectors(chairTarget, headWorldPos).normalize();
+
+          // Convert world look direction into dolly root local coordinates
+          lookDirLocal.copy(lookDirWorld).applyQuaternion(cameraRigGroup.quaternion.clone().invert());
+          const pan = Math.atan2(lookDirLocal.x, lookDirLocal.z);
+          const tilt = Math.atan2(lookDirLocal.y, Math.sqrt(lookDirLocal.x * lookDirLocal.x + lookDirLocal.z * lookDirLocal.z));
+          panHeadGroup.rotation.set(-tilt, pan, 0, "YXZ");
+        }
+
+        // D. Rotate Wheels along Axle from Distance Travelled
+        if (Math.abs(seq.distanceDelta) > 0.00001) {
+          wheelRollAngle += seq.distanceDelta / TRACK_CONFIG.wheelRadius;
+          for (const wheel of wheelMeshes) {
+            wheel.rotation.x = wheelRollAngle;
           }
         }
 
-        // B. Viewpoint Damping (Delta-time based, frame-rate independent)
-        animState.viewpointAngle = reducedMotion
-          ? animState.targetAngle
-          : THREE.MathUtils.damp(animState.viewpointAngle, animState.targetAngle, 8, deltaSeconds);
-
-        // C. Continuous Ambient Motion
-        // When paused or reduced-motion, ambient clock is frozen, preserving exact drift pose without snaps
-        if (!currentProps.isPaused && !reducedMotion) {
-          animState.ambientTime += deltaSeconds;
-        }
-
-        const t = animState.ambientTime;
-        const azimuthDrift = Math.sin(t * 0.22) * 0.012;
-        const elevationDrift = Math.cos(t * 0.18) * 0.035;
-
-        // Lens Focus Ring Animation (rotates explicitly around local axis)
-        if (focusRingNode && focusRingInitialQuat && !currentProps.isPaused && !reducedMotion) {
+        // Focus Ring Subtle Rotation while traveling
+        if (focusRingNode && focusRingInitialQuat && isRunning) {
           focusRingNode.quaternion.copy(focusRingInitialQuat);
-          focusRingNode.rotateZ(Math.sin(t * 0.45) * 0.22);
+          focusRingNode.rotateZ(Math.sin(time * 0.002) * 0.25);
         }
 
-        // D. Smooth Lighting Preset Lerping (OUTSIDE pause check - works while paused!)
-        const blend = reducedMotion ? 1.0 : 1.0 - Math.exp(-6.0 * deltaSeconds);
-        const preset = LIGHTING_PRESETS[currentProps.presetId];
+        // E. Interpolate 5 Station Lighting Looks
+        const fromLook = STATION_LIGHTING_LOOKS[seq.lightFrom];
+        const toLook = STATION_LIGHTING_LOOKS[seq.lightTo];
+        const mix = seq.lightMix;
 
-        // Key spotlight intensity and color
-        targetKeyColor.set(preset.keyColor);
-        keySpot.color.lerp(targetKeyColor, blend);
-        keySpot.intensity = THREE.MathUtils.lerp(
-          keySpot.intensity,
-          preset.keyIntensity * entranceProgress,
-          blend
-        );
+        // 1. Key Spotlight
+        tempColor.copy(new THREE.Color(fromLook.keyColor)).lerp(new THREE.Color(toLook.keyColor), mix);
+        keySpot.color.copy(tempColor);
+        keySpot.intensity = THREE.MathUtils.lerp(fromLook.keyIntensity, toLook.keyIntensity, mix);
 
-        // Fill directional light
-        targetFillColor.set(preset.fillColor);
-        fillLight.color.lerp(targetFillColor, blend);
-        fillLight.intensity = THREE.MathUtils.lerp(fillLight.intensity, preset.fillIntensity, blend);
+        tempKeyPos.set(...fromLook.keyPosition).lerp(new THREE.Vector3(...toLook.keyPosition), mix);
+        keySpot.position.copy(tempKeyPos);
 
-        // Rim spotlight
-        targetRimColor.set(preset.rimColor);
-        rimSpot.color.lerp(targetRimColor, blend);
-        rimSpot.intensity = THREE.MathUtils.lerp(
-          rimSpot.intensity,
-          preset.rimIntensity * entranceProgress,
-          blend
-        );
+        // 2. Fill Directional Light
+        tempColor.copy(new THREE.Color(fromLook.fillColor)).lerp(new THREE.Color(toLook.fillColor), mix);
+        fillLight.color.copy(tempColor);
+        fillLight.intensity = THREE.MathUtils.lerp(fromLook.fillIntensity, toLook.fillIntensity, mix);
 
-        // Studio ambient
-        targetAmbientColor.set(preset.ambientColor);
-        ambientLight.color.lerp(targetAmbientColor, blend);
-        ambientLight.intensity = THREE.MathUtils.lerp(ambientLight.intensity, preset.ambientIntensity, blend);
+        // 3. Rim Spotlight
+        tempColor.copy(new THREE.Color(fromLook.rimColor)).lerp(new THREE.Color(toLook.rimColor), mix);
+        rimSpot.color.copy(tempColor);
+        rimSpot.intensity = THREE.MathUtils.lerp(fromLook.rimIntensity, toLook.rimIntensity, mix);
 
-        // Fresnel fixture emissive lens sync
+        tempRimPos.set(...fromLook.rimPosition).lerp(new THREE.Vector3(...toLook.rimPosition), mix);
+        rimSpot.position.copy(tempRimPos);
+
+        // 4. Studio Ambient Light
+        tempColor.copy(new THREE.Color(fromLook.ambientColor)).lerp(new THREE.Color(toLook.ambientColor), mix);
+        ambientLight.color.copy(tempColor);
+        ambientLight.intensity = THREE.MathUtils.lerp(fromLook.ambientIntensity, toLook.ambientIntensity, mix);
+
+        // 5. Fresnel Lens Emissive Glow
         if (fresnelLensMesh) {
           const mat = fresnelLensMesh.material as THREE.MeshStandardMaterial;
           if (mat && mat.emissive) {
-            mat.emissive.lerp(new THREE.Color(preset.fresnelLensEmissive), blend);
+            tempColor.copy(new THREE.Color(fromLook.fresnelLensEmissive)).lerp(new THREE.Color(toLook.fresnelLensEmissive), mix);
+            mat.emissive.copy(tempColor);
           }
         }
 
-        // Volumetric atmospheric spotlight cone sync
-        coneMat.uniforms.uColor.value.lerp(targetKeyColor, blend);
-        coneMat.uniforms.uOpacity.value = THREE.MathUtils.lerp(
-          coneMat.uniforms.uOpacity.value,
-          preset.coneOpacity,
-          blend
+        // 6. Volumetric Atmospheric Spotlight Cone
+        coneMesh.position.copy(keySpot.position);
+        coneMesh.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, -1, 0),
+          chairTarget.clone().sub(coneMesh.position).normalize()
         );
-        coneMat.uniforms.uIntensity.value = THREE.MathUtils.lerp(
-          coneMat.uniforms.uIntensity.value,
-          entranceProgress,
-          blend
-        );
+        coneMat.uniforms.uColor.value.copy(tempColor);
+        coneMat.uniforms.uOpacity.value = THREE.MathUtils.lerp(fromLook.coneOpacity, toLook.coneOpacity, mix);
 
-        // E. Camera Framing & Orientation
+        // F. Viewer Camera: Fixed Deliberate 3/4 Studio View with Subtle Parallax
         const isMobile = width < 768;
-        const baseRadius = isMobile ? 8.2 : 6.8;
-        const baseHeight = isMobile ? 2.9 : 2.35;
-        const baseAzimuth = 0.36; // 3/4 studio angle default
+        pointerSmooth.lerp(pointerTarget, 0.08);
 
-        const totalAzimuth = baseAzimuth + animState.viewpointAngle + azimuthDrift;
-        const totalRadius = baseRadius + entranceCameraOffset;
-        const totalHeight = baseHeight + elevationDrift + entranceCameraOffset * 0.5;
+        const parallaxX = pointerSmooth.x * 0.18;
+        const parallaxY = pointerSmooth.y * 0.12;
 
-        camera.position.x = focusTarget.x + Math.sin(totalAzimuth) * totalRadius;
-        camera.position.z = focusTarget.z + Math.cos(totalAzimuth) * totalRadius;
-        camera.position.y = totalHeight;
+        if (isMobile) {
+          camera.position.set(3.6 + parallaxX, 2.65 + parallaxY, 5.0);
+        } else {
+          camera.position.set(3.3 + parallaxX, 2.3 + parallaxY, 4.6);
+        }
         camera.lookAt(focusTarget);
 
         renderer.render(scene, camera);
 
-        // F. Report Ready after essential content is rendered
+        // G. Mark ready after first successful render
         if (!hasReportedReady) {
           hasReportedReady = true;
           callbacksRef.current.onReady();
@@ -744,7 +704,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
 
       animId = requestAnimationFrame(animate);
 
-      // 16. Comprehensive Teardown
+      // 14. Teardown
       return () => {
         disposed = true;
         cancelAnimationFrame(animId);
@@ -752,21 +712,16 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
         intersectionObserver.disconnect();
         document.removeEventListener("visibilitychange", onVisibilityChange);
 
-        renderer.domElement.removeEventListener("pointerdown", onPointerDown);
         renderer.domElement.removeEventListener("pointermove", onPointerMove);
-        renderer.domElement.removeEventListener("pointerup", onPointerUp);
-        renderer.domElement.removeEventListener("pointercancel", onPointerUp);
         renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
         renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
         renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
 
-        // Clean up RoomEnvironment texture & PMREM
         scene.environment = null;
         environmentTarget.dispose();
         environmentScene.dispose?.();
         pmrem.dispose();
 
-        // Dispose scene contents deduplicating resources
         disposeOwnedObject(scene);
 
         renderer.dispose();
@@ -774,7 +729,7 @@ export const SoundstageScene = React.forwardRef<SoundstageSceneHandle, Soundstag
           container.removeChild(renderer.domElement);
         }
       };
-    }, []); // Empty dependency array: ONE scene instance is owned per lifecycle
+    }, []);
 
     return (
       <div
