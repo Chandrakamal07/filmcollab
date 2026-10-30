@@ -115,8 +115,8 @@ export function createGoldenReelScene(
   const presentation = new THREE.Group();
   presentation.name = "goldenReelPresentation";
   presentation.add(reel.group, filmSystem.group);
-  presentation.scale.setScalar(0.85);
-  presentation.position.set(1.45, -0.15, 0);
+  presentation.scale.setScalar(0.72);
+  presentation.position.set(1.9, 0.1, 0);
   scene.add(presentation);
 
   // =========================================================
@@ -202,8 +202,8 @@ export function createGoldenReelScene(
       presentation.position.set(0.5 - 1.3 * fitScale, -0.55 * fitScale, 0);
       camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, 6.5);
     } else {
-      presentation.scale.setScalar(0.85);
-      presentation.position.set(1.45, -0.15, 0);
+      presentation.scale.setScalar(0.72);
+      presentation.position.set(1.9, 0.1, 0);
       camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, baseCamPos.z);
     }
     camera.lookAt(cameraTarget);

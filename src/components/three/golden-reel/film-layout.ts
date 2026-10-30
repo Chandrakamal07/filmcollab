@@ -130,9 +130,17 @@ export function buildFilmLayout(matrix: THREE.Matrix4, parameters: ReelGeometryP
   const gateRight = new THREE.Vector3(1.1, 0.05, 0.65);
   const gateLeft = gateRight.clone().add(new THREE.Vector3(-gateWidth, 0, 0));
   const gateAxis = new THREE.Vector3(0, 1, 0);
+  // Finish all bending and twisting while the stock is narrow. Expanding a
+  // ribbon inside a tight turn folds its inner edge over itself.
+  const feederEnd = gateRight.clone().add(new THREE.Vector3(0.65, 0, 0));
   cubic(clearance, clearance.clone().addScaledVector(clearanceTangent, 0.55),
-    gateRight.clone().add(new THREE.Vector3(0.38, 0, 0)), gateRight,
-    shaft, gateAxis, narrowWidth, gateHeight, "display-transition");
+    feederEnd.clone().add(new THREE.Vector3(0.38, 0, 0)), feederEnd,
+    shaft, gateAxis, narrowWidth, narrowWidth, "display-transition");
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    add(feederEnd.clone().lerp(gateRight, t), new THREE.Vector3(-1, 0, 0),
+      gateAxis, THREE.MathUtils.lerp(narrowWidth, gateHeight, smooth(t)), "straight-expansion");
+  }
   const gateStartDistance = distance;
   line(gateRight, gateLeft, gateAxis, gateHeight, "gate", 72);
   const gateEndDistance = distance;
@@ -140,12 +148,18 @@ export function buildFilmLayout(matrix: THREE.Matrix4, parameters: ReelGeometryP
   // Narrow and turn the outgoing film before its small guide; never put a
   // full-height brass cylinder across the display aperture.
   const lowerRadius = 0.1;
-  const lowerCenter = gateLeft.clone().add(new THREE.Vector3(-0.35, -0.75, 0));
+  const outgoingStart = gateLeft.clone().add(new THREE.Vector3(-0.65, 0, 0));
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    add(gateLeft.clone().lerp(outgoingStart, t), new THREE.Vector3(-1, 0, 0),
+      gateAxis, THREE.MathUtils.lerp(gateHeight, narrowWidth, smooth(t)), "straight-contraction");
+  }
+  const lowerCenter = outgoingStart.clone().add(new THREE.Vector3(-0.35, -0.75, 0));
   const lowerContact = lowerCenter.clone().add(new THREE.Vector3(0, lowerRadius, 0));
   const lowerAxis = new THREE.Vector3(0, 0, 1);
-  cubic(gateLeft, gateLeft.clone().add(new THREE.Vector3(-0.25, 0, 0)),
+  cubic(outgoingStart, outgoingStart.clone().add(new THREE.Vector3(-0.25, 0, 0)),
     lowerContact.clone().add(new THREE.Vector3(0.25, 0, 0)), lowerContact,
-    gateAxis, lowerAxis, gateHeight, narrowWidth, "outgoing-transition");
+    gateAxis, lowerAxis, narrowWidth, narrowWidth, "outgoing-transition");
   for (let i = 0; i <= 32; i++) {
     const angle = Math.PI / 2 + i / 32 * Math.PI / 2;
     add(lowerCenter.clone().add(new THREE.Vector3(Math.cos(angle) * lowerRadius, Math.sin(angle) * lowerRadius, 0)),

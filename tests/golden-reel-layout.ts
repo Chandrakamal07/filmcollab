@@ -33,6 +33,17 @@ for (const sample of layout.samples) {
 }
 assert.ok(maximumOrthogonalityError < 1e-10);
 const gate = layout.samples.filter(s => s.section === "gate");
+for (const s of layout.samples) {
+  if (["display-transition", "outgoing-transition", "clearance", "upper-contact", "lower-contact"].includes(s.section)) {
+    assert.ok(Math.abs(s.width - reel.parameters.filmPackWidth) < 1e-10,
+      "Bending sections must remain narrow to avoid folded side wings");
+  }
+  if (s.section === "straight-expansion" || s.section === "straight-contraction") {
+    assert.ok(Math.abs(s.center.y - 0.05) < 1e-10);
+    assert.ok(Math.abs(s.center.z - 0.65) < 1e-10);
+    assert.ok(s.widthAxis.distanceTo(new THREE.Vector3(0, 1, 0)) < 1e-10);
+  }
+}
 for (const s of gate) {
   assert.ok(Math.abs(s.center.y - 0.05) < 1e-10);
   assert.ok(Math.abs(s.center.z - 0.65) < 1e-10);
