@@ -221,8 +221,8 @@ const Index = () => {
         onPointerLeave={handleHeroPointerLeave}
         className="relative pt-20 pb-12 px-4 sm:px-8"
       >
-        <div className="container mx-auto max-w-[1400px]">
-          <div className="relative rounded-2xl border border-white/[0.09] bg-[#090A0D] shadow-noir-lg overflow-hidden isolate">
+        <div className="container mx-auto max-w-[1680px]">
+          <div className="relative bg-[#090A0D] overflow-hidden isolate">
             {/* Hero Main Stage with Full-Hero 3D Cinematic World Background */}
             <div
               className="relative min-h-[580px] lg:min-h-[640px] flex flex-col justify-between overflow-hidden isolate select-none"
@@ -256,7 +256,7 @@ const Index = () => {
                 <div
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-[400px] sm:h-[440px] lg:inset-0 lg:h-auto z-0"
-                  style={{ background: "radial-gradient(ellipse at 77% 49%, rgba(130, 78, 24, 0.16), transparent 50%)" }}
+                  style={{ background: "radial-gradient(ellipse at 77% 49%, rgba(159, 93, 25, 0.29), transparent 50%)" }}
                 >
                   <React.Suspense fallback={<GoldenReelFallback />}>
                     <GoldenReelCanvas
@@ -312,7 +312,7 @@ const Index = () => {
                 </div>
 
                 {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-[620px] pointer-events-none" />
+                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-[760px] pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}

@@ -39,10 +39,11 @@ export function createGoldenReel(): ReelAssembly {
   const ownedTextures: THREE.Texture[] = [];
 
   // Materials: Pale champagne gold & aged brass
-  const champagneGoldMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#DEC085"),
+  const champagneGoldMat = new THREE.MeshPhysicalMaterial({
+    clearcoat: 0.32, clearcoatRoughness: 0.18,
+    color: new THREE.Color("#DDAA52"),
     metalness: 0.85,
-    roughness: 0.24,
+    roughness: 0.2,
   });
   ownedMaterials.push(champagneGoldMat);
   // A subtle brushed roughness map breaks up the perfectly uniform metal.
@@ -63,6 +64,25 @@ export function createGoldenReel(): ReelAssembly {
       brushed.wrapS = brushed.wrapT = THREE.RepeatWrapping;
       brushed.repeat.set(5, 5);
       champagneGoldMat.roughnessMap = brushed;
+      const patinaCanvas = document.createElement("canvas");
+      patinaCanvas.width = patinaCanvas.height = 512;
+      const paint = patinaCanvas.getContext("2d")!;
+      const sheen = paint.createLinearGradient(0, 0, 512, 380);
+      sheen.addColorStop(0, "#5d4228"); sheen.addColorStop(.28, "#e2c19a");
+      sheen.addColorStop(.43, "#fff1d3"); sheen.addColorStop(.50, "#a9804a");
+      sheen.addColorStop(.72, "#e7c89a"); sheen.addColorStop(1, "#6e4b2c");
+      paint.fillStyle = sheen; paint.fillRect(0, 0, 512, 512);
+      // Fine concentric tooling remains attached to the rotating metal.
+      for (let r = 30; r < 255; r += 2) {
+        paint.strokeStyle = r % 6 === 0 ? "rgba(33,19,7,.17)" : "rgba(255,238,199,.12)";
+        paint.lineWidth = .6; paint.beginPath(); paint.arc(256, 256, r, 0, Math.PI * 2); paint.stroke();
+      }
+      const patina = new THREE.CanvasTexture(patinaCanvas);
+      patina.colorSpace = THREE.SRGBColorSpace;
+      // ExtrudeGeometry's planar face UVs are in local metres.
+      patina.repeat.set(.25, .25); patina.offset.set(.5, .5);
+      champagneGoldMat.map = patina;
+      ownedTextures.push(patina);
       ownedTextures.push(brushed);
     }
   }
@@ -185,6 +205,23 @@ export function createGoldenReel(): ReelAssembly {
   const rearRim = new THREE.Mesh(rimTorusGeo, agedBrassRimMat);
   rearRim.position.z = -flangeOuterFrontZ - 0.055;
   rotatingSpool.add(rearRim);
+  // Rolled lips and rivets give the broad front surface real depth cues.
+  for (const radius of [1.92, .55]) {
+    const ring = new THREE.TorusGeometry(radius, .014, 8, 96);
+    ownedGeometries.push(ring);
+    const mesh = new THREE.Mesh(ring, agedBrassRimMat);
+    mesh.position.z = flangeOuterFrontZ + .055 * (radius / outerR) ** 2 + .008;
+    rotatingSpool.add(mesh);
+  }
+  const rivetGeometry = new THREE.SphereGeometry(.032, 10, 8);
+  ownedGeometries.push(rivetGeometry);
+  for (let i = 0; i < 6; i++) {
+    const angle = (i + .5) / 6 * Math.PI * 2;
+    const rivet = new THREE.Mesh(rivetGeometry, agedBrassRimMat);
+    rivet.scale.z = .35;
+    rivet.position.set(Math.cos(angle) * .59, Math.sin(angle) * .59, flangeOuterFrontZ + .014);
+    rotatingSpool.add(rivet);
+  }
 
   // =========================================================
   // Central Core / Hub (Connects flanges coaxially along Z)

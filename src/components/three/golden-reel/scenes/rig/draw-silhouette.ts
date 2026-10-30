@@ -233,13 +233,18 @@ export function drawCharacterSilhouette(
   if (pose.clothing?.type === "gown") {
     // Flowing evening ballgown
     const dip = pose.clothing.dressDip ?? 0;
+    const flow = Math.sin(pose.clothing.dressAngle ?? 0) * H * .18;
     const flare = H * 0.28 + dip * H * 0.16;
     const hemY = Math.max(leftAnkle.y, rightAnkle.y) + H * 0.04;
 
     ctx.beginPath();
     ctx.moveTo(waistX - halfWaist, waistY);
-    ctx.quadraticCurveTo(root.x - flare * 0.85, (waistY + hemY) * 0.5, root.x - flare * facing, hemY);
-    ctx.lineTo(root.x + flare * 0.7 * facing, hemY);
+    ctx.quadraticCurveTo(root.x - flare * 0.85, (waistY + hemY) * 0.5, root.x - flare * facing + flow, hemY);
+    // A scalloped hem follows the trailing cloth, with subtle lit folds.
+    for (let i = 0; i <= 12; i++) {
+      const x = root.x - flare * facing + flow + i / 12 * flare * 1.7 * facing;
+      ctx.lineTo(x, hemY + Math.sin(i * Math.PI / 2) * H * .012);
+    }
     ctx.quadraticCurveTo(root.x + flare * 0.45, (waistY + hemY) * 0.5, waistX + halfWaist, waistY);
     ctx.closePath();
     ctx.fill();
@@ -291,6 +296,13 @@ export function drawCharacterSilhouette(
   ctx.ellipse(0, 0, headR * 0.95, headR * 1.12, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  if (pose.clothing?.type === "gown") {
+    // Swept hair contour follows the same delayed cloth motion as the gown.
+    const trail = Math.sin(pose.clothing.dressAngle ?? 0) * headR * 1.5;
+    ctx.beginPath(); ctx.moveTo(-headR * facing, -headR * .6);
+    ctx.bezierCurveTo(-headR * 2 * facing + trail, -headR * 1.6, -headR * 2.4 * facing + trail, headR, -headR * .8 * facing, headR * 1.5);
+    ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+  }
   // Distinct nose & jaw profile in facing direction
   ctx.beginPath();
   ctx.moveTo(0, -headR * 0.2);

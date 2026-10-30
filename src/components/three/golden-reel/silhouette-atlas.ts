@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { finishCinematicFrame } from "./scenes/cinematic-finish";
 import { GENRES, GENRE_COUNT } from "./sequence-controller";
 import type { SequenceSample } from "./types";
 
@@ -50,7 +51,8 @@ export function createSilhouetteAtlas(): SilhouetteAtlasManager {
     ctx.clip();
     sceneContext.clearRect(0, 0, sceneCanvas.width, sceneCanvas.height);
     GENRES[genre].render(sceneContext, sceneCanvas.width, sceneCanvas.height, progress);
-    ctx.filter = "sepia(0.85) saturate(0.7)";
+    finishCinematicFrame(sceneContext, sceneCanvas.width, sceneCanvas.height, genre, progress * 4);
+    ctx.filter = "sepia(0.35) saturate(1.1) contrast(1.14)";
     ctx.drawImage(sceneCanvas, margin, y + 6);
     ctx.filter = "none";
     ctx.restore();
@@ -68,12 +70,16 @@ export function createSilhouetteAtlas(): SilhouetteAtlasManager {
   return {
     canvas, ctx, texture,
     update(sample) {
-      if (sample.genreIndex === previousGenre && sample.advancing === previousAdvance && Math.abs(sample.sceneProgress - previousProgress) < 0.004) return false;
+      if (sample.genreIndex === previousGenre && sample.advancing === previousAdvance && Math.abs(sample.sceneProgress - previousProgress) < 1 / 120) return false;
       previousGenre = sample.genreIndex;
       previousProgress = sample.sceneProgress;
       previousAdvance = sample.advancing;
       renderFrame(sample.genreIndex, sample.advancing ? 1 : sample.sceneProgress);
-      if (sample.advancing) renderFrame(sample.nextGenreIndex, 0);
+      // Keep background story cells alive too, with their own slower choreography.
+      for (let offset = 1; offset < FRAME_COUNT; offset++) {
+        const genre = (sample.genreIndex + offset) % FRAME_COUNT;
+        renderFrame(genre, sample.advancing && offset === 1 ? 0 : sample.sceneProgress * .65);
+      }
       texture.needsUpdate = true;
       return true;
     },

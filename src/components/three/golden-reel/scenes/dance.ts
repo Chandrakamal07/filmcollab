@@ -127,7 +127,7 @@ export const danceScene: GenreDefinition = {
       clothing: {
         type: "gown",
         dressDip: dipProgress,
-        dressAngle: dipProgress * 0.3,
+        dressAngle: dipProgress * 0.3 + Math.sin(spinAngle - 0.5) * 0.28,
       },
     };
 

@@ -52,6 +52,23 @@ export function createFilmSystem(texture: THREE.CanvasTexture, reel: THREE.Group
   const group = new THREE.Group();
   group.name = "continuousCurvedFilm";
   group.add(filmMesh);
+  // Thin physical edge catches the same studio lights as the reel. The image
+  // surface stays luminous, while these edges reveal the ribbon curvature.
+  const edgeMaterial = new THREE.MeshStandardMaterial({ color: "#b57a2c", metalness: .92, roughness: .24, side: THREE.DoubleSide });
+  const edgeGeometries: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    const edgePositions: number[] = [];
+    for (const s of layout.samples) {
+      for (const inset of [0, .003]) {
+        const p = s.center.clone().addScaledVector(s.widthAxis, side * (s.width / 2 - inset));
+        edgePositions.push(p.x, p.y, p.z + .0005);
+      }
+    }
+    const edge = new THREE.BufferGeometry();
+    edge.setAttribute("position", new THREE.Float32BufferAttribute(edgePositions, 3));
+    edge.setIndex(indices); edge.computeVertexNormals(); edgeGeometries.push(edge);
+    group.add(new THREE.Mesh(edge, edgeMaterial));
+  }
   texture.repeat.set(1, 1 / FRAME_COUNT);
   texture.offset.set(0, (FRAME_COUNT - 1) / FRAME_COUNT);
   return {
@@ -60,6 +77,6 @@ export function createFilmSystem(texture: THREE.CanvasTexture, reel: THREE.Group
     updateTransport(frames) {
       texture.offset.y = THREE.MathUtils.euclideanModulo(FRAME_COUNT - 1 + frames, FRAME_COUNT) / FRAME_COUNT;
     },
-    dispose() { geometry.dispose(); filmMaterial.dispose(); },
+    dispose() { geometry.dispose(); filmMaterial.dispose(); edgeGeometries.forEach(edge => edge.dispose()); edgeMaterial.dispose(); },
   };
 }
