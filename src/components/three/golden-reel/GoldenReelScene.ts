@@ -5,6 +5,7 @@ import { createSilhouetteAtlas, type SilhouetteAtlasManager } from "./silhouette
 import { createGoldenReel, type ReelAssembly } from "./ReelGeometry";
 import { createFilmSystem, type FilmSystem } from "./FilmPath";
 import { createCinematicAtmosphere } from "./cinematic-atmosphere";
+import { placeReferenceReel, frameReferenceCamera } from "./reference-composition";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 export interface GoldenReelController {
@@ -59,8 +60,7 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
 
   const atlas = createSilhouetteAtlas();
   const reel = createGoldenReel();
-  reel.group.position.set(-1.3, 0.8, -1.8);
-  reel.group.rotation.set(0.04, -0.80, -0.08);
+  placeReferenceReel(reel.group);
   scene.add(reel.group);
   reel.group.updateWorldMatrix(true, false);
   const filmSystem = createFilmSystem(atlas.texture, reel.group, reel.parameters);
@@ -97,35 +97,32 @@ export function createGoldenReelScene(container: HTMLElement, onFirstRender?: ()
   const draw = (pointer: THREE.Vector2, mobile: boolean) => {
     const width = container.clientWidth || 1200;
     const height = container.clientHeight || 440;
-    const left = mobile ? 0 : width * 0.32;
-    const viewWidth = width - left;
-    camera.aspect = viewWidth / height;
-    camera.updateProjectionMatrix();
-    const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    let distance = 0;
-    for (const p of envelope) {
-      distance = Math.max(distance, p.z + Math.max(
+    if (mobile) {
+      camera.fov = 55; camera.zoom = 1; camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      let distance = 0;
+      for (const p of envelope) distance = Math.max(distance, p.z + Math.max(
         Math.abs(p.x - target.x) / (tan * camera.aspect), Math.abs(p.y - target.y) / tan,
-      ) * 1.10);
+      ) * 1.08);
+      camera.position.set(target.x, target.y, distance);
+      camera.lookAt(target.x, target.y, distance - 1);
+    } else {
+      frameReferenceCamera(camera, width, height);
     }
-    distance *= mobile ? 1 : 0.9;
-    camera.position.set(target.x + pointer.x * 0.025, target.y + pointer.y * 0.025, distance);
-    camera.lookAt(target.x, target.y, distance - 1);
+    // Lock the reference angle. Pointer motion must not change composition.
+    void pointer;
     renderer.setViewport(0, 0, width, height);
     renderer.setScissorTest(false);
     renderer.clear();
-    renderer.setViewport(left, 0, viewWidth, height);
-    renderer.setScissor(left, 0, viewWidth, height);
-    renderer.setScissorTest(true);
     renderer.render(scene, camera);
-    renderer.setScissorTest(false);
   };
   const apply = () => {
     sample = sampleSequence(activeTime);
     atlas.update(sample);
     atmosphere.update(activeTime);
     filmSystem.updateTransport(sample.transportInFrames);
-    reel.rotatingSpool.rotation.z = 0.45 + sample.transportInFrames * filmSystem.framePitch / reel.effectiveWindingRadius;
+    reel.rotatingSpool.rotation.z = 0.45 + sample.transportInFrames * filmSystem.framePitch / (reel.effectiveWindingRadius * reel.group.scale.x);
   };
   apply();
   return {

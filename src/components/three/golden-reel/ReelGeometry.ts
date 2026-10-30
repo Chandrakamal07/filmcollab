@@ -113,7 +113,7 @@ export function createGoldenReel(): ReelAssembly {
   // =========================================================
   const outerR = 2.0;
   const hubHoleR = 0.32;
-  const windowCount = 6;
+  const windowCount = 5;
 
   const flangeShape = new THREE.Shape();
   flangeShape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
@@ -123,14 +123,16 @@ export function createGoldenReel(): ReelAssembly {
   centerHole.absarc(0, 0, hubHoleR, 0, Math.PI * 2, true);
   flangeShape.holes.push(centerHole);
 
-  // Long annular windows leave six elegant structural spokes, rather than
-  // six round holes in a flat disc. The hole winding opposes the outer face.
+  // Rounded annular windows reproduce the reference reel's five broad spokes. The hole winding opposes the outer face.
   for (let i = 0; i < windowCount; i++) {
     const angle = i * Math.PI * 2 / windowCount;
     const windowHole = new THREE.Path();
     windowHole.absarc(0, 0, 1.70, angle + 0.32, angle - 0.32, true);
-    windowHole.lineTo(Math.cos(angle - 0.22) * 0.70, Math.sin(angle - 0.22) * 0.70);
+    windowHole.quadraticCurveTo(Math.cos(angle - .40) * 1.10, Math.sin(angle - .40) * 1.10,
+      Math.cos(angle - .22) * .70, Math.sin(angle - .22) * .70);
     windowHole.absarc(0, 0, 0.70, angle - 0.22, angle + 0.22, false);
+    windowHole.quadraticCurveTo(Math.cos(angle + .40) * 1.10, Math.sin(angle + .40) * 1.10,
+      Math.cos(angle + .32) * 1.70, Math.sin(angle + .32) * 1.70);
     windowHole.closePath();
     flangeShape.holes.push(windowHole);
   }
@@ -215,8 +217,8 @@ export function createGoldenReel(): ReelAssembly {
   }
   const rivetGeometry = new THREE.SphereGeometry(.032, 10, 8);
   ownedGeometries.push(rivetGeometry);
-  for (let i = 0; i < 6; i++) {
-    const angle = (i + .5) / 6 * Math.PI * 2;
+  for (let i = 0; i < windowCount; i++) {
+    const angle = (i + .5) / windowCount * Math.PI * 2;
     const rivet = new THREE.Mesh(rivetGeometry, agedBrassRimMat);
     rivet.scale.z = .35;
     rivet.position.set(Math.cos(angle) * .59, Math.sin(angle) * .59, flangeOuterFrontZ + .014);

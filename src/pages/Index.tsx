@@ -219,13 +219,13 @@ const Index = () => {
       <section
         onPointerMove={handleHeroPointerMove}
         onPointerLeave={handleHeroPointerLeave}
-        className="relative pt-20 pb-12 px-4 sm:px-8"
+        className="relative pt-16 pb-12 px-0"
       >
-        <div className="container mx-auto max-w-[1680px]">
+        <div className="w-full mx-auto">
           <div className="relative bg-[#090A0D] overflow-hidden isolate">
             {/* Hero Main Stage with Full-Hero 3D Cinematic World Background */}
             <div
-              className="relative min-h-[580px] lg:min-h-[640px] flex flex-col justify-between overflow-hidden isolate select-none"
+              className="relative min-h-[580px] lg:min-h-[680px] flex flex-col justify-between overflow-hidden isolate select-none"
             >
               {/* Layer 1: Rebalanced Cinematic Copy Scrim (Protects text on left, 100% transparent on right) */}
               <div
@@ -242,7 +242,7 @@ const Index = () => {
               />
 
               {/* Upper-Right Editorial Callout */}
-              <div className="hidden xl:flex flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
+              <div className="hidden flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
                 <p className="font-display italic text-lg text-foreground/80 -rotate-3 pr-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
                   “Different Stories,
                   <br />
@@ -251,7 +251,7 @@ const Index = () => {
               </div>
 
               {/* Main Grid: Left copy, Right open negative space where 3D story fragments emerge */}
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center relative z-20">
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:aspect-[16/9] lg:min-h-[680px] lg:max-h-[1080px] items-center relative z-20">
                 {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
                 <div
                   aria-hidden="true"
@@ -266,10 +266,11 @@ const Index = () => {
                       onError={handleWebGLError}
                     />
                   </React.Suspense>
+                  <div className="absolute inset-0 hidden lg:block" style={{ background: "linear-gradient(90deg, rgba(9,10,13,.96) 0%, rgba(9,10,13,.8) 22%, rgba(9,10,13,.22) 40%, transparent 60%)" }} />
                 </div>
 
                 {/* Left: Editorial Hero Content (Matches 01 / Landing) */}
-                <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-6 lg:pb-8 min-w-0">
+                <div className="relative z-20 px-6 sm:px-12 lg:px-[4vw] pt-12 sm:pt-16 pb-6 lg:pb-8 min-w-0">
                   <FadeInSection variant="marketing">
                     <div className="flex items-center gap-2.5 mb-5">
                       <span className="h-[1px] w-7 bg-primary/80" />
@@ -278,7 +279,7 @@ const Index = () => {
                       </span>
                     </div>
 
-                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[76px] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
+                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[clamp(64px,5.7vw,108px)] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
                       Your next
                       <span className="block">film starts here.</span>
                     </h1>
@@ -312,11 +313,11 @@ const Index = () => {
                 </div>
 
                 {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-[760px] pointer-events-none" />
+                <div className="relative min-w-0 w-full h-[400px] sm:h-[440px] lg:h-full pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
-              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pb-8 pt-4 border-t border-white/[0.07] bg-gradient-to-t from-[#0E0F12] via-[#090A0D]/95 to-transparent">
+              <div className="relative z-20 px-6 sm:px-12 lg:px-[4vw] pb-8 pt-4 border-t border-white/[0.07] bg-gradient-to-t from-[#0E0F12] via-[#090A0D]/95 to-transparent">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-4 items-end">
                   <div className="col-span-2 sm:col-span-3 lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5">
                     {craftDisciplines.map((craft, idx) => (

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { createGoldenReel } from "../src/components/three/golden-reel/ReelGeometry";
 import { buildFilmLayout } from "../src/components/three/golden-reel/film-layout";
 import { createFilmSystem } from "../src/components/three/golden-reel/FilmPath";
+import { placeReferenceReel, frameReferenceCamera } from "../src/components/three/golden-reel/reference-composition";
 import { sampleSequence } from "../src/components/three/golden-reel/sequence-controller";
 
 const reel = createGoldenReel();
-reel.group.position.set(-1.3, 0.8, -1.8);
-reel.group.rotation.set(0.04, -0.80, -0.08);
+placeReferenceReel(reel.group);
 reel.group.updateWorldMatrix(true, false);
 const layout = buildFilmLayout(reel.group.matrixWorld, reel.parameters);
 const inverse = reel.group.matrixWorld.clone().invert();
@@ -15,7 +15,7 @@ let collisions = 0;
 let foldedEdges = 0;
 for (let i = 0; i < layout.samples.length; i++) {
   const s = layout.samples[i];
-  assert.ok(Math.abs(s.width - reel.parameters.filmPackWidth) < 1e-10);
+  assert.ok(Math.abs(s.width - reel.parameters.filmPackWidth * reel.group.scale.x) < 1e-10);
   assert.ok(Math.abs(s.tangent.dot(s.widthAxis)) < 1e-10);
   for (let j = 0; j <= 20; j++) {
     const p = s.center.clone().addScaledVector(s.widthAxis, s.width * (j / 20 - 0.5)).applyMatrix4(inverse);
@@ -48,5 +48,21 @@ const first = layout.samples[0].center;
 const last = layout.samples[layout.samples.length - 1].center;
 assert.ok(last.z - first.z > 4, "Foreground must come toward the viewer");
 assert.ok(last.x < 1.2, "Foreground must sweep diagonally left from the crest");
-console.log(JSON.stringify({ samples: layout.samples.length, constantWidth: reel.parameters.filmPackWidth, collisions, foldedEdges, firstGenre: sampleSequence(0).genre.id, secondGenre: sampleSequence(5.5).genre.id }, null, 2));
+const camera = new THREE.PerspectiveCamera();
+frameReferenceCamera(camera, 1672, 941);
+const project = (p: THREE.Vector3) => {
+  const q = p.clone().project(camera);
+  return { x: (q.x + 1) / 2, y: (1 - q.y) / 2 };
+};
+const reelCenter = project(reel.group.position);
+const crest = project(new THREE.Vector3(2.4, 1.45, 6));
+assert.ok(Math.abs(reelCenter.x - .48) < .035, "Reel sits behind the middle of the hero");
+assert.ok(Math.abs(reelCenter.y - .33) < .04, "Reel vertical position matches reference");
+assert.ok(Math.abs(crest.x - .81) < .04 && Math.abs(crest.y - .17) < .04, "Film crest matches the reference angle and position");
+assert.ok(project(last).y > 1, "Foreground strip leaves the composition through its lower edge");
+const rimPoints = Array.from({length: 128}, (_, i) => project(new THREE.Vector3(Math.cos(i / 128 * Math.PI * 2) * reel.outerRadius, Math.sin(i / 128 * Math.PI * 2) * reel.outerRadius, .525).applyMatrix4(reel.group.matrixWorld)));
+const reelBounds = { left: Math.min(...rimPoints.map(p => p.x)), right: Math.max(...rimPoints.map(p => p.x)), top: Math.min(...rimPoints.map(p => p.y)), bottom: Math.max(...rimPoints.map(p => p.y)) };
+assert.ok(reelBounds.bottom - reelBounds.top > .52 && reelBounds.bottom - reelBounds.top < .65, "Reel occupies the reference's large vertical footprint");
+assert.ok(reelBounds.right - reelBounds.left > .17 && reelBounds.right - reelBounds.left < .29, "Reel shaft angle yields the reference's narrow ellipse");
+console.log(JSON.stringify({ reelBounds, referenceAnchors: { reelCenter, crest, foreground: project(last) }, samples: layout.samples.length, constantWidth: layout.samples[0].width, collisions, foldedEdges, firstGenre: sampleSequence(0).genre.id, secondGenre: sampleSequence(5.5).genre.id }, null, 2));
 film.dispose(); texture.dispose(); reel.dispose();
