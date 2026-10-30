@@ -35,11 +35,11 @@ import {
   StaggerItem,
 } from "@/components/ui/motion-primitives";
 import * as THREE from "three";
-import { CinematicWorldFallback } from "@/components/three/cinematic-world/CinematicWorldFallback";
-import { CinematicWorldControls } from "@/components/three/cinematic-world/CinematicWorldControls";
+import { GoldenReelFallback } from "@/components/three/golden-reel/GoldenReelFallback";
+import { GoldenReelControls } from "@/components/three/golden-reel/GoldenReelControls";
 
-const CinematicWorldCanvas = React.lazy(
-  () => import("@/components/three/cinematic-world/CinematicWorldCanvas")
+const GoldenReelCanvas = React.lazy(
+  () => import("@/components/three/golden-reel/GoldenReelCanvas")
 );
 
 const craftDisciplines = [
@@ -94,6 +94,11 @@ const Index = () => {
   const [pointerTarget] = React.useState(() => new THREE.Vector2(0, 0));
   const [isPaused, setIsPaused] = React.useState(false);
   const [reducedMotion, setReducedMotion] = React.useState(false);
+  const [hasWebGLError, setHasWebGLError] = React.useState(false);
+
+  const handleWebGLError = React.useCallback(() => {
+    setHasWebGLError(true);
+  }, []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -211,37 +216,53 @@ const Index = () => {
       <LandingTopbar />
 
       {/* 01 / LANDING — STUDIO NOIR CINEMATIC STAGE + 3D WEBGL FILM SCULPTURE */}
-      <section className="relative pt-20 pb-12 px-4 sm:px-8">
+      <section
+        onPointerMove={handleHeroPointerMove}
+        onPointerLeave={handleHeroPointerLeave}
+        className="relative pt-20 pb-12 px-4 sm:px-8"
+      >
         <div className="container mx-auto max-w-[1400px]">
           <div className="relative rounded-2xl border border-white/[0.09] bg-[#090A0D] shadow-noir-lg overflow-hidden isolate">
             {/* Hero Main Stage with Full-Hero 3D Cinematic World Background */}
             <div
-              onPointerMove={handleHeroPointerMove}
-              onPointerLeave={handleHeroPointerLeave}
               className="relative min-h-[580px] lg:min-h-[640px] flex flex-col justify-between overflow-hidden isolate select-none"
             >
-              {/* Layer 0: Full-Hero 3D Cinematic World Behind the Interface */}
+              {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 z-0"
               >
-                <React.Suspense fallback={<CinematicWorldFallback />}>
-                  <CinematicWorldCanvas
+                <React.Suspense fallback={<GoldenReelFallback />}>
+                  <GoldenReelCanvas
                     pointerTarget={pointerTarget}
                     isPaused={isPaused}
                     reducedMotion={reducedMotion}
+                    onError={handleWebGLError}
                   />
                 </React.Suspense>
               </div>
 
-              {/* Layer 1: Atmospheric Gradients (Deep charcoal behind headline, transparent on right) */}
+              {/* Layer 1: Rebalanced Cinematic Copy Scrim (Protects text on left, 100% transparent on right) */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-[#090A0D]/95 via-[#090A0D]/75 to-transparent"
+                className="pointer-events-none absolute inset-0 z-[1] hidden md:block"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(9, 10, 13, 0.94) 0%, rgba(9, 10, 13, 0.82) 30%, rgba(9, 10, 13, 0.28) 52%, rgba(9, 10, 13, 0.04) 72%, transparent 100%)",
+                }}
+              />
+              {/* Mobile scrim: protects top copy while leaving bottom visual opening */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[1] md:hidden"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(9, 10, 13, 0.92) 0%, rgba(9, 10, 13, 0.65) 45%, rgba(9, 10, 13, 0.20) 70%, transparent 100%)",
+                }}
               />
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[#090A0D] via-transparent to-[#090A0D]/40"
+                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[#090A0D]/70 via-transparent to-[#090A0D]/20"
               />
 
               {/* Upper-Right Editorial Callout */}
@@ -342,9 +363,10 @@ const Index = () => {
                   {/* Right Architectural Tagline + Discreet Pause/Resume Control */}
                   <div className="col-span-2 sm:col-span-3 lg:col-span-3 flex flex-col justify-end lg:pl-4 pb-2">
                     <div className="flex items-center justify-between lg:justify-end gap-3 mb-2.5">
-                      <CinematicWorldControls
+                      <GoldenReelControls
                         isPaused={isPaused}
                         onTogglePause={handleTogglePause}
+                        disabled={hasWebGLError}
                       />
                     </div>
                     <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground leading-relaxed">

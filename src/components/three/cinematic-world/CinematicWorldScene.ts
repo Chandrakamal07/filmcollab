@@ -4,6 +4,10 @@ export interface CinematicLayerData {
   group: THREE.Group;
   basePosition: THREE.Vector3;
   baseRotation: THREE.Euler;
+  baseQuaternion: THREE.Quaternion;
+  composedPosition: THREE.Vector3;
+  composedRotation: THREE.Euler;
+  composedQuaternion: THREE.Quaternion;
   ampX: number;
   ampY: number;
   ampZ: number;
@@ -16,29 +20,172 @@ export interface CinematicWorldController {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   layers: CinematicLayerData[];
-  lightBeam: THREE.Mesh;
-  sweepLight: THREE.PointLight;
+  lightBeam: THREE.Mesh | null;
+  sweepLight: THREE.PointLight | null;
   update: (deltaSeconds: number, isRunning: boolean, pointer: THREE.Vector2, isMobile: boolean) => void;
   dispose: () => void;
+  isReady: () => boolean;
+  getActiveTime: () => number;
 }
+
+export function applyCoverCrop(
+  texture: THREE.Texture,
+  imageWidth: number,
+  imageHeight: number,
+  planeWidth: number,
+  planeHeight: number,
+  alignX: number = 0.5,
+  alignY: number = 0.5
+) {
+  const imageAspect = imageWidth / imageHeight;
+  const planeAspect = planeWidth / planeHeight;
+
+  texture.repeat.set(1, 1);
+  texture.offset.set(0, 0);
+
+  if (imageAspect > planeAspect) {
+    texture.repeat.x = planeAspect / imageAspect;
+    texture.offset.x = (1 - texture.repeat.x) * alignX;
+  } else {
+    texture.repeat.y = imageAspect / planeAspect;
+    texture.offset.y = (1 - texture.repeat.y) * alignY;
+  }
+
+  texture.needsUpdate = true;
+}
+
+interface ImageConfig {
+  path: string;
+  width: number;
+  height: number;
+  imgWidth: number;
+  imgHeight: number;
+  cropX: number;
+  cropY: number;
+  basePos: THREE.Vector3;
+  baseRot: THREE.Euler;
+  composedPos: THREE.Vector3;
+  composedRot: THREE.Euler;
+  ampX: number;
+  ampY: number;
+  ampZ: number;
+  ampRotY: number;
+  phaseOffset: number;
+}
+
+const IMAGE_CONFIGS: ImageConfig[] = [
+  // 1. Clapperboard on Film Set (Anchor Image)
+  {
+    path: "/images/hero/frame-main.jpg",
+    width: 2.8,
+    height: 1.58,
+    imgWidth: 1200,
+    imgHeight: 811,
+    cropX: 0.5,
+    cropY: 0.5,
+    basePos: new THREE.Vector3(2.0, -0.05, -1.0),
+    baseRot: new THREE.Euler(0.02, -0.15, -0.01),
+    composedPos: new THREE.Vector3(2.2, -0.12, -0.9),
+    composedRot: new THREE.Euler(0.0, -0.09, 0.0),
+    ampX: 0.12,
+    ampY: 0.06,
+    ampZ: 0.12,
+    ampRotY: 0.03,
+    phaseOffset: 0.0,
+  },
+  // 2. Central Cinema Neon Theater Facade (Lower Right Accent)
+  {
+    path: "/images/hero/frame-supporting-2.jpg",
+    width: 2.0,
+    height: 1.25,
+    imgWidth: 1000,
+    imgHeight: 800,
+    cropX: 0.5,
+    cropY: 0.5,
+    basePos: new THREE.Vector3(3.1, -0.72, -0.5),
+    baseRot: new THREE.Euler(-0.02, -0.22, 0.02),
+    composedPos: new THREE.Vector3(2.85, -0.68, -0.6),
+    composedRot: new THREE.Euler(0.0, -0.11, 0.0),
+    ampX: -0.12,
+    ampY: 0.07,
+    ampZ: -0.14,
+    ampRotY: -0.04,
+    phaseOffset: Math.PI * 0.5,
+  },
+  // 3. Studio Stage Lighting Fixture (Upper Left-Center Depth)
+  {
+    path: "/images/hero/frame-supporting-1.jpg",
+    width: 2.1,
+    height: 1.25,
+    imgWidth: 1000,
+    imgHeight: 667,
+    cropX: 0.5,
+    cropY: 0.5,
+    basePos: new THREE.Vector3(1.4, 0.95, -2.0),
+    baseRot: new THREE.Euler(0.03, -0.09, 0.01),
+    composedPos: new THREE.Vector3(1.7, 0.78, -1.6),
+    composedRot: new THREE.Euler(0.0, -0.07, 0.0),
+    ampX: 0.10,
+    ampY: -0.05,
+    ampZ: 0.12,
+    ampRotY: 0.03,
+    phaseOffset: Math.PI * 1.0,
+  },
+  // 4. Mist-Shrouded Castle Vista Portrait (Upper Right Anchor)
+  {
+    path: "/images/hero/frame-4.jpg",
+    width: 1.35,
+    height: 1.75,
+    imgWidth: 1000,
+    imgHeight: 1513,
+    cropX: 0.5,
+    cropY: 0.35,
+    basePos: new THREE.Vector3(3.3, 0.78, -1.4),
+    baseRot: new THREE.Euler(0.01, -0.25, -0.02),
+    composedPos: new THREE.Vector3(3.15, 0.65, -1.2),
+    composedRot: new THREE.Euler(0.0, -0.13, 0.0),
+    ampX: -0.09,
+    ampY: -0.06,
+    ampZ: -0.10,
+    ampRotY: -0.03,
+    phaseOffset: Math.PI * 1.5,
+  },
+];
 
 export function createCinematicWorldScene(
   container: HTMLElement,
-  onFirstRender?: () => void
+  onFirstRender?: () => void,
+  onError?: (err: Error) => void
 ): CinematicWorldController {
   const width = container.clientWidth || window.innerWidth || 1200;
   const height = container.clientHeight || 700;
 
+  let disposed = false;
+  let essentialTexturesReady = false;
+  let hasReportedFirstRender = false;
+
+  // Deduplicated resource tracking sets for clean disposal
+  const ownedGeometries = new Set<THREE.BufferGeometry>();
+  const ownedMaterials = new Set<THREE.Material>();
+  const ownedTextures = new Set<THREE.Texture>();
+
   // 1. WebGL Renderer
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: "high-performance",
-  });
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
+  } catch (err) {
+    onError?.(err instanceof Error ? err : new Error(String(err)));
+    throw err;
+  }
+
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(width, height);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.0;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   renderer.domElement.style.width = "100%";
@@ -49,42 +196,24 @@ export function createCinematicWorldScene(
 
   // 2. Scene & Camera
   const scene = new THREE.Scene();
-
-  // Perspective camera: 36° cinema field of view
   const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 40);
-  const baseCamPos = new THREE.Vector3(0.3, 0.05, 6.8);
+  const baseCamPos = new THREE.Vector3(0.0, 0.0, 6.0);
   camera.position.copy(baseCamPos);
   const cameraTarget = new THREE.Vector3(0.5, 0.0, 0.0);
   camera.lookAt(cameraTarget);
 
-  // 3. Cinematic Studio Lighting
-  // Warm Key Light grazing from upper right
-  const keyLight = new THREE.DirectionalLight("#FFF4E6", 2.2);
-  keyLight.position.set(4.2, 3.8, 2.5);
-  scene.add(keyLight);
-
-  // Amber Rim Light defining photographic edges
-  const amberRim = new THREE.SpotLight("#FFAA48", 3.8, 12, Math.PI / 3, 0.6, 1.2);
-  amberRim.position.set(-2.4, 2.0, -1.0);
-  amberRim.target.position.set(1.5, 0, -2.0);
-  scene.add(amberRim);
-  scene.add(amberRim.target);
-
-  // Cool Deep Ambient
-  const ambientLight = new THREE.AmbientLight("#0D1018", 0.95);
-  scene.add(ambientLight);
-
-  // Moving reflection light
-  const sweepLight = new THREE.PointLight("#FFE0B2", 1.8, 8.0, 1.2);
-  sweepLight.position.set(2.0, 1.5, 0.5);
+  // 3. Restrained Atmospheric Lighting
+  const sweepLight = new THREE.PointLight("#FFE0B2", 1.2, 7.0, 1.4);
+  sweepLight.position.set(2.4, 1.2, 0.2);
   scene.add(sweepLight);
 
-  // 4. Soft Volumetric Light Beam (Anamorphic studio shaft)
-  const beamLength = 9.0;
-  const beamRadiusTop = 0.35;
-  const beamRadiusBottom = 2.4;
+  // 4. Soft Volumetric Anamorphic Light Beam
+  const beamLength = 8.5;
+  const beamRadiusTop = 0.25;
+  const beamRadiusBottom = 2.0;
   const beamGeo = new THREE.CylinderGeometry(beamRadiusTop, beamRadiusBottom, beamLength, 32, 1, true);
   beamGeo.translate(0, -beamLength / 2, 0);
+  ownedGeometries.add(beamGeo);
 
   const beamMat = new THREE.ShaderMaterial({
     transparent: true,
@@ -93,8 +222,8 @@ export function createCinematicWorldScene(
     blending: THREE.AdditiveBlending,
     uniforms: {
       uColor: { value: new THREE.Color("#FFAE4E") },
-      uOpacity: { value: 0.11 },
-      uTime: { value: 0 },
+      uOpacity: { value: 0.07 },
+      uPhase: { value: 0.0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -111,224 +240,141 @@ export function createCinematicWorldScene(
     fragmentShader: `
       uniform vec3 uColor;
       uniform float uOpacity;
-      uniform float uTime;
+      uniform float uPhase;
       varying vec2 vUv;
       varying vec3 vNormal;
       varying vec3 vViewPosition;
       void main() {
-        // Soft longitudinal falloff
-        float lengthFade = smoothstep(0.02, 0.18, vUv.y) * (1.0 - smoothstep(0.70, 0.98, vUv.y));
-        // Soft rim falloff
+        float lengthFade = smoothstep(0.02, 0.20, vUv.y) * (1.0 - smoothstep(0.70, 0.98, vUv.y));
         vec3 normal = normalize(vNormal);
         vec3 viewDir = normalize(vViewPosition);
         float rim = abs(dot(viewDir, normal));
         float softRim = pow(1.0 - rim, 0.8) * 0.8 + rim * 0.2;
-        // Subtle atmospheric shimmer
-        float shimmer = 0.92 + 0.08 * sin(vUv.y * 18.0 - uTime * 0.6);
+        // Integer harmonic shimmer over 20-second loop (period 2*pi)
+        float shimmer = 0.96 + 0.04 * sin(vUv.y * 18.0 - uPhase);
         gl_FragColor = vec4(uColor, uOpacity * lengthFade * softRim * shimmer);
       }
     `,
   });
+  ownedMaterials.add(beamMat);
 
   const lightBeam = new THREE.Mesh(beamGeo, beamMat);
-  lightBeam.position.set(3.8, 3.4, 0.2);
+  lightBeam.position.set(3.4, 3.2, 0.0);
   lightBeam.quaternion.setFromUnitVectors(
     new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(-0.65, -0.65, -0.4).normalize()
+    new THREE.Vector3(-0.65, -0.65, -0.38).normalize()
   );
   scene.add(lightBeam);
 
-  // 5. Texture Loader & Shared Materials
+  // 5. Tracked Asynchronous Texture Loading
   const textureLoader = new THREE.TextureLoader();
 
-  const graphiteBorderMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#1A1D23"),
-    metalness: 0.35,
-    roughness: 0.55,
-  });
-
-  const titaniumBevelMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#747C8A"),
-    metalness: 0.88,
-    roughness: 0.24,
-  });
-
-  const amberHairlineMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#E9B457"),
-    emissive: new THREE.Color("#2A1C06"),
-    emissiveIntensity: 0.4,
-    metalness: 0.82,
-    roughness: 0.28,
-  });
-
-  const carbonBackMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color("#0E1014"),
-    metalness: 0.2,
-    roughness: 0.7,
-  });
-
-  // Helper to build a cinematic image surface with physical micro-framing
-  function createCinematicSurface(
-    imagePath: string,
-    widthMeters: number,
-    heightMeters: number,
-    filmLabel?: string
-  ): THREE.Group {
-    const group = new THREE.Group();
-
-    // Photographic Image Face
-    const texture = textureLoader.load(imagePath);
+  async function loadOwnedTexture(url: string): Promise<THREE.Texture> {
+    const texture = await textureLoader.loadAsync(url);
+    if (disposed) {
+      texture.dispose();
+      throw new Error("Scene disposed during texture loading");
+    }
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
-
-    const photoMat = new THREE.MeshStandardMaterial({
-      map: texture,
-      roughness: 0.35,
-      metalness: 0.08,
-      side: THREE.FrontSide,
-    });
-
-    const photoPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(widthMeters, heightMeters),
-      photoMat
-    );
-    photoPlane.position.set(0, 0, 0.002);
-    group.add(photoPlane);
-
-    // Dark Backplate
-    const backPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(widthMeters, heightMeters),
-      carbonBackMat
-    );
-    backPlane.rotation.y = Math.PI;
-    backPlane.position.set(0, 0, -0.002);
-    group.add(backPlane);
-
-    // Thin Graphite Surrounding Frame (15mm border)
-    const bw = 0.014;
-    const fw = widthMeters + bw * 2;
-    const fh = heightMeters + bw * 2;
-
-    const frameOuter = new THREE.Mesh(
-      new THREE.BoxGeometry(fw, fh, 0.006),
-      graphiteBorderMat
-    );
-    frameOuter.position.set(0, 0, 0);
-    group.add(frameOuter);
-
-    // Machined Titanium Beveled Rim
-    const rimTop = new THREE.Mesh(
-      new THREE.BoxGeometry(fw, 0.002, 0.007),
-      titaniumBevelMat
-    );
-    rimTop.position.set(0, fh / 2, 0.001);
-    group.add(rimTop);
-
-    // Amber Hairline Accent on Bottom Edge
-    const amberBottom = new THREE.Mesh(
-      new THREE.BoxGeometry(fw * 0.85, 0.0015, 0.007),
-      amberHairlineMat
-    );
-    amberBottom.position.set(0, -fh / 2, 0.001);
-    group.add(amberBottom);
-
-    // Restrained Optical Gauge Markings on Side
-    if (filmLabel) {
-      const notchGeo = new THREE.BoxGeometry(0.0015, 0.008, 0.008);
-      for (let n = -2; n <= 2; n++) {
-        const notch = new THREE.Mesh(notchGeo, titaniumBevelMat);
-        notch.position.set(fw / 2 + 0.001, n * 0.035, 0);
-        group.add(notch);
-      }
-    }
-
-    return group;
+    ownedTextures.add(texture);
+    return texture;
   }
 
-  // 6. Instantiate 4 Cinematic Story Fragments
+  // Dark backing material placed strictly BEHIND each image
+  const carbonBackMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color("#08090C"),
+    side: THREE.FrontSide,
+    depthTest: true,
+    depthWrite: true,
+  });
+  ownedMaterials.add(carbonBackMat);
+
   const layers: CinematicLayerData[] = [];
+  const thickness = 0.006;
+  const imageZ = 0.001;
 
-  // Fragment 1: The Master Landscape Horizon (2.39:1 Anamorphic)
-  const frag1Group = createCinematicSurface("/images/hero/frame-main.jpg", 3.4, 1.42, "2.39:1");
-  const frag1BasePos = new THREE.Vector3(1.5, 0.20, -2.2);
-  const frag1BaseRot = new THREE.Euler(0.04, -0.16, -0.015);
-  frag1Group.position.copy(frag1BasePos);
-  frag1Group.rotation.copy(frag1BaseRot);
-  scene.add(frag1Group);
+  Promise.all(
+    IMAGE_CONFIGS.map(async (config) => {
+      const texture = await loadOwnedTexture(config.path);
+      if (disposed) return null;
 
-  layers.push({
-    group: frag1Group,
-    basePosition: frag1BasePos,
-    baseRotation: frag1BaseRot,
-    ampX: 0.18,
-    ampY: 0.10,
-    ampZ: 0.25,
-    ampRotY: 0.06,
-    phaseOffset: 0.0,
-  });
+      applyCoverCrop(
+        texture,
+        config.imgWidth,
+        config.imgHeight,
+        config.width,
+        config.height,
+        config.cropX,
+        config.cropY
+      );
 
-  // Fragment 2: The Character Silhouette & Set (1.85:1 Theatrical)
-  const frag2Group = createCinematicSurface("/images/hero/frame-supporting-2.jpg", 2.3, 1.24, "1.85:1");
-  const frag2BasePos = new THREE.Vector3(2.5, -0.70, -0.9);
-  const frag2BaseRot = new THREE.Euler(-0.03, -0.24, 0.01);
-  frag2Group.position.copy(frag2BasePos);
-  frag2Group.rotation.copy(frag2BaseRot);
-  scene.add(frag2Group);
+      const group = new THREE.Group();
 
-  layers.push({
-    group: frag2Group,
-    basePosition: frag2BasePos,
-    baseRotation: frag2BaseRot,
-    ampX: -0.22,
-    ampY: 0.12,
-    ampZ: -0.30,
-    ampRotY: -0.07,
-    phaseOffset: Math.PI * 0.45,
-  });
+      // Front photograph (unlit, luminous, toneMapped false)
+      const photoMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        toneMapped: false,
+        side: THREE.FrontSide,
+        depthTest: true,
+        depthWrite: true,
+      });
+      ownedMaterials.add(photoMaterial);
 
-  // Fragment 3: Architectural Vista & Light (2.39:1 Anamorphic)
-  const frag3Group = createCinematicSurface("/images/hero/frame-supporting-1.jpg", 2.8, 1.17, "2.39:1");
-  const frag3BasePos = new THREE.Vector3(0.8, 1.15, -3.4);
-  const frag3BaseRot = new THREE.Euler(0.05, 0.08, 0.02);
-  frag3Group.position.copy(frag3BasePos);
-  frag3Group.rotation.copy(frag3BaseRot);
-  scene.add(frag3Group);
+      const photoGeo = new THREE.PlaneGeometry(config.width, config.height);
+      ownedGeometries.add(photoGeo);
 
-  layers.push({
-    group: frag3Group,
-    basePosition: frag3BasePos,
-    baseRotation: frag3BaseRot,
-    ampX: 0.14,
-    ampY: -0.08,
-    ampZ: 0.20,
-    ampRotY: 0.05,
-    phaseOffset: Math.PI * 1.1,
-  });
+      const photoPlane = new THREE.Mesh(photoGeo, photoMaterial);
+      photoPlane.position.z = imageZ;
+      group.add(photoPlane);
 
-  // Fragment 4: Golden-Hour Cinematic Atmosphere (1.66:1 European Wide)
-  const frag4Group = createCinematicSurface("/images/hero/frame-4.jpg", 1.9, 1.14);
-  const frag4BasePos = new THREE.Vector3(3.2, 0.80, -2.5);
-  const frag4BaseRot = new THREE.Euler(0.02, -0.26, -0.01);
-  frag4Group.position.copy(frag4BasePos);
-  frag4Group.rotation.copy(frag4BaseRot);
-  scene.add(frag4Group);
+      // Backing slab located entirely behind image: front face at z = 0
+      const backingGeo = new THREE.BoxGeometry(config.width + 0.012, config.height + 0.012, thickness);
+      ownedGeometries.add(backingGeo);
 
-  layers.push({
-    group: frag4Group,
-    basePosition: frag4BasePos,
-    baseRotation: frag4BaseRot,
-    ampX: -0.15,
-    ampY: -0.11,
-    ampZ: -0.18,
-    ampRotY: -0.05,
-    phaseOffset: Math.PI * 1.65,
-  });
+      const backing = new THREE.Mesh(backingGeo, carbonBackMat);
+      backing.position.z = -thickness / 2;
+      group.add(backing);
 
-  // 7. Time & Cycle Animation State
+      group.position.copy(config.basePos);
+      group.rotation.copy(config.baseRot);
+      scene.add(group);
+
+      const baseQuat = new THREE.Quaternion().setFromEuler(config.baseRot);
+      const compQuat = new THREE.Quaternion().setFromEuler(config.composedRot);
+
+      return {
+        group,
+        basePosition: config.basePos.clone(),
+        baseRotation: config.baseRot.clone(),
+        baseQuaternion: baseQuat,
+        composedPosition: config.composedPos.clone(),
+        composedRotation: config.composedRot.clone(),
+        composedQuaternion: compQuat,
+        ampX: config.ampX,
+        ampY: config.ampY,
+        ampZ: config.ampZ,
+        ampRotY: config.ampRotY,
+        phaseOffset: config.phaseOffset,
+      } as CinematicLayerData;
+    })
+  )
+    .then((loadedLayers) => {
+      if (disposed) return;
+      for (const l of loadedLayers) {
+        if (l) layers.push(l);
+      }
+      essentialTexturesReady = true;
+    })
+    .catch((err) => {
+      console.error("[CinematicWorld] Texture loading failed:", err);
+      onError?.(err instanceof Error ? err : new Error(String(err)));
+    });
+
+  // 6. Time & Cycle Animation State
   let activeTime = 0;
-  const cycleDuration = 20.0; // 20-second seamless ambient loop
-  let hasReportedFirstRender = false;
+  const cycleDuration = 20.0; // 20-second continuous periodic loop
 
   const update = (
     deltaSeconds: number,
@@ -336,84 +382,89 @@ export function createCinematicWorldScene(
     pointer: THREE.Vector2,
     isMobile: boolean
   ) => {
-    const dt = Math.min(Math.max(deltaSeconds, 0), 0.05);
+    if (disposed) return;
 
+    const dt = Math.min(Math.max(deltaSeconds, 0), 0.05);
     if (isRunning) {
       activeTime += dt;
     }
 
-    // 20-second continuous periodic phase: (0 -> 2pi)
+    // 20-second continuous periodic phase in [0, 2pi)
     const phase = ((activeTime % cycleDuration) / cycleDuration) * Math.PI * 2;
 
-    // A. Update Layer Motion (Derived from base transforms with harmonic convergence)
-    // Between phase ~0.8pi and 1.3pi (t ~ 8s - 13s), layers gracefully align toward a unified widescreen convergence
-    const convergenceFactor = Math.sin(phase) * 0.5 + 0.5; // Smooth 0 to 1 wave
+    // Coordinated Convergence Weight: smooth cubic wave holding alignment at peak
+    const convergence = Math.pow((1 - Math.cos(phase)) / 2, 3);
+    const wanderDamp = 1.0 - convergence * 0.75;
 
+    // A. Update Layer Motion
     for (const layer of layers) {
+      // 1. Interpolate between base and composed transforms
+      layer.group.position.lerpVectors(layer.basePosition, layer.composedPosition, convergence);
+      layer.group.quaternion.slerpQuaternions(layer.baseQuaternion, layer.composedQuaternion, convergence);
+
+      // 2. Add harmonic ambient drift using integer multipliers only
       const pOff = layer.phaseOffset;
+      const driftX = Math.sin(phase + pOff) * layer.ampX * wanderDamp;
+      const driftY = Math.cos(phase + pOff) * layer.ampY * wanderDamp;
+      const driftZ = Math.sin(2 * phase + pOff) * layer.ampZ * wanderDamp;
+      const driftRotY = Math.sin(phase + pOff) * layer.ampRotY * wanderDamp;
 
-      // Harmonic drift: X, Y, Z coordinates derived from base without cumulative drift
-      const driftX = Math.sin(phase + pOff) * layer.ampX;
-      const driftY = Math.cos(phase + pOff) * layer.ampY;
-      const driftZ = Math.sin(phase * 0.5 + pOff) * layer.ampZ;
-      const driftRotY = Math.sin(phase + pOff) * layer.ampRotY;
+      layer.group.position.x += driftX;
+      layer.group.position.y += driftY;
+      layer.group.position.z += driftZ;
 
-      // Subtle convergence alignment
-      const alignCorrectionY = (0 - layer.baseRotation.y) * 0.28 * convergenceFactor;
-
-      layer.group.position.x = layer.basePosition.x + driftX;
-      layer.group.position.y = layer.basePosition.y + driftY;
-      layer.group.position.z = layer.basePosition.z + driftZ;
-
-      layer.group.rotation.x = layer.baseRotation.x;
-      layer.group.rotation.y = layer.baseRotation.y + driftRotY + alignCorrectionY;
-      layer.group.rotation.z = layer.baseRotation.z;
+      // Apply subtle extra Y rotation wander
+      const qDrift = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), driftRotY);
+      layer.group.quaternion.multiply(qDrift);
     }
 
-    // B. Pointer Parallax (Restrained: camera shifts subtly)
-    const parallaxX = pointer.x * (isMobile ? 0.15 : 0.32);
-    const parallaxY = pointer.y * (isMobile ? 0.10 : 0.20);
+    // B. Pointer Parallax
+    const parallaxX = pointer.x * (isMobile ? 0.08 : 0.20);
+    const parallaxY = pointer.y * (isMobile ? 0.05 : 0.12);
 
     if (isMobile) {
-      camera.position.set(baseCamPos.x + 0.2 + parallaxX, baseCamPos.y + 0.3 + parallaxY, 8.4);
+      camera.position.set(baseCamPos.x + 0.3 + parallaxX, baseCamPos.y + 0.1 + parallaxY, 7.6);
     } else {
       camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, baseCamPos.z);
     }
     camera.lookAt(cameraTarget);
 
-    // C. Atmospheric Light Beam Shimmer & Sweep Light Movement
-    beamMat.uniforms.uTime.value = activeTime;
-    sweepLight.position.x = 2.0 + Math.sin(phase) * 1.2 + pointer.x * 0.4;
-    sweepLight.position.y = 1.4 + Math.cos(phase * 0.8) * 0.6 + pointer.y * 0.3;
+    // C. Atmospheric Shimmer & Sweep Light (strictly integer harmonics)
+    beamMat.uniforms.uPhase.value = phase;
+    sweepLight.position.x = 2.4 + Math.sin(phase) * 1.0 + pointer.x * 0.3;
+    sweepLight.position.y = 1.2 + Math.cos(phase) * 0.5 + pointer.y * 0.2;
 
-    // Render Scene
     renderer.render(scene, camera);
 
-    if (!hasReportedFirstRender) {
+    if (essentialTexturesReady && !hasReportedFirstRender) {
       hasReportedFirstRender = true;
       onFirstRender?.();
     }
   };
 
   const dispose = () => {
-    beamMat.dispose();
-    beamGeo.dispose();
-    graphiteBorderMat.dispose();
-    titaniumBevelMat.dispose();
-    amberHairlineMat.dispose();
-    carbonBackMat.dispose();
+    disposed = true;
 
     scene.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {
         const mesh = obj as THREE.Mesh;
-        mesh.geometry?.dispose();
+        if (mesh.geometry) ownedGeometries.add(mesh.geometry);
         if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((m) => m.dispose());
-        } else {
-          mesh.material?.dispose();
+          mesh.material.forEach((m) => ownedMaterials.add(m));
+        } else if (mesh.material) {
+          ownedMaterials.add(mesh.material);
         }
       }
     });
+
+    ownedGeometries.forEach((g) => g.dispose());
+    ownedGeometries.clear();
+
+    ownedMaterials.forEach((m) => m.dispose());
+    ownedMaterials.clear();
+
+    ownedTextures.forEach((t) => t.dispose());
+    ownedTextures.clear();
 
     renderer.dispose();
     if (renderer.domElement.parentElement === container) {
@@ -430,5 +481,7 @@ export function createCinematicWorldScene(
     sweepLight,
     update,
     dispose,
+    isReady: () => essentialTexturesReady,
+    getActiveTime: () => activeTime,
   };
 }
