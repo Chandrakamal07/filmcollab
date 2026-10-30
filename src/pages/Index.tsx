@@ -192,28 +192,24 @@ const Index = () => {
                 <div className="absolute top-0 right-[12%] w-[560px] h-[420px] rounded-full bg-[#E9B457]/20 blur-[120px]" />
               </div>
 
-              {/* Layer 2: Real Lazy-Loaded Three.js / WebGL 35mm Film-Ribbon & Aperture Sculpture */}
-              <div className="absolute inset-y-0 right-0 w-full lg:w-[62%] pointer-events-auto z-10 opacity-95">
+              {/* Layer 2: Desktop 3D WebGL Canvas Slot (Right half of the stage) */}
+              <div className="hidden lg:flex absolute inset-y-0 right-0 w-[54%] xl:w-[56%] pointer-events-auto z-10 items-center justify-center">
                 <React.Suspense fallback={<FilmSculptureFallback />}>
                   <FilmSculptureCanvas />
                 </React.Suspense>
               </div>
 
-              {/* Upper-Right Handwritten / Editorial Callout & WebGL Telemetry Pill */}
-              <div className="hidden md:flex flex-col items-end gap-2 absolute top-7 right-8 z-20 pointer-events-none">
-                <div className="inline-flex items-center gap-2 rounded-full border border-primary/35 bg-black/55 backdrop-blur-md px-3 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                  35MM WEBGL SCULPTURE • INTERACTIVE
-                </div>
-                <p className="font-display italic text-xl text-foreground/85 -rotate-6 mt-3 pr-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+              {/* Upper-Right Editorial Callout */}
+              <div className="hidden xl:flex flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
+                <p className="font-display italic text-lg text-foreground/80 -rotate-3 pr-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
                   “Different Stories,
                   <br />
-                  <span className="text-primary">Brighter People”</span>
+                  <span className="text-primary font-normal">Brighter People”</span>
                 </p>
               </div>
 
               {/* Layer 3: Left-Aligned Editorial Hero Content (Matches 01 / Landing) */}
-              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-10 max-w-2xl">
+              <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-6 max-w-2xl">
                 <FadeInSection variant="marketing">
                   <div className="flex items-center gap-2.5 mb-5">
                     <span className="h-[1px] w-7 bg-primary/80" />
@@ -253,6 +249,11 @@ const Index = () => {
                     </Button>
                   </div>
                 </FadeInSection>
+              </div>
+
+              {/* Mobile / Tablet Dedicated Media Slot (clean separation below CTAs, above craft strip) */}
+              <div className="lg:hidden relative z-20 px-4 sm:px-8 py-4 flex items-center justify-center">
+                <FilmSculptureFallback className="w-full max-w-[420px] h-[280px] sm:h-[320px]" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
