@@ -227,21 +227,6 @@ const Index = () => {
             <div
               className="relative min-h-[580px] lg:min-h-[640px] flex flex-col justify-between overflow-hidden isolate select-none"
             >
-              {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-0"
-              >
-                <React.Suspense fallback={<GoldenReelFallback />}>
-                  <GoldenReelCanvas
-                    pointerTarget={pointerTarget}
-                    isPaused={isPaused}
-                    reducedMotion={reducedMotion}
-                    onError={handleWebGLError}
-                  />
-                </React.Suspense>
-              </div>
-
               {/* Layer 1: Rebalanced Cinematic Copy Scrim (Protects text on left, 100% transparent on right) */}
               <div
                 aria-hidden="true"
@@ -249,15 +234,6 @@ const Index = () => {
                 style={{
                   background:
                     "linear-gradient(90deg, rgba(9, 10, 13, 0.94) 0%, rgba(9, 10, 13, 0.82) 30%, rgba(9, 10, 13, 0.28) 52%, rgba(9, 10, 13, 0.04) 72%, transparent 100%)",
-                }}
-              />
-              {/* Mobile scrim: protects top copy while leaving bottom visual opening */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-[1] md:hidden"
-                style={{
-                  background:
-                    "linear-gradient(180deg, rgba(9, 10, 13, 0.92) 0%, rgba(9, 10, 13, 0.65) 45%, rgba(9, 10, 13, 0.20) 70%, transparent 100%)",
                 }}
               />
               <div
@@ -276,6 +252,21 @@ const Index = () => {
 
               {/* Main Grid: Left copy, Right open negative space where 3D story fragments emerge */}
               <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center relative z-20">
+                {/* Layer 0: Full-Hero 3D The Golden Reel Background Behind the Interface */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-[300px] sm:h-[340px] lg:top-0 lg:-bottom-[220px] lg:h-auto z-0"
+                >
+                  <React.Suspense fallback={<GoldenReelFallback />}>
+                    <GoldenReelCanvas
+                      pointerTarget={pointerTarget}
+                      isPaused={isPaused}
+                      reducedMotion={reducedMotion}
+                      onError={handleWebGLError}
+                    />
+                  </React.Suspense>
+                </div>
+
                 {/* Left: Editorial Hero Content (Matches 01 / Landing) */}
                 <div className="relative z-20 px-6 sm:px-12 lg:px-14 pt-12 sm:pt-16 pb-6 lg:pb-8 min-w-0">
                   <FadeInSection variant="marketing">
@@ -320,7 +311,7 @@ const Index = () => {
                 </div>
 
                 {/* Right: Open negative space allowing the 3D cinematic world to breathe */}
-                <div className="hidden lg:block relative min-w-0 w-full h-[400px] pointer-events-none" />
+                <div className="relative min-w-0 w-full h-[300px] sm:h-[340px] lg:h-[400px] pointer-events-none" />
               </div>
 
               {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
@@ -598,3 +589,4 @@ const Index = () => {
 };
 
 export default Index;
+

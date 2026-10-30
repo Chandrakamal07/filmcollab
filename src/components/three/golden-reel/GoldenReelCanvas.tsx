@@ -200,7 +200,7 @@ export const GoldenReelCanvas: React.FC<GoldenReelCanvasProps> = React.memo(
           pointerSmooth.set(0, 0);
         }
 
-        const isMobile = (container.clientWidth || 1200) < 768;
+        const isMobile = (container.clientWidth || 1200) < 1024;
         controller.update(deltaSeconds, isRunning, pointerSmooth, isMobile);
 
         // Check whether scheduler can settle when paused
@@ -266,4 +266,5 @@ export const GoldenReelCanvas: React.FC<GoldenReelCanvasProps> = React.memo(
 
 GoldenReelCanvas.displayName = "GoldenReelCanvas";
 export default GoldenReelCanvas;
+
 

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { sampleSequence, SequenceSample } from "./sequence-controller";
+import { sampleSequence } from "./sequence-controller";
+import type { SequenceSample } from "./types";
 import { createSilhouetteAtlas, SilhouetteAtlasManager } from "./silhouette-atlas";
 import { createGoldenReel, ReelAssembly } from "./ReelGeometry";
 import { createFilmSystem, FilmSystem } from "./FilmPath";
@@ -34,7 +35,6 @@ export function createGoldenReelScene(
 
   const ownedGeometries = new Set<THREE.BufferGeometry>();
   const ownedMaterials = new Set<THREE.Material>();
-  const ownedTextures = new Set<THREE.Texture>();
 
   // 1. WebGL Renderer
   let renderer: THREE.WebGLRenderer;
@@ -64,7 +64,7 @@ export function createGoldenReelScene(
   // 2. Scene & Camera
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 40);
-  const baseCamPos = new THREE.Vector3(0.15, 0.0, 5.8);
+  const baseCamPos = new THREE.Vector3(0.15, 0.0, 7.2);
   camera.position.copy(baseCamPos);
   const cameraTarget = new THREE.Vector3(0.50, -0.05, 0.0);
   camera.lookAt(cameraTarget);
@@ -91,7 +91,6 @@ export function createGoldenReelScene(
   let atlas: SilhouetteAtlasManager;
   try {
     atlas = createSilhouetteAtlas();
-    ownedTextures.add(atlas.texture);
   } catch (err) {
     onError?.(err instanceof Error ? err : new Error(String(err)));
     throw err;
@@ -111,13 +110,22 @@ export function createGoldenReelScene(
   const filmSystem = createFilmSystem(atlas.texture, reel.group, reel.parameters);
   scene.add(filmSystem.group);
 
+  // Reel, feeder and guides are one assembly. Apply presentation transforms
+  // to their shared parent, never independently after computing contacts.
+  const presentation = new THREE.Group();
+  presentation.name = "goldenReelPresentation";
+  presentation.add(reel.group, filmSystem.group);
+  presentation.scale.setScalar(0.85);
+  presentation.position.set(1.45, -0.15, 0);
+  scene.add(presentation);
+
   // =========================================================
   // 7. Development-Only Inspection Helpers (Dev & Verification)
   // =========================================================
   const helpersGroup = new THREE.Group();
   helpersGroup.name = "inspectionHelpers";
   helpersGroup.visible = false;
-  scene.add(helpersGroup);
+  presentation.add(helpersGroup);
 
   // Spindle Axis Helper (Cyan line along reel local Z)
   const spindleGeo = new THREE.BufferGeometry().setFromPoints([
@@ -126,18 +134,20 @@ export function createGoldenReelScene(
   ]);
   ownedGeometries.add(spindleGeo);
   const spindleLine = new THREE.Line(spindleGeo, new THREE.LineBasicMaterial({ color: "#00E5FF" }));
+  ownedMaterials.add(spindleLine.material);
   helpersGroup.add(spindleLine);
 
   // Gate Boundary Helper (Green outline)
   const gateBoxGeo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-0.70, 0.556, 0.05),
-    new THREE.Vector3(1.10, 0.556, 0.05),
-    new THREE.Vector3(1.10, -0.456, 0.05),
-    new THREE.Vector3(-0.70, -0.456, 0.05),
-    new THREE.Vector3(-0.70, 0.556, 0.05),
+    new THREE.Vector3(-0.70, 0.556, 0.65),
+    new THREE.Vector3(1.10, 0.556, 0.65),
+    new THREE.Vector3(1.10, -0.456, 0.65),
+    new THREE.Vector3(-0.70, -0.456, 0.65),
+    new THREE.Vector3(-0.70, 0.556, 0.65),
   ]);
   ownedGeometries.add(gateBoxGeo);
   const gateBox = new THREE.Line(gateBoxGeo, new THREE.LineBasicMaterial({ color: "#00E676" }));
+  ownedMaterials.add(gateBox.material);
   helpersGroup.add(gateBox);
 
   const toggleHelpers = (visible?: boolean): boolean => {
@@ -185,8 +195,15 @@ export function createGoldenReelScene(
     const parallaxY = pointer.y * (isMobile ? 0.03 : 0.10);
 
     if (isMobile) {
-      camera.position.set(baseCamPos.x + 0.35 + parallaxX, baseCamPos.y + 0.12 + parallaxY, 7.2);
+      // This canvas occupies the reserved background region below mobile copy.
+      // Fit the same assembly (including the guides) to the current aspect.
+      const fitScale = Math.min(0.85, camera.aspect * 0.62);
+      presentation.scale.setScalar(fitScale);
+      presentation.position.set(0.5 - 1.3 * fitScale, -0.55 * fitScale, 0);
+      camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, 6.5);
     } else {
+      presentation.scale.setScalar(0.85);
+      presentation.position.set(1.45, -0.15, 0);
       camera.position.set(baseCamPos.x + parallaxX, baseCamPos.y + parallaxY, baseCamPos.z);
     }
     camera.lookAt(cameraTarget);
@@ -217,26 +234,12 @@ export function createGoldenReelScene(
     filmSystem.dispose();
     reel.dispose();
 
-    scene.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh) {
-        const mesh = obj as THREE.Mesh;
-        if (mesh.geometry) ownedGeometries.add(mesh.geometry);
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((m) => ownedMaterials.add(m));
-        } else if (mesh.material) {
-          ownedMaterials.add(mesh.material);
-        }
-      }
-    });
-
     ownedGeometries.forEach((g) => g.dispose());
     ownedGeometries.clear();
 
     ownedMaterials.forEach((m) => m.dispose());
     ownedMaterials.clear();
 
-    ownedTextures.forEach((t) => t.dispose());
-    ownedTextures.clear();
 
     renderer.dispose();
     if (renderer.domElement.parentElement === container) {
@@ -260,3 +263,4 @@ export function createGoldenReelScene(
     getSequenceSample: () => currentSample,
   };
 }
+
