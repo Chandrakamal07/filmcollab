@@ -145,8 +145,38 @@ export default function AdminLocations() {
     }
   };
 
-  const handleBlock = (id: string) => {
-    toast({ title: "Location blocked", description: "This is a mock action for now." });
+  const handleBlock = async (id: string) => {
+    try {
+      const loc = locations.find(l => l.id === id);
+      const currentTags = loc?.tags || [];
+      const isBlocked = currentTags.includes("Blocked");
+      const updatedTags = isBlocked
+        ? currentTags.filter((t: string) => t !== "Blocked")
+        : [...currentTags, "Blocked"];
+
+      const { error } = await supabase
+        .from("shooting_locations")
+        .update({ tags: updatedTags })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setLocations(prev =>
+        prev.map(l => (l.id === id ? { ...l, tags: updatedTags } : l))
+      );
+
+      toast({
+        title: isBlocked ? "Location unblocked" : "Location blocked",
+        description: isBlocked ? "Location is now visible to users." : "Location has been flagged as blocked."
+      });
+    } catch (error: any) {
+      console.error("Error updating location status:", error);
+      toast({
+        variant: "destructive",
+        title: "Block action failed",
+        description: error?.message || "Could not update location moderation status."
+      });
+    }
   };
 
   const handleOpenNotify = (loc: any) => {

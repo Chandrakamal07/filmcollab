@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -139,14 +139,30 @@ function getPortraitImage(userItem: User, idx: number): string {
 
 export default function DiscoverPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || searchParams.get("search") || "");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [sortType, setSortType] = useState<SortType>("recent");
-  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [categoryFilters, setCategoryFilters] = useState<string[]>(() => {
+    const craft = searchParams.get("craft") || searchParams.get("category");
+    return craft ? [craft] : [];
+  });
+
+  // Synchronize search and craft filters whenever URL search parameters change
+  useEffect(() => {
+    const q = searchParams.get("q") || searchParams.get("search") || "";
+    if (q !== query) {
+      setQuery(q);
+    }
+    const craft = searchParams.get("craft") || searchParams.get("category");
+    if (craft && !categoryFilters.includes(craft)) {
+      setCategoryFilters([craft]);
+    }
+  }, [searchParams]);
   const [locationFilter, setLocationFilter] = useState("");
   const [minLikes, setMinLikes] = useState(0);
   const [currentTab, setCurrentTab] = useState<"discover" | "liked" | "saved">("discover");

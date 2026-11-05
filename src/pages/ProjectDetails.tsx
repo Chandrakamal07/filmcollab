@@ -173,6 +173,14 @@ export default function ProjectDetails() {
     }
     return "overview";
   });
+
+  // Synchronize active workspace view whenever query parameters change
+  useEffect(() => {
+    const viewParam = searchParams.get("view") || searchParams.get("tab");
+    if (viewParam && ["overview", "tasks", "chat", "team", "applicants"].includes(viewParam)) {
+      setActiveTab(viewParam);
+    }
+  }, [searchParams]);
   const [taskViewMode, setTaskViewMode] = useState<"board" | "list">("board");
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);

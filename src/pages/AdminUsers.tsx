@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -160,7 +161,15 @@ const getUserDisplayId = (userId: string) => {
 };
 
 export default function AdminUsers() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
+  const [searchTerm, setSearchTerm] = useState(urlQuery);
+
+  useEffect(() => {
+    if (urlQuery) {
+      setSearchTerm(urlQuery);
+    }
+  }, [urlQuery]);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");

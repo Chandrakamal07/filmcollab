@@ -53,18 +53,43 @@ export default function ContactUs() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    if (!formData.name.trim() || !formData.email.trim() || !formData.subject.trim() || !formData.message.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Required fields missing",
+        description: "Please fill in your name, email, subject, and message.",
+      });
+      return;
+    }
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from("contact_submissions").insert({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        subject: formData.subject.trim(),
+        message: formData.message.trim(),
+      });
+
+      if (error) throw error;
+
       setFormData({ name: "", email: "", subject: "", message: "" });
       toast({
         title: "Message Sent!",
-        description: "We've received your message and will get back to you shortly.",
+        description: "We've received your message and our studio concierge will get back to you shortly.",
       });
-    }, 1500);
+    } catch (error: any) {
+      console.error("Error submitting contact inquiry:", error);
+      toast({
+        variant: "destructive",
+        title: "Submission failed",
+        description: error?.message || "Could not deliver your message. Your draft has been preserved—please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

@@ -123,8 +123,29 @@ export default function AdminDirectory() {
     }
   };
 
-  const handleBlock = async (_itemId: string) => {
-    toast.success("File blocked successfully");
+  const handleBlock = async (itemId: string) => {
+    try {
+      const item = directoryItems.find(i => i.id === itemId);
+      const isBlocked = item?.status === "blocked" || (item?.tags && item.tags.includes("Blocked"));
+      const newStatus = isBlocked ? "active" : "blocked";
+      const currentTags = item?.tags || [];
+      const updatedTags = isBlocked
+        ? currentTags.filter((t: string) => t !== "Blocked")
+        : [...currentTags, "Blocked"];
+
+      const { error } = await supabase
+        .from("directory_files")
+        .update({ status: newStatus, tags: updatedTags })
+        .eq("id", itemId);
+
+      if (error) throw error;
+
+      setDirectoryItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, tags: updatedTags } : i));
+      toast.success(isBlocked ? "File unblocked successfully" : "File blocked successfully");
+    } catch (error: any) {
+      console.error("Error toggling block state for file:", error);
+      toast.error(error?.message || "Failed to update file moderation status");
+    }
   };
 
   const handleOpenNotify = (item: any) => {

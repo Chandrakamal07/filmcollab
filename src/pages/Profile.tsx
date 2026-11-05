@@ -1703,8 +1703,65 @@ export default function ProfilePage() {
   };
 
   // Quick Actions
-  const handleSendMessage = () => navigate("/messages");
-  const handleConnect = () => toast({ title: "Connection request sent", description: "We'll notify you once accepted." });
+  const handleSendMessage = () => {
+    const targetUserId = profile.user_id || profile.id;
+    const q = new URLSearchParams();
+    if (targetUserId) q.set("recipient", targetUserId);
+    if (profile.username) q.set("u", profile.username);
+    navigate(`/messages?${q.toString()}`);
+  };
+
+  const handleConnect = async () => {
+    if (!user) {
+      navigate("/auth/signin", { state: { from: window.location.pathname } });
+      return;
+    }
+    const targetUserId = profile.user_id || profile.id;
+    if (!targetUserId || targetUserId === user.id) return;
+
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from("connections")
+        .select("id, status")
+        .or(`and(user_id.eq.${user.id},connected_user_id.eq.${targetUserId}),and(user_id.eq.${targetUserId},connected_user_id.eq.${user.id})`)
+        .maybeSingle();
+
+      if (existing) {
+        toast({
+          title: "Connection Already Exists",
+          description: `Current connection status is '${existing.status}'.`
+        });
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("connections").insert({
+        user_id: user.id,
+        connected_user_id: targetUserId,
+        status: "pending"
+      });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Connection Request Sent",
+        description: `Connection request sent to ${profile.name || profile.username || "creator"}.`
+      });
+
+      await supabase.from("notifications").insert({
+        user_id: targetUserId,
+        title: "New Connection Request",
+        description: `${user.email} sent you a connection request.`,
+        type: "connection",
+        action_url: `/profile/${user.id}`
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Request Failed",
+        description: err.message || "Could not send connection request."
+      });
+    }
+  };
   const handleShareProfile = async () => {
     const url = `${window.location.origin}/profile${profile.username ? `?u=${encodeURIComponent(profile.username)}` : ""}`;
     try {
@@ -2129,7 +2186,7 @@ export default function ProfilePage() {
                     size="sm" 
                     variant="outline" 
                     className="flex-1 sm:flex-none border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground justify-center transition-colors"
-                    onClick={() => navigate(`/messages?u=${encodeURIComponent(profile.username)}`)}
+                    onClick={handleSendMessage}
                     disabled={!canMessage}
                   >
                     <MessageSquare className="w-4 h-4 mr-1.5 text-primary" />

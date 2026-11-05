@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
+import {
   Search,
   Bell,
   Users,
@@ -12,18 +12,24 @@ import {
   CheckCircle2,
   Clock
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AdminNotifications() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
 
-  // Mock notifications data
-  const notifications = [
+  // Initial fallback notifications data
+  const initialNotifications = [
     {
-      id: 1,
+      id: "1",
       type: "user",
       title: "New user registration",
       message: "5 new users registered today",
@@ -33,7 +39,7 @@ export default function AdminNotifications() {
       color: "text-primary"
     },
     {
-      id: 2,
+      id: "2",
       type: "content",
       title: "Content flagged",
       message: "A post has been reported by users",
@@ -43,7 +49,7 @@ export default function AdminNotifications() {
       color: "text-amber-400"
     },
     {
-      id: 3,
+      id: "3",
       type: "system",
       title: "System backup completed",
       message: "Daily backup finished successfully",
@@ -54,13 +60,69 @@ export default function AdminNotifications() {
     }
   ];
 
+  const [notifications, setNotifications] = useState<any[]>(initialNotifications);
+
+  // Load real notifications from Supabase
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        if (!user?.id) return;
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("*")
+          .or(`user_id.eq.${user.id},recipient_id.eq.${user.id}`)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const mapped = data.map((n: any) => ({
+            id: n.id,
+            type: n.type || "system",
+            title: n.title || "Notification",
+            message: n.message || n.description || "",
+            time: new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            isUnread: !n.is_read && n.status !== "read",
+            icon: n.type === "user" ? Users : n.type === "content" ? AlertTriangle : CheckCircle2,
+            color: n.type === "user" ? "text-primary" : n.type === "content" ? "text-amber-400" : "text-emerald-400"
+          }));
+          setNotifications(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not fetch real notifications:", err);
+      }
+    };
+    fetchNotifications();
+  }, [user?.id]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      if (user?.id) {
+        await supabase
+          .from("notifications")
+          .update({ is_read: true, status: "read" })
+          .or(`user_id.eq.${user.id},recipient_id.eq.${user.id}`);
+      }
+      setNotifications(prev => prev.map(n => ({ ...n, isUnread: false })));
+      toast({
+        title: "All marked as read",
+        description: "Notifications have been marked as read."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Action failed",
+        description: err?.message || "Could not mark notifications as read."
+      });
+    }
+  };
+
   // Filter notifications based on search and type
   const filteredNotifications = notifications.filter(notification => {
-    const matchesSearch = 
+    const matchesSearch =
       notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       notification.message.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = typeFilter === "all" || notification.type === typeFilter;
-    
+
     return matchesSearch && matchesType;
   });
 
@@ -78,7 +140,7 @@ export default function AdminNotifications() {
             variant="outline"
             size="sm"
             className="text-primary border-primary/30 bg-surface-elevated hover:bg-primary/10"
-            onClick={() => console.log("Mark all as read")}
+            onClick={handleMarkAllRead}
           >
             Mark all read
           </Button>

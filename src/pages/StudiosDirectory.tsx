@@ -51,6 +51,7 @@ import {
   GraduationCap
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 import { Company, JobPosting, AuditionPosting, InternshipPosting, Application, Review, Project, TeamMember } from "../types/studios";
 import { CATEGORIES, SERVICES, STATES, CITIES, LANGUAGES, INITIAL_COMPANIES, STATE_CITY_MAP } from "./studios-data";
 
@@ -59,28 +60,88 @@ export default function StudiosDirectory() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const userStorageSuffix = user?.id ? `_${user.id}` : "";
+
   // Load companies from localStorage or initial state
   const [companies, setCompanies] = useState<Company[]>(() => {
     const saved = localStorage.getItem("studios_directory_companies");
     return saved ? JSON.parse(saved) : INITIAL_COMPANIES;
   });
 
-  // Load applications
+  // Load account-scoped applications
   const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem("studios_directory_applications");
+    const saved = localStorage.getItem(`studios_directory_applications${userStorageSuffix}`) || localStorage.getItem("studios_directory_applications");
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Followed & Saved company IDs
+  // Followed & Saved company IDs (account scoped)
   const [followedIds, setFollowedIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem("studios_directory_followed");
+    const saved = localStorage.getItem(`studios_directory_followed${userStorageSuffix}`) || localStorage.getItem("studios_directory_followed");
     return saved ? JSON.parse(saved) : [];
   });
 
   const [savedIds, setSavedIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem("studios_directory_saved");
+    const saved = localStorage.getItem(`studios_directory_saved${userStorageSuffix}`) || localStorage.getItem("studios_directory_saved");
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Fetch real companies from Supabase
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const { data, error } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
+        if (!error && data && data.length > 0) {
+          const dbCompanies: Company[] = data.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            logo: c.logo || c.name.slice(0, 2).toUpperCase(),
+            coverImage: c.cover_image || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+            category: c.category || "Production House",
+            description: c.description || "",
+            establishedYear: c.established_year || 2020,
+            founder: c.founder || "Not Specified",
+            services: c.services || ["Film Production"],
+            languages: c.languages || ["English", "Hindi"],
+            email: c.email || "",
+            phone: c.phone || "",
+            website: c.website || "https://www.filmcollab.com",
+            socials: c.socials || {},
+            address: c.address || "",
+            city: c.city || "Mumbai",
+            state: c.state || "Maharashtra",
+            country: c.country || "India",
+            mapsLocation: c.maps_location || "",
+            workingHours: c.working_hours || "10:00 AM - 6:00 PM",
+            verified: c.verified || false,
+            hiringNow: c.hiring_now || false,
+            openAuditions: c.open_auditions || false,
+            internshipsAvailable: c.internships_available || false,
+            acceptingFreshers: c.accepting_freshers || false,
+            openForCollaboration: c.open_for_collaboration || true,
+            employeeCount: c.employee_count || 10,
+            projectsCompleted: c.projects_completed || 5,
+            followersCount: c.followers_count || 0,
+            rating: Number(c.rating) || 4.5,
+            reviewsCount: c.reviews_count || 0,
+            featured: c.featured || false,
+            trending: c.trending || false,
+            recentlyAdded: c.recently_added || false,
+            gallery: c.gallery || [],
+            opportunities: []
+          }));
+
+          setCompanies(prev => {
+            const dbIds = new Set(data.map((d: any) => d.id));
+            const filteredFallback = prev.filter(p => !dbIds.has(p.id));
+            return [...dbCompanies, ...filteredFallback];
+          });
+        }
+      } catch (err) {
+        console.warn("Could not fetch Supabase companies, retaining fallback:", err);
+      }
+    };
+    fetchCompanies();
+  }, []);
 
   // Persist states
   useEffect(() => {
@@ -88,16 +149,16 @@ export default function StudiosDirectory() {
   }, [companies]);
 
   useEffect(() => {
-    localStorage.setItem("studios_directory_applications", JSON.stringify(applications));
-  }, [applications]);
+    localStorage.setItem(`studios_directory_applications${userStorageSuffix}`, JSON.stringify(applications));
+  }, [applications, userStorageSuffix]);
 
   useEffect(() => {
-    localStorage.setItem("studios_directory_followed", JSON.stringify(followedIds));
-  }, [followedIds]);
+    localStorage.setItem(`studios_directory_followed${userStorageSuffix}`, JSON.stringify(followedIds));
+  }, [followedIds, userStorageSuffix]);
 
   useEffect(() => {
-    localStorage.setItem("studios_directory_saved", JSON.stringify(savedIds));
-  }, [savedIds]);
+    localStorage.setItem(`studios_directory_saved${userStorageSuffix}`, JSON.stringify(savedIds));
+  }, [savedIds, userStorageSuffix]);
 
   // Current Active Tab (All, Featured/Trending, Hiring, Auditions, Internships, My Workspace)
   const [activeTab, setActiveTab] = useState<string>("all");
@@ -508,7 +569,7 @@ export default function StudiosDirectory() {
   };
 
   // Action: Register Company
-  const handleRegisterCompany = (e: React.FormEvent) => {
+  const handleRegisterCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regForm.name || !regForm.description || !regForm.email || !regForm.phone || !regForm.address) {
       toast({
@@ -519,8 +580,34 @@ export default function StudiosDirectory() {
       return;
     }
 
+    let assignedId = "company_" + Date.now();
+    if (user) {
+      try {
+        const { data, error } = await supabase.from("companies").insert({
+          name: regForm.name,
+          description: regForm.description,
+          category: regForm.category,
+          email: regForm.email,
+          phone: regForm.phone,
+          website: regForm.website || "https://www.filmcollab.com",
+          address: regForm.address + (regForm.zipCode ? `, ${regForm.zipCode}` : ""),
+          city: regForm.city,
+          state: regForm.state,
+          country: "India",
+          user_id: user.id,
+          services: regForm.servicesSelected.length > 0 ? regForm.servicesSelected : ["Film Production"],
+          gst_number: regForm.gstNumber
+        }).select().single();
+        if (!error && data) {
+          assignedId = data.id;
+        }
+      } catch (err) {
+        console.warn("Could not insert company into Supabase:", err);
+      }
+    }
+
     const brandNewCompany: Company = {
-      id: "company_" + Date.now(),
+      id: assignedId,
       name: regForm.name,
       logo: regForm.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3),
       coverImage: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",

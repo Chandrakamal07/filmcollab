@@ -19,11 +19,16 @@ import {
   User,
   Check
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AdminPosts() {
-  const [editingTags, setEditingTags] = useState<{ id: number; tags: string[] } | null>(null);
+  const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const [editingTags, setEditingTags] = useState<{ id: string | number; tags: string[] } | null>(null);
 
   // Available tags for posts
   const availableTags = [
@@ -39,16 +44,16 @@ export default function AdminPosts() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Mock posts data
-  const posts = [
+  // Initial fallback posts data
+  const initialPosts = [
     {
-      id: 1,
+      id: "1",
       content: "Just finished an amazing film project!",
       type: "Text",
       date: "2024-03-15",
       status: "Published",
       creator: {
-        id: 1,
+        id: "1",
         name: "Michael Chen",
         username: "michael",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=michael",
@@ -57,13 +62,13 @@ export default function AdminPosts() {
       tags: ["Trending", "Featured"]
     },
     {
-      id: 2,
+      id: "2",
       content: "Behind the scenes photo",
       type: "Image",
       date: "2024-03-14",
       status: "Pending",
       creator: {
-        id: 2,
+        id: "2",
         name: "Leo Martinez",
         username: "leo",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=leo",
@@ -72,13 +77,13 @@ export default function AdminPosts() {
       tags: ["Popular"]
     },
     {
-      id: 3,
+      id: "3",
       content: "Check out this video",
       type: "Video",
       date: "2024-03-13",
       status: "Flagged",
       creator: {
-        id: 3,
+        id: "3",
         name: "Amelia Thompson",
         username: "amelia",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=amelia",
@@ -87,6 +92,61 @@ export default function AdminPosts() {
       tags: ["Editor's Pick", "Sponsored"]
     }
   ];
+
+  const [posts, setPosts] = useState<any[]>(initialPosts);
+
+  // Load real posts from Supabase
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("posts")
+          .select(`
+            id,
+            title,
+            content,
+            author_id,
+            media_urls,
+            media_types,
+            hashtags,
+            is_published,
+            is_featured,
+            created_at,
+            profiles:author_id (id, full_name, username, avatar_url, category)
+          `)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const mapped = data.map((p: any) => {
+            const prof = p.profiles || {};
+            const name = prof.full_name || prof.username || "Creator";
+            const mediaType = (p.media_types && p.media_types[0]) || (p.media_urls && p.media_urls.length > 0 ? "Image" : "Text");
+            const typeFormatted = mediaType.charAt(0).toUpperCase() + mediaType.slice(1);
+            return {
+              id: p.id,
+              content: p.content || p.title || "No content",
+              type: typeFormatted,
+              date: new Date(p.created_at).toISOString().split("T")[0],
+              status: p.is_published ? "Published" : "Flagged",
+              creator: {
+                id: prof.id || p.author_id,
+                name,
+                username: prof.username || name.toLowerCase().replace(/\s+/g, ""),
+                avatar: prof.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+                category: prof.category || "General"
+              },
+              tags: p.hashtags && p.hashtags.length > 0 ? p.hashtags : (p.is_featured ? ["Featured"] : ["Trending"])
+            };
+          });
+          setPosts(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not load real posts, retaining fallback:", err);
+      }
+    };
+    fetchPosts();
+  }, []);
 
   const getTypeBadgeVariant = (type: string) => {
     switch (type) {
@@ -149,31 +209,128 @@ export default function AdminPosts() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const handleViewPost = (postId: number) => {
-    console.log("View post:", postId);
+  const isUuid = (id: string | number): boolean => {
+    return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   };
 
-  const handleApprovePost = (postId: number) => {
-    console.log("Approve post:", postId);
+  const handleViewPost = (postId: string | number) => {
+    const p = posts.find(item => item.id === postId);
+    if (p) {
+      toast({
+        title: `Post by ${p.creator.name}`,
+        description: p.content.slice(0, 100)
+      });
+    }
   };
 
-  const handleFlagPost = (postId: number) => {
-    console.log("Flag post:", postId);
+  const handleApprovePost = async (postId: string | number) => {
+    if (!hasPermission("posts", "update")) {
+      toast({
+        variant: "destructive",
+        title: "Permission denied",
+        description: "You do not have permission to approve posts."
+      });
+      return;
+    }
+    try {
+      if (isUuid(postId)) {
+        const { error } = await supabase.from("posts").update({ is_published: true }).eq("id", postId);
+        if (error) throw error;
+      }
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Published" } : p));
+      toast({
+        title: "Post approved",
+        description: "The post is now published and visible."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Approve failed",
+        description: err?.message || "Failed to approve post in database."
+      });
+    }
   };
 
-  const handleDeletePost = (postId: number) => {
-    console.log("Delete post:", postId);
+  const handleFlagPost = async (postId: string | number) => {
+    if (!hasPermission("posts", "update")) {
+      toast({
+        variant: "destructive",
+        title: "Permission denied",
+        description: "You do not have permission to moderate posts."
+      });
+      return;
+    }
+    try {
+      if (isUuid(postId)) {
+        const { error } = await supabase.from("posts").update({ is_published: false }).eq("id", postId);
+        if (error) throw error;
+      }
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Flagged" } : p));
+      toast({
+        title: "Post flagged",
+        description: "The post has been hidden and flagged for moderation."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Flag failed",
+        description: err?.message || "Failed to flag post in database."
+      });
+    }
   };
 
-  const handleEditTags = (postId: number, currentTags: string[]) => {
+  const handleDeletePost = async (postId: string | number) => {
+    if (!hasPermission("posts", "delete")) {
+      toast({
+        variant: "destructive",
+        title: "Permission denied",
+        description: "You do not have permission to delete posts."
+      });
+      return;
+    }
+    try {
+      if (isUuid(postId)) {
+        const { error } = await supabase.from("posts").delete().eq("id", postId);
+        if (error) throw error;
+      }
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      toast({
+        title: "Post deleted",
+        description: "The post has been permanently removed."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: err?.message || "Failed to delete post."
+      });
+    }
+  };
+
+  const handleEditTags = (postId: string | number, currentTags: string[]) => {
     setEditingTags({ id: postId, tags: currentTags });
   };
 
-  const handleSavePostTags = (postId: number) => {
-    const postToUpdate = posts.find(p => p.id === postId);
-    if (postToUpdate && editingTags) {
-      postToUpdate.tags = editingTags.tags;
+  const handleSavePostTags = async (postId: string | number) => {
+    if (!editingTags) return;
+    const newTags = editingTags.tags;
+    try {
+      if (isUuid(postId)) {
+        const { error } = await supabase.from("posts").update({ hashtags: newTags }).eq("id", postId);
+        if (error) throw error;
+      }
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, tags: newTags } : p));
       setEditingTags(null);
+      toast({
+        title: "Tags updated",
+        description: "Post tags have been saved."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: err?.message || "Failed to persist tags."
+      });
     }
   };
 

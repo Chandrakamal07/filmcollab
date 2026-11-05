@@ -18,10 +18,16 @@ import {
   MessageSquare,
   Settings
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AdminCommunities() {
+  const { hasPermission } = useAuth();
+  const { toast } = useToast();
+
   // Available tags for communities
   const availableTags = [
     { value: "featured", label: "Featured", color: "purple" },
@@ -35,18 +41,18 @@ export default function AdminCommunities() {
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [editingTags, setEditingTags] = useState<{ id: number; tags: string[] } | null>(null);
+  const [editingTags, setEditingTags] = useState<{ id: string | number; tags: string[] } | null>(null);
 
-  // Mock communities data
-  const communities = [
+  // Fallback communities data
+  const initialCommunities = [
     {
-      id: 1,
+      id: "1",
       name: "Filmmakers Hub",
       description: "A community for professional filmmakers",
       totalMembers: 1245,
       activeMembers: 856,
       creator: {
-        id: 1,
+        id: "1",
         name: "John Smith",
         username: "johnsmith",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=john"
@@ -57,13 +63,13 @@ export default function AdminCommunities() {
       tags: ["Featured", "Verified", "Popular"]
     },
     {
-      id: 2,
+      id: "2",
       name: "Cinematography Masters",
       description: "Advanced cinematography techniques and discussions",
       totalMembers: 876,
       activeMembers: 543,
       creator: {
-        id: 2,
+        id: "2",
         name: "Sarah Johnson",
         username: "sarahj",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah"
@@ -74,13 +80,13 @@ export default function AdminCommunities() {
       tags: ["Trending", "Public"]
     },
     {
-      id: 3,
+      id: "3",
       name: "Sound Design Network",
       description: "For sound designers and audio engineers",
       totalMembers: 654,
       activeMembers: 321,
       creator: {
-        id: 3,
+        id: "3",
         name: "Mike Wilson",
         username: "mikew",
         avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=mike"
@@ -92,15 +98,101 @@ export default function AdminCommunities() {
     }
   ];
 
-  const handleEditTags = (communityId: number, currentTags: string[]) => {
+  const [communities, setCommunities] = useState<any[]>(initialCommunities);
+
+  // Fetch real community groups from Supabase if table exists
+  useEffect(() => {
+    const fetchCommunities = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("community_groups")
+          .select("id, name, description, category, tags, privacy, created_at, created_by")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const mapped = data.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            description: g.description || "Community group",
+            totalMembers: 1,
+            activeMembers: 1,
+            creator: {
+              id: g.created_by,
+              name: "Community Admin",
+              username: "admin",
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${g.name}`
+            },
+            status: "Active",
+            dateCreated: new Date(g.created_at).toISOString().split("T")[0],
+            lastActive: new Date(g.created_at).toISOString().split("T")[0],
+            tags: g.tags && g.tags.length > 0 ? g.tags : [g.privacy === "private" ? "Private" : "Public"]
+          }));
+          setCommunities(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not fetch database communities, using initial set:", err);
+      }
+    };
+    fetchCommunities();
+  }, []);
+
+  const isUuid = (id: string | number): boolean => {
+    return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  };
+
+  const handleEditTags = (communityId: string | number, currentTags: string[]) => {
     setEditingTags({ id: communityId, tags: currentTags });
   };
 
-  const handleSaveCommunityTags = (communityId: number) => {
-    const communityToUpdate = communities.find(c => c.id === communityId);
-    if (communityToUpdate && editingTags) {
-      communityToUpdate.tags = editingTags.tags;
+  const handleSaveCommunityTags = async (communityId: string | number) => {
+    if (!editingTags) return;
+    const newTags = editingTags.tags;
+    try {
+      if (isUuid(communityId)) {
+        const { error } = await supabase.from("community_groups").update({ tags: newTags }).eq("id", communityId);
+        if (error) throw error;
+      }
+      setCommunities(prev => prev.map(c => c.id === communityId ? { ...c, tags: newTags } : c));
       setEditingTags(null);
+      toast({
+        title: "Tags updated",
+        description: "Community tags saved successfully."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Save failed",
+        description: err?.message || "Failed to update community tags."
+      });
+    }
+  };
+
+  const handleDeleteCommunity = async (communityId: string | number) => {
+    if (!hasPermission("communities", "delete")) {
+      toast({
+        variant: "destructive",
+        title: "Permission denied",
+        description: "You do not have permission to delete communities."
+      });
+      return;
+    }
+    try {
+      if (isUuid(communityId)) {
+        const { error } = await supabase.from("community_groups").delete().eq("id", communityId);
+        if (error) throw error;
+      }
+      setCommunities(prev => prev.filter(c => c.id !== communityId));
+      toast({
+        title: "Community deleted",
+        description: "Community has been permanently removed."
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: err?.message || "Failed to delete community."
+      });
     }
   };
 
@@ -352,6 +444,7 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => handleDeleteCommunity(community.id)}
                             className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="h-4 w-4" />

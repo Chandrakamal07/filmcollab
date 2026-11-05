@@ -31,19 +31,26 @@ export default function SignIn() {
   useEffect(() => {
     console.log("SignIn component - auth state changed:", { user: user?.id, authLoading });
 
-    // If user is authenticated and not loading, navigate based on role
+    // If user is authenticated and not loading, navigate based on role, preserving return target with search & hash
     if (user && !authLoading) {
-      const from = location.state?.from?.pathname;
+      const fromState = location.state?.from;
+      const targetDestination =
+        typeof fromState === "string"
+          ? fromState
+          : fromState?.pathname
+          ? `${fromState.pathname}${fromState.search || ""}${fromState.hash || ""}`
+          : null;
+
       console.log("SignIn component - user authenticated, checking admin status");
       if (isAdmin()) {
         console.log("User is admin, navigating to admin dashboard");
-        navigate(from || "/admin-dashboard");
+        navigate(targetDestination || "/admin-dashboard", { replace: true });
       } else {
         console.log("User is regular user, navigating to dashboard");
-        navigate(from || "/dashboard");
+        navigate(targetDestination || "/dashboard", { replace: true });
       }
     }
-  }, [user, authLoading, navigate, isAdmin, location.state?.from?.pathname]);
+  }, [user, authLoading, navigate, isAdmin, location.state]);
 
   const form = useForm<SignInFormData>({
     resolver: zodResolver(signInSchema),

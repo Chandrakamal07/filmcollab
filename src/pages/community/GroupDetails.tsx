@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft,
   Users,
@@ -69,6 +72,8 @@ interface ChatMessage {
 export default function GroupDetails() {
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [groupSettings, setGroupSettings] = useState({
@@ -185,11 +190,45 @@ export default function GroupDetails() {
     scrollToBottom();
   }, [chatMessages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      // In a real app, this would send the message to the server
-      console.log("Sending message:", newMessage);
-      setNewMessage("");
+  const isUuid = (id: string | null | undefined): boolean => {
+    if (!id) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+    const msg = newMessage.trim();
+    setNewMessage("");
+    try {
+      if (user && isUuid(groupId)) {
+        const { error } = await supabase.from("community_group_messages").insert({
+          group_id: groupId,
+          user_id: user.id,
+          message: msg,
+          type: 'text'
+        });
+        if (error) throw error;
+      }
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `msg-${Date.now()}`,
+          userId: user?.id || "me",
+          userName: profile?.full_name || "You",
+          userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
+          message: msg,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'text',
+          isAdmin: true
+        }
+      ]);
+    } catch (err: any) {
+      console.error("Failed to send group message:", err);
+      toast({
+        variant: "destructive",
+        title: "Message failed",
+        description: err?.message || "Could not deliver message to the group."
+      });
     }
   };
 
@@ -606,9 +645,33 @@ export default function GroupDetails() {
                   <div className="flex gap-3 pt-4 border-t border-border/60">
                     <Button 
                       className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover"
-                      onClick={() => {
-                        console.log("Saving settings:", groupSettings);
-                        setShowSettings(false);
+                      onClick={async () => {
+                        try {
+                          if (user && isUuid(groupId)) {
+                            const { error } = await supabase
+                              .from("community_groups")
+                              .update({
+                                name: groupSettings.name,
+                                description: groupSettings.description,
+                                privacy: groupSettings.privacy,
+                                settings: groupSettings
+                              })
+                              .eq("id", groupId);
+                            if (error) throw error;
+                          }
+                          toast({
+                            title: "Settings saved",
+                            description: "Group preferences updated successfully."
+                          });
+                          setShowSettings(false);
+                        } catch (err: any) {
+                          console.error("Failed to save settings:", err);
+                          toast({
+                            variant: "destructive",
+                            title: "Save failed",
+                            description: err?.message || "Could not persist group settings."
+                          });
+                        }
                       }}
                     >
                       <Save className="w-4 h-4 mr-2" />

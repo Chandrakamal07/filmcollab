@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 interface Job {
   id: string;
@@ -248,74 +249,193 @@ export default function JobDetails() {
     }
   };
 
-  const handleDelete = () => {
-    if (job) {
+  const handleDelete = async () => {
+    if (!job) return;
+    try {
+      const { error } = await supabase.from("jobs").delete().eq("id", job.id);
+      if (error) throw error;
       toast({
         title: "Job deleted",
         description: "The job has been deleted successfully."
       });
       navigate("/jobs");
-    }
-  };
-
-  const handleUpdateJob = () => {
-    if (job && editForm) {
-      const skillsArray = typeof editForm.skills_required === 'string' 
-        ? editForm.skills_required.split(',').map(s => s.trim())
-        : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
-      
-      const updatedJob = {
-        ...job,
-        ...editForm,
-        skills_required: skillsArray
-      };
-      setJob(updatedJob);
-      setShowEditDialog(false);
+    } catch (err: any) {
       toast({
-        title: "Job updated",
-        description: "The job has been updated successfully."
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: err.message || "Failed to delete job."
       });
     }
   };
 
+  const handleUpdateJob = async () => {
+    if (job && editForm) {
+      const skillsArray = typeof editForm.skills_required === 'string' 
+        ? editForm.skills_required.split(',').map(s => s.trim())
+        : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
+
+      try {
+        const { error } = await supabase.from("jobs").update({
+          job_title: editForm.title || job.title,
+          company_name: editForm.company || job.company,
+          location: editForm.location || job.location,
+          salary_min: editForm.min_salary || job.min_salary,
+          salary_max: editForm.max_salary || job.max_salary,
+          job_description: editForm.description || job.description,
+          requirements: editForm.requirements || job.requirements,
+          benefits: editForm.benefits || job.benefits,
+          job_type: editForm.job_type || job.job_type,
+          experience_level: editForm.experience_level || job.experience_level,
+          industry: editForm.category || job.category,
+          skills_required: skillsArray,
+        }).eq("id", job.id);
+
+        if (error) throw error;
+
+        const updatedJob = {
+          ...job,
+          ...editForm,
+          skills_required: skillsArray
+        };
+        setJob(updatedJob as Job);
+        setShowEditDialog(false);
+        toast({
+          title: "Job updated",
+          description: "The job has been updated successfully."
+        });
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "Update Failed",
+          description: err.message || "Failed to update job details."
+        });
+      }
+    }
+  };
+
+  const mapDbJob = (dbJob: any): Job => ({
+    id: dbJob.id,
+    title: dbJob.job_title || dbJob.title || "Production Role",
+    company: dbJob.company_name || dbJob.company || "Studio",
+    location: dbJob.location || "Remote",
+    min_salary: dbJob.salary_min || dbJob.min_salary || 0,
+    max_salary: dbJob.salary_max || dbJob.max_salary || 0,
+    description: dbJob.job_description || dbJob.description || "",
+    requirements: dbJob.requirements || "",
+    skills_required: dbJob.skills_required || [],
+    benefits: dbJob.benefits || "",
+    job_type: dbJob.job_type || "Full-time",
+    experience_level: dbJob.experience_level || "Mid-Level",
+    category: dbJob.industry || dbJob.category || "Film & Media",
+    posted_date: dbJob.posted_date || dbJob.created_at || new Date().toISOString(),
+    application_deadline: dbJob.application_deadline || "",
+    status: dbJob.status || "Active",
+    user_id: dbJob.user_id || "",
+    created_at: dbJob.created_at || new Date().toISOString(),
+    updated_at: dbJob.updated_at || new Date().toISOString(),
+  });
+
   useEffect(() => {
-    const fetchJobDetails = () => {
+    const fetchJobDetails = async () => {
       console.log('JobDetails: jobId from URL:', jobId);
-      console.log('JobDetails: Available job IDs:', hardcodedJobs.map(job => job.id));
       
       if (!jobId) {
-        console.log('JobDetails: No jobId provided');
         setLoading(false);
         return;
       }
 
-      // Find the job in hardcoded data
-      const foundJob = hardcodedJobs.find(job => job.id === jobId);
-      console.log('JobDetails: Found job:', foundJob);
-      
-      if (foundJob) {
-        setJob(foundJob);
-        setLoading(false);
-      } else {
-        console.log('JobDetails: Job not found for ID:', jobId);
+      setLoading(true);
+      try {
+        // 1. Check Supabase jobs table
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("id", jobId)
+          .maybeSingle();
+
+        if (!error && data) {
+          setJob(mapDbJob(data));
+
+          // Check if current user already applied
+          if (user?.id) {
+            const { data: appData } = await supabase
+              .from("job_applications")
+              .select("id")
+              .eq("job_id", jobId)
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (appData) {
+              setIsApplied(true);
+            }
+          }
+          setLoading(false);
+          return;
+        }
+
+        // 2. Check hardcodedJobs fallback (e.g. for seed IDs)
+        const foundJob = hardcodedJobs.find(j => j.id === jobId);
+        if (foundJob) {
+          setJob(foundJob);
+          setLoading(false);
+          return;
+        }
+
+        // 3. Not found
         setLoading(false);
         toast({
           variant: "destructive",
           title: "Job not found",
           description: "The requested job could not be found."
         });
+      } catch (err) {
+        console.error("Error fetching job details:", err);
+        setLoading(false);
       }
     };
 
     fetchJobDetails();
-  }, [jobId, toast]);
+  }, [jobId, user?.id, toast]);
 
-  const handleApply = () => {
-    setIsApplied(true);
-    toast({
-      title: "Application submitted",
-      description: "Your application has been submitted successfully."
-    });
+  const handleApply = async () => {
+    if (!user) {
+      navigate("/auth/signin", { state: { from: window.location.pathname } });
+      return;
+    }
+    if (!job) return;
+
+    try {
+      const { error } = await supabase.from("job_applications").insert({
+        job_id: job.id,
+        user_id: user.id
+      });
+
+      if (error && error.code !== "23505") {
+        throw error;
+      }
+
+      setIsApplied(true);
+      toast({
+        title: "Application Submitted",
+        description: `Your application for ${job.title} at ${job.company} has been submitted successfully.`
+      });
+
+      // Send real notification to job poster
+      if (job.user_id && job.user_id !== user.id) {
+        supabase.from("notifications").insert({
+          user_id: job.user_id,
+          title: "New Job Application",
+          description: `Someone applied for your job: ${job.title}`,
+          type: "job",
+          action_url: `/jobs/${job.id}`
+        }).then(() => {});
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Application Failed",
+        description: err.message || "Could not submit application. Please try again."
+      });
+    }
   };
 
   const handleSave = () => {

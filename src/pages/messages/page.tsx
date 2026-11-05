@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ interface ChatMessage {
   timestamp: number;
   read: boolean;
   fileName?: string;
+  failed?: boolean;
 }
 
 interface Conversation {
@@ -102,6 +103,9 @@ export default function MessagesPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const recipientParam = searchParams.get("recipient");
+  const usernameParam = searchParams.get("u");
 
   // Local Storage & Hybrid states
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -130,8 +134,69 @@ export default function MessagesPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingFileType, setPendingFileType] = useState<MessageType>("image");
 
-  // Determine current user ID
+  // Determine current user ID and account-namespaced storage prefix
   const currentUserId = profile?.id || user?.id || "me";
+  const storagePrefix = currentUserId && currentUserId !== "me" ? `_${currentUserId}` : "";
+
+  // Handle URL parameters ?recipient=UUID or ?u=username
+  useEffect(() => {
+    const handleUrlRecipient = async () => {
+      if (recipientParam && isUuid(recipientParam)) {
+        setActiveId(recipientParam);
+        setIsMobileChatOpen(true);
+        const { data: recProfile } = await supabase
+          .from("profiles")
+          .select("id, full_name, username, avatar_url, category")
+          .eq("id", recipientParam)
+          .maybeSingle();
+        if (recProfile) {
+          const fullName = recProfile.full_name || recProfile.username || "Film Professional";
+          const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          setConnectedUsers((prev) => {
+            if (prev.some((u) => u.id === recProfile.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: recProfile.id,
+                username: recProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+                fullName,
+                avatarUrl: recProfile.avatar_url,
+                avatarInitials: initials || "U",
+                category: recProfile.category || "Professional"
+              }
+            ];
+          });
+        }
+      } else if (usernameParam) {
+        const { data: recProfile } = await supabase
+          .from("profiles")
+          .select("id, full_name, username, avatar_url, category")
+          .eq("username", usernameParam)
+          .maybeSingle();
+        if (recProfile) {
+          setActiveId(recProfile.id);
+          setIsMobileChatOpen(true);
+          const fullName = recProfile.full_name || recProfile.username || "Film Professional";
+          const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          setConnectedUsers((prev) => {
+            if (prev.some((u) => u.id === recProfile.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: recProfile.id,
+                username: recProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+                fullName,
+                avatarUrl: recProfile.avatar_url,
+                avatarInitials: initials || "U",
+                category: recProfile.category || "Professional"
+              }
+            ];
+          });
+        }
+      }
+    };
+    handleUrlRecipient();
+  }, [recipientParam, usernameParam]);
 
   // E2EE Initialization
   useEffect(() => {
@@ -176,7 +241,7 @@ export default function MessagesPage() {
 
   // Load and merge all data
   const loadLocalData = useCallback(() => {
-    const saved = localStorage.getItem("chat_conversations");
+    const saved = localStorage.getItem(`chat_conversations${storagePrefix}`) || localStorage.getItem("chat_conversations");
     let initialConvs = seedConversations;
     if (saved) {
       try {
@@ -220,7 +285,7 @@ export default function MessagesPage() {
       setActiveId(initialConvs[0].id);
     }
     setConnectedUsers(updatedContacts);
-  }, [activeId]);
+  }, [activeId, storagePrefix]);
 
   const loadChatData = useCallback(async () => {
     try {
@@ -324,7 +389,7 @@ export default function MessagesPage() {
       const messagesData = rawMessagesData as unknown as DBMessage[];
 
       const dbConversations: Conversation[] = [];
-      const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+      const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
 
       if (!msgErr && messagesData && messagesData.length > 0) {
         // Group messages by recipient
@@ -356,7 +421,9 @@ export default function MessagesPage() {
             try {
               const otherPubKey = await importPublicKey(JSON.parse(otherProfile.public_key));
               sharedKey = await deriveAESKey(privateKey, otherPubKey);
-            } catch(e) {}
+            } catch (e) {
+              console.debug("E2EE key derivation skipped:", e);
+            }
           }
 
           const decryptedMsgs = await Promise.all(msgs.map(async m => {
@@ -408,10 +475,10 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.id, currentUserId, activeId, loadLocalData, privateKey]);
+  }, [user, profile?.id, currentUserId, activeId, loadLocalData, privateKey, storagePrefix]);
 
   const saveLocalData = (newConvs: Conversation[]) => {
-    localStorage.setItem("chat_conversations", JSON.stringify(newConvs));
+    localStorage.setItem(`chat_conversations${storagePrefix}`, JSON.stringify(newConvs));
   };
 
   // Run initial mount load
@@ -486,9 +553,9 @@ export default function MessagesPage() {
   useEffect(() => {
     if (activeId && activeConv && activeConv.unread > 0) {
       // Clear unread count locally
-      const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+      const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
       readConvs[activeId] = Date.now();
-      localStorage.setItem("read_conversations", JSON.stringify(readConvs));
+      localStorage.setItem(`read_conversations${storagePrefix}`, JSON.stringify(readConvs));
 
       setConversations((prev) => prev.map((c) =>
         c.id === activeId ? { ...c, unread: 0, messages: c.messages.map(m => ({ ...m, read: true })) } : c
@@ -705,18 +772,50 @@ export default function MessagesPage() {
         });
 
         if (error) {
-          console.warn("Database insert message failed (handled gracefully):", error);
+          console.error("Database insert message failed:", error);
+          toast({
+            variant: "destructive",
+            title: "Message Delivery Failed",
+            description: error.message || "Message could not be saved to the server."
+          });
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === newMsg.id ? { ...m, failed: true } : m
+                    )
+                  }
+                : c
+            )
+          );
         } else {
           loadChatData(); // Reload from db to overwrite temp message with db version
         }
-      } catch (err) {
-        console.warn("Error inserting message to database:", err);
+      } catch (err: any) {
+        console.error("Error inserting message to database:", err);
+        toast({
+          variant: "destructive",
+          title: "Message Delivery Failed",
+          description: err?.message || "Failed to communicate with message server."
+        });
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === newMsg.id ? { ...m, failed: true } : m
+                  )
+                }
+              : c
+          )
+        );
       }
     }
-
   };
 
-    // 3. Simulate smart typing response from Seed contacts
   // Handle local attachment real file upload & convert to base64
   const triggerAttachmentSelection = (type: MessageType) => {
     setPendingFileType(type);
@@ -728,13 +827,21 @@ export default function MessagesPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const base64Data = reader.result as string;
-      sendMessage(pendingFileType, base64Data, file.name);
-      toast({
-        title: "Attachment sent",
-        description: `Successfully sent ${file.name}`
-      });
+      try {
+        await sendMessage(pendingFileType, base64Data, file.name);
+        toast({
+          title: "Attachment processed",
+          description: `Sending ${file.name}...`
+        });
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "File error",
+          description: err?.message || "Failed to send attachment."
+        });
+      }
     };
     reader.onerror = () => {
       toast({
@@ -751,22 +858,71 @@ export default function MessagesPage() {
     }
   };
 
-  // Load older mock history simulation
-  function loadOlder() {
-    if (!activeConv) return;
+  // Load older messages pagination from Supabase
+  const loadOlder = async () => {
+    if (!activeConv || loadingOlder) return;
     setLoadingOlder(true);
-    setTimeout(() => {
-      const older: ChatMessage[] = [
-        { id: "old-" + Date.now(), sender: "them", type: "text", content: "Hey! Just wanted to share our project proposal outline. Glad to connect here.", timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3, read: true },
-        { id: "old-" + (Date.now() + 1), sender: "me", type: "text", content: "Absolutely. Looking forward to reviewing the project coordinates.", timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3 + 60000, read: true },
-      ];
-      setConversations((prev) =>
-        prev.map((c) => (c.id === activeConv.id ? { ...c, messages: [...older, ...c.messages] } : c))
-      );
+    try {
+      const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+      if (user && !isGuestSession && isUuid(activeConv.id) && isUuid(currentUserId)) {
+        const oldestMsg = activeConv.messages[0];
+        const oldestTimestamp = oldestMsg ? new Date(oldestMsg.timestamp).toISOString() : new Date().toISOString();
+
+        const { data: olderDbMessages, error: olderErr } = await supabase
+          .from("messages")
+          .select("*")
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${activeConv.id}),and(sender_id.eq.${activeConv.id},receiver_id.eq.${currentUserId})`)
+          .lt("created_at", oldestTimestamp)
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (olderErr) {
+          throw olderErr;
+        }
+
+        if (!olderDbMessages || olderDbMessages.length === 0) {
+          toast({
+            title: "End of conversation history",
+            description: "No earlier messages exist in this conversation."
+          });
+          setLoadingOlder(false);
+          return;
+        }
+
+        const mappedOlder: ChatMessage[] = olderDbMessages.reverse().map((m) => ({
+          id: m.id,
+          sender: m.sender_id === currentUserId ? "me" : "them",
+          type: (m.type as MessageType) || "text",
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+          read: m.is_read
+        }));
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeConv.id
+              ? { ...c, messages: [...mappedOlder, ...c.messages] }
+              : c
+          )
+        );
+        chatBodyRef.current?.scrollTo({ top: 120, behavior: "smooth" });
+      } else {
+        toast({
+          title: "End of history",
+          description: "No earlier messages available."
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to load older messages:", err);
+      toast({
+        variant: "destructive",
+        title: "Could not load older messages",
+        description: err?.message || "Error retrieving earlier messages."
+      });
+    } finally {
       setLoadingOlder(false);
-      chatBodyRef.current?.scrollTo({ top: 120, behavior: "smooth" });
-    }, 800);
-  }
+    }
+  };
 
   // Delete/Clear conversation
   const clearConversation = (id: string) => {
@@ -802,15 +958,13 @@ export default function MessagesPage() {
       });
       setReportReason("");
       setReportModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to submit report:", err);
-      // Fallback for offline / seed user testing
       toast({
-        title: "Report submitted",
-        description: `Your report for ${activeConv.username} has been recorded.`
+        variant: "destructive",
+        title: "Report failed",
+        description: err?.message || `Could not submit report for ${activeConv.username}. Please try again.`
       });
-      setReportReason("");
-      setReportModalOpen(false);
     } finally {
       setSubmittingReport(false);
     }
@@ -1097,7 +1251,11 @@ export default function MessagesPage() {
                               }`}>
                                 <span>{formatTime(m.timestamp)}</span>
                                 {isMe && (
-                                  m.id.startsWith('msg_temp_') ? (
+                                  m.failed ? (
+                                    <span className="text-destructive font-sans font-medium text-[10px] flex items-center gap-1">
+                                      Delivery failed
+                                    </span>
+                                  ) : m.id.startsWith('msg_temp_') ? (
                                     <Check className="w-3.5 h-3.5 text-primary-foreground/70" />
                                   ) : m.read ? (
                                     <CheckCheck className="w-3.5 h-3.5 text-primary-foreground" />

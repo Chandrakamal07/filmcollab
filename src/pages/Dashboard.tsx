@@ -88,17 +88,36 @@ export default function Dashboard() {
     const profileDbId = profile?.id;
     const currentUserId = user?.id || profile?.user_id || profileDbId;
 
-    // Fetch latest active project for the "Continue your project" spotlight stage
-    supabase
-      .from("projects_space")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setFeaturedProject(data[0]);
-        }
-      });
+    // Fetch latest active project owned by or joined by current user
+    if (currentUserId) {
+      supabase
+        .from("projects")
+        .select("*")
+        .eq("created_by", currentUserId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .then(async ({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            setFeaturedProject(data[0]);
+          } else {
+            // Check joined projects
+            const { data: memberProjects } = await supabase
+              .from("project_members")
+              .select("project_id, projects(*)")
+              .eq("user_id", currentUserId)
+              .limit(1);
+
+            if (memberProjects && memberProjects.length > 0 && (memberProjects[0] as any).projects) {
+              setFeaturedProject((memberProjects[0] as any).projects);
+            } else {
+              setFeaturedProject(null);
+            }
+          }
+        })
+        .catch(() => {
+          setFeaturedProject(null);
+        });
+    }
 
     // Fetch latest opportunities for "Opportunities for you"
     supabase
@@ -180,10 +199,23 @@ export default function Dashboard() {
     }
   }, [profile, user]);
 
-  const activeProjectTitle = featuredProject?.title || "After the Rain";
+  const formatRelativeTime = (dateStr?: string) => {
+    if (!dateStr) return "Recently";
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours < 24) return `${Math.max(1, diffHours)}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return "Recently";
+    }
+  };
+
+  const activeProjectTitle = featuredProject?.title || "No Active Production";
   const activeProjectSub = featuredProject
-    ? `${featuredProject.type || "Short Film"} • ${featuredProject.status || "In Development"}`
-    : "Short Film • In Development";
+    ? `${featuredProject.project_type || featuredProject.type || "Production"} • ${featuredProject.status || "In Development"}`
+    : "Create or join a slate to collaborate";
   const activeProjectRoute = featuredProject?.id
     ? `/projects/${featuredProject.id}`
     : "/projects";
@@ -191,16 +223,16 @@ export default function Dashboard() {
   const opportunityRows =
     liveJobs.length > 0
       ? liveJobs.map((job, idx) => ({
-          id: job.id,
-          title: job.title || "Production Crew Role",
-          company: job.company || "Studio Production",
-          location: job.location || "Mumbai, India",
-          type: job.salary_min ? `₹${job.salary_min}` : "Paid",
-          craft: job.category || job.type || "Production",
-          posted: `${idx + 2} days ago`,
-          image:
-            FALLBACK_OPPORTUNITIES[idx % FALLBACK_OPPORTUNITIES.length].image,
-        }))
+        id: job.id,
+        title: job.job_title || job.title || "Production Crew Role",
+        company: job.company_name || job.company || "Studio Production",
+        location: job.location || "Mumbai, India",
+        type: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : (job.job_type || "Paid"),
+        craft: job.industry || job.skills_required?.[0] || job.category || job.type || "Production",
+        posted: formatRelativeTime(job.posted_date || job.created_at),
+        image:
+          FALLBACK_OPPORTUNITIES[idx % FALLBACK_OPPORTUNITIES.length].image,
+      }))
       : FALLBACK_OPPORTUNITIES;
 
   const attentionItems = [
@@ -358,11 +390,10 @@ export default function Dashboard() {
                         key={tab}
                         type="button"
                         onClick={() => setProjectQuickTab(tab)}
-                        className={`relative pb-2.5 text-xs sm:text-sm font-medium transition-colors ${
-                          active
+                        className={`relative pb-2.5 text-xs sm:text-sm font-medium transition-colors ${active
                             ? "text-foreground"
                             : "text-muted-foreground hover:text-foreground"
-                        }`}
+                          }`}
                       >
                         {tab}
                         {active && (
@@ -377,7 +408,13 @@ export default function Dashboard() {
                   })}
                   <button
                     type="button"
-                    onClick={() => navigate(activeProjectRoute)}
+                    onClick={() => {
+                      const targetView = projectQuickTab.toLowerCase();
+                      const url = featuredProject?.id
+                        ? `/projects/${featuredProject.id}?view=${targetView === "files" ? "overview" : targetView}`
+                        : "/projects";
+                      navigate(url);
+                    }}
                     className="ml-auto pb-2.5 text-xs font-mono text-primary hover:underline"
                   >
                     Open {projectQuickTab} →
@@ -431,10 +468,10 @@ export default function Dashboard() {
                         <p className="text-xs font-mono text-muted-foreground truncate">
                           {dashboardEvents[0]?.date
                             ? new Date(dashboardEvents[0].date).toLocaleDateString("en-US", {
-                                weekday: "short",
-                                day: "numeric",
-                                month: "short",
-                              })
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                            })
                             : "Sat, 24 May • 10:00 AM"}
                         </p>
                       </div>
@@ -472,7 +509,7 @@ export default function Dashboard() {
                     <StaggerItem key={opp.id || index} index={index}>
                       <DimensionalCard
                         maxTilt={4}
-                        onClick={() => navigate("/jobs")}
+                        onClick={() => navigate(opp.id ? `/jobs/${opp.id}` : "/jobs")}
                         className="cursor-pointer p-3 rounded-xl bg-[#1A1C21] border-white/[0.07] hover:border-primary/40 group"
                       >
                         <DimensionalLayer depth={12} className="flex items-center gap-4">

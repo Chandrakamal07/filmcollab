@@ -13,10 +13,13 @@ import About from "./pages/About";
 import ContactUs from "./pages/ContactUs";
 import SignIn from "./pages/auth/SignIn";
 import SignUp from "./pages/auth/SignUp";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 import AdminSignIn from "./pages/auth/AdminSignIn";
 import AdminSignUp from "./pages/auth/AdminSignUp";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminProfile from "./pages/AdminProfile";
 import Jobs from "./pages/Jobs";
 import JobDetails from "./pages/JobDetails";
 import CastingCalls from "./pages/casting-calls/page";
@@ -112,9 +115,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Public Route Component (redirect if already authenticated)
+// Public Route Component (redirect if already authenticated, honoring return location)
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, isAdmin } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
@@ -127,8 +131,16 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
   
-  // If user exists, redirect based on role
+  // If user exists, redirect to requested 'from' destination or default dashboard
   if (user) {
+    const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } | string })?.from;
+    if (from) {
+      const destination =
+        typeof from === "string"
+          ? from
+          : `${from.pathname || ""}${from.search || ""}${from.hash || ""}` || "/dashboard";
+      return <Navigate to={destination} replace />;
+    }
     if (isAdmin()) {
       return <Navigate to="/admin-dashboard" replace />;
     }
@@ -136,6 +148,17 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
   
   return <>{children}</>;
+}
+
+// Seamless alias redirects for /signin and /signup preserving search & state
+function RedirectToSignIn() {
+  const location = useLocation();
+  return <Navigate to={`/auth/signin${location.search}${location.hash}`} state={location.state} replace />;
+}
+
+function RedirectToSignUp() {
+  const location = useLocation();
+  return <Navigate to={`/auth/signup${location.search}${location.hash}`} state={location.state} replace />;
 }
 
 function AppRoutes() {
@@ -147,6 +170,9 @@ function AppRoutes() {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<ContactUs />} />
+      {/* Compatibility alias routes */}
+      <Route path="/signin" element={<RedirectToSignIn />} />
+      <Route path="/signup" element={<RedirectToSignUp />} />
       <Route
         path="/auth/signin"
         element={
@@ -162,6 +188,18 @@ function AppRoutes() {
             <SignUp />
           </PublicRoute>
         }
+      />
+      <Route
+        path="/auth/forgot-password"
+        element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/auth/reset-password"
+        element={<ResetPassword />}
       />
 
       {/* Admin routes */}
@@ -225,14 +263,6 @@ function AppRoutes() {
       />
         <Route
           path="/jobs/:jobId"
-          element={
-            <ProtectedRoute>
-              <JobDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/jobs/:id"
           element={
             <ProtectedRoute>
               <JobDetails />
@@ -542,6 +572,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <AdminSettings />
+          </AdminRoute>
+        } 
+      />
+      <Route 
+        path="/admin-dashboard/profile" 
+        element={
+          <AdminRoute>
+            <AdminProfile />
           </AdminRoute>
         } 
       />

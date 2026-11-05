@@ -113,13 +113,13 @@ export function LandingTopbar({ className }: LandingTopbarProps) {
 
             <Button
               variant="ghost"
-              onClick={() => navigate("/signin")}
+              onClick={() => navigate("/auth/signin")}
               className="hidden sm:inline-flex h-9 px-4 text-sm font-medium text-foreground/90 hover:text-foreground hover:bg-white/[0.06]"
             >
               Log in
             </Button>
             <Button
-              onClick={() => navigate("/signup")}
+              onClick={() => navigate("/auth/signup")}
               className="h-9 px-4 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_0_20px_rgba(233,180,87,0.28)]"
             >
               Sign up
@@ -172,7 +172,7 @@ export function LandingTopbar({ className }: LandingTopbarProps) {
                   variant="outline"
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    navigate("/signin");
+                    navigate("/auth/signin");
                   }}
                   className="w-full justify-center"
                 >

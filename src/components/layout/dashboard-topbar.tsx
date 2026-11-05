@@ -190,7 +190,12 @@ export function DashboardTopbar({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/discover");
+    const q = globalSearchQuery.trim();
+    if (q) {
+      navigate(`/discover?q=${encodeURIComponent(q)}`);
+    } else {
+      navigate("/discover");
+    }
   };
 
   return (

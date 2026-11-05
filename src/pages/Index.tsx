@@ -506,7 +506,7 @@ const Index = () => {
               <div className="flex flex-wrap items-center gap-4">
                 <Button
                   size="lg"
-                  onClick={() => navigate("/signup")}
+                  onClick={() => navigate("/auth/signup")}
                   className="h-12 px-7 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-noir"
                 >
                   Create Studio Account

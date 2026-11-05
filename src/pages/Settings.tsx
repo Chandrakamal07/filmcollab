@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/app-layout';
@@ -15,6 +16,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -47,8 +56,15 @@ import {
 const Settings = () => {
   const { toast } = useToast();
   const { user, profile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('privacy');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Change Password Modal State
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // RapidAPI Credentials & Testing State
   const [rapidApiKey, setRapidApiKey] = useState(() => localStorage.getItem("X_RAPIDAPI_KEY") || "");
@@ -364,6 +380,50 @@ const Settings = () => {
 
   const handleAppearanceChange = (field: string, value: string | boolean) => {
     setAppearanceSettings(prev => ({ ...prev, [field]: value }));
+    if (field === 'theme' && typeof value === 'string') {
+      setTheme(value);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Weak password",
+        description: "Password must be at least 6 characters long.",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Passwords mismatch",
+        description: "New password and confirmation password do not match.",
+      });
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setSecuritySettings(prev => ({ ...prev, passwordLastChanged: new Date().toISOString() }));
+      toast({
+        title: "Password updated",
+        description: "Your account password has been changed successfully.",
+      });
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsPasswordDialogOpen(false);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Password update failed",
+        description: err?.message || "Could not update password.",
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const handleSecurityChange = (field: string, value: boolean | string) => {
@@ -842,7 +902,12 @@ const Settings = () => {
                           Last changed: {new Date(securitySettings.passwordLastChanged).toLocaleDateString()}
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setIsPasswordDialogOpen(true)}
+                        className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground"
+                      >
                         Change Password
                       </Button>
                     </div>
@@ -862,6 +927,61 @@ const Settings = () => {
           </TabsContent>
 
         </Tabs>
+
+        {/* Change Password Dialog */}
+        <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
+            <DialogHeader>
+              <DialogTitle className="font-display text-xl text-foreground">Change Password</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs">
+                Enter your new account password below. You will use this to sign in across FilmCollab.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUpdatePassword} className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="At least 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-surface-elevated border-border/80"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Repeat new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-surface-elevated border-border/80"
+                  required
+                />
+              </div>
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsPasswordDialogOpen(false)}
+                  className="border-border/80 text-foreground"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isUpdatingPassword}
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                >
+                  {isUpdatingPassword ? "Updating..." : "Update Password"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

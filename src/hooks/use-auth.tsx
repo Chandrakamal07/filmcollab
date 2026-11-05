@@ -338,21 +338,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = () => {
-    return userRole?.role === 'admin' || profile?.role === 'admin' || localStorage.getItem("registering_admin") === "true";
+    return userRole?.role === 'admin' || profile?.role === 'admin';
   };
 
   const hasPermission = (page: string, action?: string) => {
     if (!isAdmin()) return false;
     
-    // Superadmin bypass (if there's no admin_team_members entry, assume they are superadmin, or if explicitly set)
-    if (!adminPermissions) {
-      // For now, if you are an admin and not in the team members table, you have full access
+    // Superadmin has full access across all admin areas
+    if (userRole?.role === 'admin' || profile?.role === 'admin') {
+      // If scoped team permissions exist, enforce them
+      if (adminPermissions) {
+        if (adminPermissions.status !== 'Active') return false;
+        if (adminPermissions.role === 'Admin') return true;
+        const pagePerms = adminPermissions.permissions?.[page];
+        if (!pagePerms) return false;
+        if (action) return !!pagePerms[action];
+        return !!pagePerms.view;
+      }
       return true;
     }
     
-    if (adminPermissions.status !== 'Active') return false;
-    
-    // Admins have full access
+    // Scoped team members require active permission records
+    if (!adminPermissions || adminPermissions.status !== 'Active') return false;
     if (adminPermissions.role === 'Admin') return true;
 
     const pagePerms = adminPermissions.permissions?.[page];

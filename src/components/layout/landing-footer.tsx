@@ -59,17 +59,17 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link to="#" className="transition-colors hover:text-primary">
+                <Link to="/support" className="transition-colors hover:text-primary">
                   Help Center
                 </Link>
               </li>
               <li>
-                <Link to="#" className="transition-colors hover:text-primary">
+                <Link to="/privacy" className="transition-colors hover:text-primary">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link to="#" className="transition-colors hover:text-primary">
+                <Link to="/terms" className="transition-colors hover:text-primary">
                   Terms of Service
                 </Link>
               </li>
@@ -82,22 +82,22 @@ export function LandingFooter() {
             </h4>
             <ul className="space-y-2.5 text-sm text-muted-foreground">
               <li>
-                <a href="#" className="transition-colors hover:text-primary">
+                <a href="https://twitter.com/filmcollab" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
                   Twitter
                 </a>
               </li>
               <li>
-                <a href="#" className="transition-colors hover:text-primary">
+                <a href="https://instagram.com/filmcollab" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
                   Instagram
                 </a>
               </li>
               <li>
-                <a href="#" className="transition-colors hover:text-primary">
+                <a href="https://linkedin.com/company/filmcollab" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
                   LinkedIn
                 </a>
               </li>
               <li>
-                <a href="#" className="transition-colors hover:text-primary">
+                <a href="https://youtube.com/@filmcollab" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
                   YouTube
                 </a>
               </li>

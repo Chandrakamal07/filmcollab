@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import {
   CreditCard,
   Check,
@@ -21,6 +23,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 
 const Billing = () => {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
@@ -43,9 +47,9 @@ const Billing = () => {
     }
   };
 
-  // Mock user data
+  // Authoritative current user plan
   const currentPlan = {
-    name: 'Free',
+    name: profile?.role === 'admin' ? 'Studio Pro (Admin)' : 'Free Creator',
     price: 0,
     period: 'month',
     features: [
@@ -63,31 +67,14 @@ const Billing = () => {
   };
 
   const handleUpgrade = async (planId: string) => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Upgrade initiated",
-        description: `Redirecting to payment for ${planId} plan...`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to initiate upgrade. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    toast({
+      title: "Self-serve checkout unavailable",
+      description: `Payment provider integration for the ${planId} plan is currently undergoing gateway configuration. Please contact studio sales to activate your plan.`,
+    });
   };
 
   const handleContactSales = () => {
-    toast({
-      title: "Contact Sales",
-      description: "Redirecting to contact form...",
-    });
+    navigate("/contact?subject=" + encodeURIComponent("Studio Plan Upgrade Inquiry"));
   };
 
   return (
@@ -104,6 +91,22 @@ const Billing = () => {
             <CreditCard className="w-3.5 h-3.5 mr-1.5" />
             Current Plan: {currentPlan.name}
           </Badge>
+        </div>
+
+        {/* Payment Processing Notice */}
+        <div className="p-4 rounded-xl border border-primary/30 bg-primary/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold text-foreground">Self-serve payment processing is in preview</p>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Online gateway integrations are currently undergoing certification. To upgrade your studio tier or invoice your company directly, please contact our concierge team.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap border-primary/40 bg-card hover:bg-primary/20 text-foreground" onClick={handleContactSales}>
+            Contact Sales
+          </Button>
         </div>
 
         {/* Current Plan */}

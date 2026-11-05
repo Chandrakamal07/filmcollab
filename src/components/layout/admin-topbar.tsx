@@ -28,6 +28,8 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminTopbarProps {
   pageTitle?: string;
@@ -40,7 +42,8 @@ export function AdminTopbar({
   onMenuToggle,
   isMobileMenuOpen = false,
 }: AdminTopbarProps) {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -51,7 +54,7 @@ export function AdminTopbar({
     navigate("/", { replace: true });
   };
 
-  const mockAdminNotifications = [
+  const initialNotifications = [
     {
       id: 1,
       title: "New user registration",
@@ -78,7 +81,39 @@ export function AdminTopbar({
     },
   ];
 
-  const unreadCount = mockAdminNotifications.filter((n) => n.unread).length;
+  const [notifications, setNotifications] = useState(initialNotifications);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchValue.trim()) {
+      navigate(`/admin-dashboard/users?q=${encodeURIComponent(searchValue.trim())}`);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      if (user?.id) {
+        await supabase
+          .from("notifications")
+          .update({ is_read: true })
+          .or(`user_id.eq.${user.id},recipient_id.eq.${user.id}`);
+      }
+      setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+      toast({
+        title: "Marked all as read",
+        description: "Admin notifications updated."
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not mark notifications as read.";
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: msg
+      });
+    }
+  };
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   return (
     <header className="sticky top-0 z-40 bg-card/85 backdrop-blur-xl supports-[backdrop-filter]:bg-card/75 border-b border-border/80">
@@ -101,7 +136,7 @@ export function AdminTopbar({
 
         <div className="flex items-center gap-3">
           {/* Search Bar */}
-          <div className="relative hidden lg:block">
+          <form onSubmit={handleSearchSubmit} className="relative hidden lg:block">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search users, reports..."
@@ -109,7 +144,7 @@ export function AdminTopbar({
               onChange={(e) => setSearchValue(e.target.value)}
               className="pl-9 w-64 h-9"
             />
-          </div>
+          </form>
 
           {/* Admin Notifications */}
           <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
@@ -127,12 +162,12 @@ export function AdminTopbar({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-sm">Admin Notifications</h3>
-                  <Button variant="ghost" size="sm" className="text-xs h-7 px-2">
+                  <Button variant="ghost" size="sm" onClick={handleMarkAllRead} className="text-xs h-7 px-2 hover:bg-primary/10 text-primary">
                     Mark all read
                   </Button>
                 </div>
                 <div className="space-y-2.5">
-                  {mockAdminNotifications.map((notification) => (
+                  {notifications.map((notification) => (
                     <div
                       key={notification.id}
                       className={`p-3 rounded-lg border cursor-pointer transition-colors ${

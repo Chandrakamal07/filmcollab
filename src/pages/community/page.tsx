@@ -315,7 +315,29 @@ export default function CommunityPage() {
     }
   ];
 
-  const handleGroupClick = (group) => {
+  const filteredTrendingGroups = trendingGroups.filter((group) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      group.name.toLowerCase().includes(q) ||
+      group.description.toLowerCase().includes(q) ||
+      group.category.toLowerCase().includes(q) ||
+      group.tags.some((t) => t.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredJoinedGroups = joinedGroups.filter((group) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      group.name.toLowerCase().includes(q) ||
+      group.description.toLowerCase().includes(q) ||
+      group.category.toLowerCase().includes(q) ||
+      group.tags.some((t) => t.toLowerCase().includes(q))
+    );
+  });
+
+  const handleGroupClick = (group: any) => {
     if (activeTab === "created") {
       // Navigate to group details page for created groups
       navigate(`/community/group/${group.id}`);
@@ -412,7 +434,7 @@ export default function CommunityPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {trendingGroups.map((group) => (
+                {filteredTrendingGroups.map((group) => (
                   <Card 
                     key={group.id} 
                     className="bg-surface-elevated border-border/80 hover:border-primary/40 shadow-noir transition-all rounded-xl cursor-pointer group"
@@ -478,7 +500,7 @@ export default function CommunityPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {joinedGroups.map((group) => (
+                {filteredJoinedGroups.map((group) => (
                   <Card 
                     key={group.id} 
                     className="bg-surface-elevated border-border/80 hover:border-primary/40 shadow-noir transition-all rounded-xl cursor-pointer group"
