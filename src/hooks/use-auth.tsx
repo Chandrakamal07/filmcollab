@@ -26,6 +26,8 @@ interface Profile {
   skills?: string[] | null;
   role?: string | null;
   category?: string | null;
+  username?: string | null;
+  phone?: string | null;
   location?: string | null;
   website?: string | null;
   portfolio_url?: string | null;
@@ -156,13 +158,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let adminPermsData = null;
       if (finalProfileData && (finalProfileData.role === 'admin' || (roleData && roleData.some(r => r.role === 'admin')))) {
         const permsResult = await withTimeout(
-          supabase
-            .from('admin_team_members')
-            .select('*')
-            .eq('profile_id', profileData.id)
-            .maybeSingle(),
+          Promise.resolve(
+            supabase
+              .from('admin_team_members')
+              .select('*')
+              .eq('profile_id', profileData.id)
+              .maybeSingle()
+          ),
           10000,
-          { data: null, error: null }
+          { data: null, error: null } as any
         );
         adminPermsData = permsResult.data;
         setAdminPermissions(adminPermsData as AdminPermissions);
@@ -277,47 +281,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentUser = userResult?.data?.user;
       }
       
-      const isUserAdmin = currentUser?.user_metadata?.role === 'admin' || 
-                          currentUser?.email?.toLowerCase().includes('admin') ||
-                          localStorage.getItem("registering_admin") === "true";
-      const roleToAssign = isUserAdmin ? 'admin' : 'user';
-
       if (roleData && roleData.length > 0) {
-        console.log('User roles fetched:', roleData);
+        console.log('User roles fetched from database:', roleData);
         const activeRole = roleData.find(r => r.role === 'admin') || roleData[0];
-        
-        // If the database says user, but they should be admin, update it in the database!
-        if (activeRole.role !== roleToAssign && roleToAssign === 'admin') {
-          console.log('Updating user role to admin in DB');
-          const { error: updateError } = await withTimeout(
-            supabase
-              .from('user_roles')
-              .update({ role: 'admin' })
-              .eq('id', activeRole.id) as unknown as Promise<{ error: null | { message: string } }>,
-            1500,
-            { error: null }
-          );
-          if (!updateError) {
-            activeRole.role = 'admin';
-          }
-        }
-        
         setUserRole(activeRole as UserRole);
       } else {
-        // No role found — auto insert or set a default in-memory role
+        // No role found in DB — assign default regular 'user' role
         const defaultRole: UserRole = {
           id: '',
           user_id: userId,
-          role: roleToAssign as 'user' | 'admin',
+          role: 'user',
           created_at: new Date().toISOString()
         };
         setUserRole(defaultRole);
-        // Try inserting default role to DB (silent catch on error)
+        // Persist default 'user' role to DB
         try {
           await withTimeout(
-            supabase.from('user_roles').insert({ user_id: userId, role: roleToAssign }) as unknown as Promise<unknown>,
+            Promise.resolve(supabase.from('user_roles').insert({ user_id: userId, role: 'user' })) as any,
             1500,
-            {}
+            {} as any
           );
         } catch (e) {
           console.warn('Failed to insert default user role to DB:', e);
@@ -342,34 +324,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = (page: string, action?: string) => {
+    // Fail-closed: Must have admin status
     if (!isAdmin()) return false;
     
-    // Superadmin has full access across all admin areas
-    if (userRole?.role === 'admin' || profile?.role === 'admin') {
-      // If scoped team permissions exist, enforce them
-      if (adminPermissions) {
-        if (adminPermissions.status !== 'Active') return false;
-        if (adminPermissions.role === 'Admin') return true;
-        const pagePerms = adminPermissions.permissions?.[page];
-        if (!pagePerms) return false;
-        if (action) return !!pagePerms[action];
-        return !!pagePerms.view;
-      }
-      return true;
-    }
-    
-    // Scoped team members require active permission records
-    if (!adminPermissions || adminPermissions.status !== 'Active') return false;
-    if (adminPermissions.role === 'Admin') return true;
+    const normalizedPage = (page || '').toLowerCase();
+    const normalizedAction = action 
+      ? (action.toLowerCase() === 'update' ? 'edit' : action.toLowerCase())
+      : 'view';
 
-    const pagePerms = adminPermissions.permissions?.[page];
-    if (!pagePerms) return false;
-    
-    if (action) {
-      return !!pagePerms[action];
+    // If scoped team permissions exist, enforce them
+    if (adminPermissions) {
+      if (adminPermissions.status !== 'Active') return false;
+      if (adminPermissions.role === 'Admin') return true;
+
+      const perms = adminPermissions.permissions || {};
+      const matchedKey = Object.keys(perms).find(k => k.toLowerCase() === normalizedPage);
+      if (!matchedKey) return false;
+
+      const pagePerms = perms[matchedKey];
+      if (!pagePerms) return false;
+
+      if (normalizedAction === 'edit') return !!pagePerms.edit;
+      if (normalizedAction === 'delete') return !!pagePerms.delete;
+      return !!pagePerms.view;
     }
     
-    return !!pagePerms.view;
+    // Verified global superadmin from user_roles has full access
+    return userRole?.role === 'admin';
   };
 
   useEffect(() => {
@@ -541,15 +522,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const redirectUrl = `${window.location.origin}/dashboard`;
       const fullName = firstName && lastName ? `${firstName} ${lastName}` : (firstName || '');
 
-      if (role === 'admin') {
-        localStorage.setItem("registering_admin", "true");
-      } else {
-        localStorage.removeItem("registering_admin");
-      }
-
-      // To prevent Postgres ENUM cast errors in handle_new_user_role trigger when role is a profession like "Director"
-      const authRole = role === 'admin' ? 'admin' : undefined;
-      
       if (role && role !== 'admin') {
         localStorage.setItem('pending_profession', role);
       }
@@ -563,7 +535,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             full_name: fullName,
             first_name: firstName || '',
             last_name: lastName || '',
-            role: authRole,
           }
         }
       });

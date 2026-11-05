@@ -100,6 +100,7 @@ export default function NewCastingCall() {
       }
 
       await addCastingCall({
+        creatorId: "user",
         title: form.title,
         projectName: form.projectName,
         productionHouse: form.productionHouse,

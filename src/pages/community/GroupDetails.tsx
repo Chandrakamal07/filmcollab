@@ -123,7 +123,7 @@ export default function GroupDetails() {
     { id: "6", name: "Emma Rodriguez", role: "Sound Designer", avatar: "ER", joinedDate: "2024-11-20", isAdmin: false, isModerator: false, online: true }
   ];
 
-  const chatMessages: ChatMessage[] = [
+  const demoChatMessages: ChatMessage[] = [
     {
       id: "1",
       userId: "2",
@@ -182,6 +182,8 @@ export default function GroupDetails() {
     }
   ];
 
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -195,35 +197,91 @@ export default function GroupDetails() {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   };
 
+  useEffect(() => {
+    if (!groupId) return;
+    if (isUuid(groupId)) {
+      const fetchGroupMessages = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("community_group_messages")
+            .select("id, user_id, message, type, created_at")
+            .eq("group_id", groupId)
+            .order("created_at", { ascending: true });
+
+          if (!error && data && data.length > 0) {
+            setChatMessages(data.map((m: any) => ({
+              id: m.id,
+              userId: m.user_id,
+              userName: m.user_id === user?.id ? (profile?.full_name || "You") : "Member",
+              userAvatar: (m.user_id === user?.id ? (profile?.full_name || "Y") : "M").slice(0, 2).toUpperCase(),
+              message: m.message,
+              timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              type: m.type || 'text',
+              isAdmin: false
+            })));
+          } else {
+            setChatMessages([]);
+          }
+        } catch (err) {
+          console.warn("Could not load real group messages:", err);
+        }
+      };
+      fetchGroupMessages();
+    } else {
+      setChatMessages(demoChatMessages);
+    }
+  }, [groupId, user?.id, profile?.full_name]);
+
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
     const msg = newMessage.trim();
     setNewMessage("");
     try {
       if (user && isUuid(groupId)) {
-        const { error } = await supabase.from("community_group_messages").insert({
-          group_id: groupId,
-          user_id: user.id,
-          message: msg,
-          type: 'text'
-        });
+        const { data, error } = await supabase
+          .from("community_group_messages")
+          .insert({
+            group_id: groupId,
+            user_id: user.id,
+            message: msg,
+            type: 'text'
+          })
+          .select("id, created_at")
+          .single();
+
         if (error) throw error;
+
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: data?.id || `msg-${Date.now()}`,
+            userId: user.id,
+            userName: profile?.full_name || "You",
+            userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
+            message: msg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'text',
+            isAdmin: true
+          }
+        ]);
+      } else {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            userId: user?.id || "me",
+            userName: profile?.full_name || "You",
+            userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
+            message: msg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'text',
+            isAdmin: true
+          }
+        ]);
       }
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-${Date.now()}`,
-          userId: user?.id || "me",
-          userName: profile?.full_name || "You",
-          userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
-          message: msg,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'text',
-          isAdmin: true
-        }
-      ]);
     } catch (err: any) {
       console.error("Failed to send group message:", err);
+      setNewMessage(msg); // Preserve draft on failure
       toast({
         variant: "destructive",
         title: "Message failed",

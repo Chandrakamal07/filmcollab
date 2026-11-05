@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import ReactPlayer from "react-player";
+import ReactPlayerDefault from "react-player";
+const ReactPlayer = ReactPlayerDefault as any;
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -587,7 +588,11 @@ export default function DirectoryPage() {
       if (error && error.code !== '42P01') throw error;
       if (!data) return [];
 
-      return data.map((item: any) => {
+      const visibleData = data.filter((item: any) => 
+        (item.status !== 'blocked' && (!item.tags || !item.tags.includes('Blocked'))) || item.user_id === userId
+      );
+
+      return visibleData.map((item: any) => {
         const typeMap: Record<string, DirType> = {
           'image': 'images',
           'video': 'videos',

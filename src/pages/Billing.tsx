@@ -317,57 +317,61 @@ const Billing = () => {
               <div className="space-y-4">
                 <div>
                   <h4 className="font-medium text-foreground mb-2">Payment Method</h4>
-                  <div className="flex items-center gap-3 p-3.5 border border-border/80 bg-surface-elevated/60 rounded-lg">
-                    <CreditCard className="w-5 h-5 text-primary" />
-                    <div>
-                      <p className="text-sm font-medium font-mono text-foreground">**** **** **** 1234</p>
-                      <p className="text-xs text-muted-foreground font-mono">Expires 12/25</p>
+                  <div className="p-4 border border-border/80 bg-surface-elevated/40 rounded-xl space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-surface-elevated border border-border/60">
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">No payment method attached</p>
+                        <p className="text-xs text-muted-foreground">Free tier active — no charges pending</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" className="ml-auto border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
-                      Update
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toast({
+                        title: "Payment Gateway",
+                        description: "Self-serve card attachments are in preview. Please contact sales to setup direct studio billing."
+                      })}
+                      className="w-full text-xs border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors"
+                    >
+                      Add Payment Method
                     </Button>
                   </div>
                 </div>
+
                 <div>
                   <h4 className="font-medium text-foreground mb-2">Billing Address</h4>
-                  <div className="p-3.5 border border-border/80 bg-surface-elevated/60 rounded-lg">
-                    <p className="text-sm text-foreground">123 Film Street</p>
-                    <p className="text-sm text-muted-foreground">Los Angeles, CA 90210</p>
-                    <p className="text-sm text-muted-foreground">United States</p>
-                    <Button variant="outline" size="sm" className="mt-2 border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
-                      Update
+                  <div className="p-4 border border-border/80 bg-surface-elevated/40 rounded-xl space-y-2">
+                    <p className="text-sm text-foreground">
+                      {profile?.location ? profile.location : "No billing address on file"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Associated with {profile?.full_name || user?.email || "Creator Account"}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate("/settings")}
+                      className="mt-2 text-xs border-border/80 hover:border-primary/40 bg-card text-foreground transition-colors"
+                    >
+                      Update in Settings
                     </Button>
                   </div>
                 </div>
               </div>
+
               <div className="space-y-4">
                 <div>
                   <h4 className="font-medium text-foreground mb-2">Recent Invoices</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-3 border border-border/80 bg-surface-elevated/60 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium font-mono text-foreground">Invoice #INV-001</p>
-                        <p className="text-xs text-muted-foreground font-mono">Dec 15, 2024</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium font-mono text-foreground">₹0.00</p>
-                        <Badge className="text-xs bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">Paid</Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border border-border/80 bg-surface-elevated/60 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium font-mono text-foreground">Invoice #INV-002</p>
-                        <p className="text-xs text-muted-foreground font-mono">Nov 15, 2024</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium font-mono text-foreground">₹0.00</p>
-                        <Badge className="text-xs bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">Paid</Badge>
-                      </div>
-                    </div>
+                  <div className="p-8 border border-border/80 bg-surface-elevated/40 rounded-xl text-center space-y-2">
+                    <Calendar className="w-8 h-8 text-muted-foreground opacity-30 mx-auto" />
+                    <p className="text-sm font-medium text-foreground">No invoices yet</p>
+                    <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                      You are enjoying the Free Creator tier. Invoices will generate automatically when studio upgrades or paid services are added.
+                    </p>
                   </div>
-                  <Button variant="outline" size="sm" className="w-full mt-3 border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
-                    View All Invoices
-                  </Button>
                 </div>
               </div>
             </div>

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -54,34 +54,39 @@ export function AdminTopbar({
     navigate("/", { replace: true });
   };
 
-  const initialNotifications = [
-    {
-      id: 1,
-      title: "New user registration",
-      description: "5 new users registered today",
-      time: "10 minutes ago",
-      unread: true,
-      type: "info",
-    },
-    {
-      id: 2,
-      title: "Content flagged",
-      description: "A post has been reported by users",
-      time: "30 minutes ago",
-      unread: true,
-      type: "warning",
-    },
-    {
-      id: 3,
-      title: "System backup completed",
-      description: "Daily backup finished successfully",
-      time: "2 hours ago",
-      unread: false,
-      type: "success",
-    },
-  ];
+  const [notifications, setNotifications] = useState<any[]>([]);
 
-  const [notifications, setNotifications] = useState(initialNotifications);
+  useEffect(() => {
+    const fetchAdminNotifications = async () => {
+      const profileId = profile?.id;
+      if (!profileId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", profileId)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (!error && data) {
+          const mapped = data.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            description: n.description,
+            time: new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            unread: n.status === "unread",
+            type: n.type === "connection" ? "info" : n.type === "system" ? "warning" : "success"
+          }));
+          setNotifications(mapped);
+        }
+      } catch (err) {
+        console.warn("Could not fetch admin notifications:", err);
+      }
+    };
+
+    fetchAdminNotifications();
+  }, [profile?.id]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,11 +97,15 @@ export function AdminTopbar({
 
   const handleMarkAllRead = async () => {
     try {
-      if (user?.id) {
-        await supabase
+      const profileId = profile?.id;
+      if (profileId) {
+        const { error } = await supabase
           .from("notifications")
-          .update({ is_read: true })
-          .or(`user_id.eq.${user.id},recipient_id.eq.${user.id}`);
+          .update({ status: "read" })
+          .eq("user_id", profileId)
+          .eq("status", "unread");
+
+        if (error) throw error;
       }
       setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
       toast({

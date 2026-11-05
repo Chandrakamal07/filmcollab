@@ -70,18 +70,21 @@ export default function StudiosDirectory() {
 
   // Load account-scoped applications
   const [applications, setApplications] = useState<Application[]>(() => {
-    const saved = localStorage.getItem(`studios_directory_applications${userStorageSuffix}`) || localStorage.getItem("studios_directory_applications");
+    if (!userStorageSuffix) return [];
+    const saved = localStorage.getItem(`studios_directory_applications${userStorageSuffix}`);
     return saved ? JSON.parse(saved) : [];
   });
 
   // Followed & Saved company IDs (account scoped)
   const [followedIds, setFollowedIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem(`studios_directory_followed${userStorageSuffix}`) || localStorage.getItem("studios_directory_followed");
+    if (!userStorageSuffix) return [];
+    const saved = localStorage.getItem(`studios_directory_followed${userStorageSuffix}`);
     return saved ? JSON.parse(saved) : [];
   });
 
   const [savedIds, setSavedIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem(`studios_directory_saved${userStorageSuffix}`) || localStorage.getItem("studios_directory_saved");
+    if (!userStorageSuffix) return [];
+    const saved = localStorage.getItem(`studios_directory_saved${userStorageSuffix}`);
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -127,7 +130,14 @@ export default function StudiosDirectory() {
             trending: c.trending || false,
             recentlyAdded: c.recently_added || false,
             gallery: c.gallery || [],
-            opportunities: []
+            projects: c.projects || [],
+            team: c.team || [],
+            reviews: c.reviews || [],
+            jobs: c.jobs || [],
+            auditions: c.auditions || [],
+            internships: c.internships || [],
+            opportunities: [],
+            userId: c.user_id
           }));
 
           setCompanies(prev => {
@@ -324,9 +334,9 @@ export default function StudiosDirectory() {
   // Quick stat counters
   const stats = {
     totalStudios: companies.length,
-    openAuditions: companies.reduce((acc, c) => acc + c.auditions.length, 0),
-    hiringNow: companies.reduce((acc, c) => acc + c.jobs.length, 0),
-    internships: companies.reduce((acc, c) => acc + c.internships.length, 0),
+    openAuditions: companies.reduce((acc, c) => acc + (c.auditions?.length || 0), 0),
+    hiringNow: companies.reduce((acc, c) => acc + (c.jobs?.length || 0), 0),
+    internships: companies.reduce((acc, c) => acc + (c.internships?.length || 0), 0),
   };
 
   // Filter and Search Logic
@@ -580,88 +590,100 @@ export default function StudiosDirectory() {
       return;
     }
 
-    let assignedId = "company_" + Date.now();
-    if (user) {
-      try {
-        const { data, error } = await supabase.from("companies").insert({
-          name: regForm.name,
-          description: regForm.description,
-          category: regForm.category,
-          email: regForm.email,
-          phone: regForm.phone,
-          website: regForm.website || "https://www.filmcollab.com",
-          address: regForm.address + (regForm.zipCode ? `, ${regForm.zipCode}` : ""),
-          city: regForm.city,
-          state: regForm.state,
-          country: "India",
-          user_id: user.id,
-          services: regForm.servicesSelected.length > 0 ? regForm.servicesSelected : ["Film Production"],
-          gst_number: regForm.gstNumber
-        }).select().single();
-        if (!error && data) {
-          assignedId = data.id;
-        }
-      } catch (err) {
-        console.warn("Could not insert company into Supabase:", err);
-      }
+    if (!user) {
+      navigate("/auth/signin", { state: { from: window.location.pathname } });
+      return;
     }
 
-    const brandNewCompany: Company = {
-      id: assignedId,
-      name: regForm.name,
-      logo: regForm.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3),
-      coverImage: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
-      category: regForm.category,
-      description: regForm.description,
-      establishedYear: parseInt(regForm.establishedYear) || new Date().getFullYear(),
-      founder: regForm.founder || "Not Specified",
-      services: regForm.servicesSelected.length > 0 ? regForm.servicesSelected : ["Film Production"],
-      languages: [],
-      email: regForm.email,
-      phone: regForm.phone,
-      website: regForm.website || "https://www.filmcollab.com",
-      socials: {
-        facebook: regForm.facebook,
-        instagram: regForm.instagram,
-        twitter: regForm.twitter,
-        linkedin: regForm.linkedin
-      },
-      address: regForm.address + (regForm.zipCode ? `, ${regForm.zipCode}` : ""),
-      city: regForm.city,
-      state: regForm.state,
-      country: "India",
-      gstNumber: regForm.gstNumber,
-      mapsLocation: regForm.mapsLocation,
-      workingHours: `${regForm.officeOpenTime} - ${regForm.officeCloseTime}`,
-      verified: false,
-      hiringNow: false,
-      openAuditions: false,
-      internshipsAvailable: false,
-      acceptingFreshers: true,
-      employeeCount: 1,
-      projectsCompleted: 0,
-      followersCount: 0,
-      rating: 5.0,
-      reviewsCount: 0,
-      featured: false,
-      trending: false,
-      recentlyAdded: true,
-      gallery: [],
-      projects: [],
-      team: [],
-      reviews: [],
-      jobs: [],
-      auditions: [],
-      internships: [],
-      userId: user?.id
-    };
+    try {
+      const { data, error } = await supabase.from("companies").insert({
+        name: regForm.name,
+        description: regForm.description,
+        category: regForm.category,
+        email: regForm.email,
+        phone: regForm.phone,
+        website: regForm.website || "https://www.filmcollab.com",
+        address: regForm.address + (regForm.zipCode ? `, ${regForm.zipCode}` : ""),
+        city: regForm.city,
+        state: regForm.state,
+        country: "India",
+        user_id: user.id,
+        services: regForm.servicesSelected.length > 0 ? regForm.servicesSelected : ["Film Production"],
+        gst_number: regForm.gstNumber
+      }).select().single();
 
-    setCompanies(prev => [brandNewCompany, ...prev]);
-    setIsRegisterOpen(false);
-    toast({
-      title: "Company Registered!",
-      description: `Welcome to the directory, ${regForm.name}! You can now manage opportunities from your workspace.`,
-    });
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error("No company record returned after registration.");
+      }
+
+      const brandNewCompany: Company = {
+        id: data.id,
+        name: regForm.name,
+        logo: regForm.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 3),
+        coverImage: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+        category: regForm.category,
+        description: regForm.description,
+        establishedYear: parseInt(regForm.establishedYear) || new Date().getFullYear(),
+        founder: regForm.founder || "Not Specified",
+        services: regForm.servicesSelected.length > 0 ? regForm.servicesSelected : ["Film Production"],
+        languages: [],
+        email: regForm.email,
+        phone: regForm.phone,
+        website: regForm.website || "https://www.filmcollab.com",
+        socials: {
+          facebook: regForm.facebook,
+          instagram: regForm.instagram,
+          twitter: regForm.twitter,
+          linkedin: regForm.linkedin
+        },
+        address: regForm.address + (regForm.zipCode ? `, ${regForm.zipCode}` : ""),
+        city: regForm.city,
+        state: regForm.state,
+        country: "India",
+        gstNumber: regForm.gstNumber,
+        mapsLocation: regForm.mapsLocation,
+        workingHours: `${regForm.officeOpenTime} - ${regForm.officeCloseTime}`,
+        verified: false,
+        hiringNow: false,
+        openAuditions: false,
+        internshipsAvailable: false,
+        acceptingFreshers: true,
+        employeeCount: 1,
+        projectsCompleted: 0,
+        followersCount: 0,
+        rating: 5.0,
+        reviewsCount: 0,
+        featured: false,
+        trending: false,
+        recentlyAdded: true,
+        gallery: [],
+        projects: [],
+        team: [],
+        reviews: [],
+        jobs: [],
+        auditions: [],
+        internships: [],
+        userId: user.id
+      };
+
+      setCompanies(prev => [brandNewCompany, ...prev]);
+      setIsRegisterOpen(false);
+      toast({
+        title: "Company Registered!",
+        description: `Welcome to the directory, ${regForm.name}! You can now manage opportunities from your workspace.`,
+      });
+    } catch (err: any) {
+      console.error("Failed to register company:", err);
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: err?.message || "Could not save company to database. Please check your inputs."
+      });
+    }
   };
 
   // Action: Workspace Addition Actions

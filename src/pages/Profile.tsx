@@ -250,6 +250,7 @@ const emptyProfileData: ProfileData = {
   achievements: [],
   recentActivity: [],
   portfolio: [],
+  directoryFiles: [],
   languages: [],
   availableForTravel: false,
   privacyShowPhone: true,
@@ -996,7 +997,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { id: routeId } = useParams();
   const [searchParams] = useSearchParams();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [profile, setProfile] = useState<ProfileData>(emptyProfileData);
   const [isConnected, setIsConnected] = useState(false);
@@ -1499,10 +1500,10 @@ export default function ProfilePage() {
         
         // Cache the stats
         profileStatsCache.set(resolvedUserId, {
-          projects: allUserProjects,
-          connectionsCount: connRes?.count || data?.followers_count || 0,
-          projectsCount: projectIds ? projectIds.size : 0,
-          likesCount: likesRes?.count || data?.likes_count || 0,
+          projects: userProjects,
+          connectionsCount: connectionsCount,
+          projectsCount: projectsCount,
+          likesCount: likesCount,
           jobsCount: jobsCountRef
         });
       }
@@ -1704,9 +1705,9 @@ export default function ProfilePage() {
 
   // Quick Actions
   const handleSendMessage = () => {
-    const targetUserId = profile.user_id || profile.id;
+    const targetProfileId = profile.id;
     const q = new URLSearchParams();
-    if (targetUserId) q.set("recipient", targetUserId);
+    if (targetProfileId) q.set("recipient", targetProfileId);
     if (profile.username) q.set("u", profile.username);
     navigate(`/messages?${q.toString()}`);
   };
@@ -1716,14 +1717,26 @@ export default function ProfilePage() {
       navigate("/auth/signin", { state: { from: window.location.pathname } });
       return;
     }
-    const targetUserId = profile.user_id || profile.id;
-    if (!targetUserId || targetUserId === user.id) return;
+
+    // Resolve authenticated sender profile ID (from profiles table)
+    let senderProfileId = authProfile?.id;
+    if (!senderProfileId) {
+      const { data: senderP } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      senderProfileId = senderP?.id;
+    }
+
+    const targetProfileId = profile.id;
+    if (!senderProfileId || !targetProfileId || senderProfileId === targetProfileId) return;
 
     try {
       const { data: existing, error: checkError } = await supabase
         .from("connections")
         .select("id, status")
-        .or(`and(user_id.eq.${user.id},connected_user_id.eq.${targetUserId}),and(user_id.eq.${targetUserId},connected_user_id.eq.${user.id})`)
+        .or(`and(user_id.eq.${senderProfileId},connected_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},connected_user_id.eq.${senderProfileId})`)
         .maybeSingle();
 
       if (existing) {
@@ -1735,8 +1748,8 @@ export default function ProfilePage() {
       }
 
       const { error: insertError } = await supabase.from("connections").insert({
-        user_id: user.id,
-        connected_user_id: targetUserId,
+        user_id: senderProfileId,
+        connected_user_id: targetProfileId,
         status: "pending"
       });
 
@@ -1748,11 +1761,11 @@ export default function ProfilePage() {
       });
 
       await supabase.from("notifications").insert({
-        user_id: targetUserId,
+        user_id: targetProfileId,
         title: "New Connection Request",
-        description: `${user.email} sent you a connection request.`,
+        description: `${authProfile?.full_name || user.email} sent you a connection request.`,
         type: "connection",
-        action_url: `/profile/${user.id}`
+        action_url: `/profile/${senderProfileId}`
       });
     } catch (err: any) {
       toast({
@@ -2787,10 +2800,10 @@ export default function ProfilePage() {
                                      try {
                                        await supabase.from('directory_files').delete().eq('id', file.id);
                                        setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                                       toast.success("File deleted successfully");
+                                       toast({ title: "File deleted successfully" });
                                      } catch(err) {
                                        console.error(err);
-                                       toast.error("Failed to delete file");
+                                       toast({ title: "Failed to delete file", variant: "destructive" });
                                      }
                                    }
                                  });
@@ -3672,10 +3685,10 @@ export default function ProfilePage() {
                            try {
                              await supabase.from('directory_files').delete().eq('id', file.id);
                              setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                             toast.success("File deleted successfully");
+                             toast({ title: "File deleted successfully" });
                            } catch(err) {
                              console.error(err);
-                             toast.error("Failed to delete file");
+                             toast({ title: "Failed to delete file", variant: "destructive" });
                            }
                          }
                        }}>
@@ -3946,7 +3959,7 @@ export default function ProfilePage() {
                                     setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
                                     setPreviewImageIndex(idx - 1);
                                   } catch (err) {
-                                    toast.error("Failed to reorder");
+                                    toast({ title: "Failed to reorder", variant: "destructive" });
                                   }
                                 }}>
                                   <ChevronLeft className="w-3 h-3" />

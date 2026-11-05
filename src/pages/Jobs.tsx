@@ -517,7 +517,9 @@ export default function Jobs() {
           experience_level,
           industry: "Production",
           job_description,
-          posted_date: new Date().toISOString()
+          posted_date: new Date().toISOString(),
+          user_id: "",
+          status: "Active"
         };
       }
       if (foundJob) {

@@ -56,6 +56,7 @@ interface Project {
   episodes: number | null;
   team_size: number;
   tags: string[] | null;
+  project_tags?: string[] | null;
   skills_required: string[] | null;
   created_by: string;
   featured: boolean;

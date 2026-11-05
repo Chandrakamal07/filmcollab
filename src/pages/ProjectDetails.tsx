@@ -225,7 +225,7 @@ export default function ProjectDetails() {
     if (!projectId) return;
     
     const subscription = supabase.channel("project_messages_channel")
-      .on("postgres", { event: "INSERT", schema: "public", table: "project_messages", filter: `project_id=eq.${projectId}` }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "project_messages", filter: `project_id=eq.${projectId}` }, (payload) => {
         const newData = payload.new;
         
         setChatMessages(prev => {
@@ -258,8 +258,8 @@ export default function ProjectDetails() {
         const formattedMessages = data.map(m => ({
           id: m.id,
           user_id: m.sender_id,
-          user_name: m.profiles?.full_name || m.profiles?.username || "Unknown",
-          user_avatar: (m.profiles?.full_name || m.profiles?.username || "U").substring(0, 2).toUpperCase(),
+          user_name: (m.profiles as any)?.full_name || (m.profiles as any)?.username || "Unknown",
+          user_avatar: ((m.profiles as any)?.full_name || (m.profiles as any)?.username || "U").substring(0, 2).toUpperCase(),
           message: m.content,
           timestamp: m.created_at
         }));
@@ -284,7 +284,7 @@ export default function ProjectDetails() {
     if (!projectId) return;
 
     const subscription = supabase.channel("project_tasks_channel")
-      .on("postgres", { event: "*", schema: "public", table: "project_tasks", filter: `project_id=eq.${projectId}` }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_tasks", filter: `project_id=eq.${projectId}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newTask = payload.new as Task;
           setTasks(prev => {
@@ -330,7 +330,7 @@ export default function ProjectDetails() {
     title: "",
     description: "",
     assigned_to: "",
-    priority: "medium" as const,
+    priority: "medium" as "low" | "medium" | "high",
     due_date: ""
   });
 
@@ -1215,16 +1215,16 @@ export default function ProjectDetails() {
       
       const mentionedUsers = [...dbMembers];
       if (project.created_by && project.created_by !== currentUser.id) {
-        mentionedUsers.push({ user_id: project.created_by, role: 'Creator', full_name: project.creator_name || "", username: project.creator_username || "", id: '', name: '', avatar: '', joined_date: '' } as any);
+        mentionedUsers.push({ user_id: project.created_by, role: 'Creator', full_name: (project as any)?.creator_name || "", username: (project as any)?.creator_username || "", id: '', name: '', avatar: '', joined_date: '' } as any);
       }
 
       const notificationsToInsert = [];
       
       for (const u of mentionedUsers) {
-        const name = u.name?.toLowerCase() || "";
-        const fullName = u.full_name?.toLowerCase() || "";
-        const username = u.username?.toLowerCase() || "";
-        const role = u.role?.toLowerCase() || "";
+        const name = (u as any).name?.toLowerCase() || "";
+        const fullName = (u as any).full_name?.toLowerCase() || "";
+        const username = (u as any).username?.toLowerCase() || "";
+        const role = (u as any).role?.toLowerCase() || "";
         
         let isMentioned = false;
         if (mentions.some(m => name.includes(m.toLowerCase()) || fullName.includes(m.toLowerCase()) || username.includes(m.toLowerCase()) || role.includes(m.toLowerCase()))) {
@@ -1655,8 +1655,8 @@ export default function ProjectDetails() {
               const formattedMessages = messagesData.map(data => ({
                 id: data.id,
                 user_id: data.sender_id,
-                user_name: data.profiles?.full_name || data.profiles?.username || "Unknown",
-                user_avatar: (data.profiles?.full_name || data.profiles?.username || "U").substring(0, 2).toUpperCase(),
+                user_name: (data.profiles as any)?.full_name || (data.profiles as any)?.username || "Unknown",
+                user_avatar: ((data.profiles as any)?.full_name || (data.profiles as any)?.username || "U").substring(0, 2).toUpperCase(),
                 message: data.content,
                 timestamp: data.created_at
               }));
@@ -3421,11 +3421,11 @@ export default function ProjectDetails() {
                 {/* @Mention Popover */}
                 {mentionOpen && (
                   <div className="absolute bottom-20 left-4 w-64 bg-popover text-popover-foreground rounded-lg shadow-lg border border-border max-h-48 overflow-y-auto z-10 p-1">
-                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: project.creator_name || project.creator_username } as any] : []).filter(u => 
+                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: (project as any)?.creator_name || (project as any)?.creator_username } as any] : []).filter((u: any) => 
                       u.name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.username?.toLowerCase().includes(mentionQuery.toLowerCase())
-                    ).map((u, i) => (
+                    ).map((u: any, i) => (
                       <div 
                         key={i}
                         className="flex items-center gap-2 p-2 hover:bg-surface-hover rounded cursor-pointer"
@@ -3437,7 +3437,7 @@ export default function ProjectDetails() {
                         <span className="text-sm font-medium text-foreground">{u.name || u.full_name || u.username}</span>
                       </div>
                     ))}
-                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: project.creator_name || project.creator_username } as any] : []).filter(u => 
+                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: (project as any)?.creator_name || (project as any)?.creator_username } as any] : []).filter((u: any) => 
                       u.name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.username?.toLowerCase().includes(mentionQuery.toLowerCase())

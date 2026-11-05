@@ -56,7 +56,7 @@ function disposeOwnedObject(root: THREE.Object3D) {
   geometries.forEach((g) => g.dispose());
   materials.forEach((m) => {
     for (const key of Object.keys(m)) {
-      const val = (m as Record<string, unknown>)[key];
+      const val = (m as unknown as Record<string, unknown>)[key];
       if (val && typeof val === "object" && "isTexture" in val && (val as THREE.Texture).isTexture) {
         textures.add(val as THREE.Texture);
       }

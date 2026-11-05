@@ -169,7 +169,7 @@ export default function AdminCommunities() {
   };
 
   const handleDeleteCommunity = async (communityId: string | number) => {
-    if (!hasPermission("communities", "delete")) {
+    if (!hasPermission("Communities", "delete")) {
       toast({
         variant: "destructive",
         title: "Permission denied",

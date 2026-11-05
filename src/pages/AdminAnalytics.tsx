@@ -70,6 +70,7 @@ export default function AdminAnalytics() {
   const [ticketsData, setTicketsData] = useState<any>({ metrics: [], chartData: [] });
   const [teamData, setTeamData] = useState<any>({ metrics: [], chartData: [] });
   const [locationsData, setLocationsData] = useState<any>({ metrics: [], chartData: [], typeData: [] });
+  const [directoryData, setDirectoryData] = useState<any>({ metrics: [], chartData: [], hasFiles: false });
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -231,7 +232,7 @@ export default function AdminAnalytics() {
       // Set states
       setUsersData({
         metrics: [
-          { title: "Total Users", value: totalUsers.toLocaleString(), change: "+12.5%", icon: Users, color: "text-primary" },
+          { title: "Total Registered Users", value: totalUsers.toLocaleString(), change: "+12.5%", icon: Users, color: "text-primary" },
           { title: `New Users (${timeRange}d)`, value: newUsers.toLocaleString(), change: "+8.3%", icon: UserPlus, color: "text-primary" },
           { title: "Active Users", value: Math.floor(totalUsers * 0.7).toLocaleString(), change: "+15.2%", icon: Activity, color: "text-primary" },
           { title: "User Retention", value: "78.5%", change: "+2.1%", icon: Target, color: "text-primary" }
@@ -291,21 +292,56 @@ export default function AdminAnalytics() {
         typeData: locationTypeData.length ? locationTypeData : [{ name: 'No Data', value: 1 }]
       });
 
+      // 7. Fetch Directory Files Data
+      const { data: files } = await supabase.from('directory_files').select('id, file_type, created_at');
+      const totalFiles = files?.length || 0;
+
+      let imagesCount = 0;
+      let videosCount = 0;
+      let documentsCount = 0;
+
+      const fileMonths: Record<string, { images: number; videos: number; documents: number }> = {};
+      files?.forEach(f => {
+        const type = (f.file_type || '').toLowerCase();
+        const month = f.created_at ? new Date(f.created_at).toISOString().slice(0, 7) : 'Recent';
+        if (!fileMonths[month]) fileMonths[month] = { images: 0, videos: 0, documents: 0 };
+
+        if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('jpeg')) {
+          imagesCount += 1;
+          fileMonths[month].images += 1;
+        } else if (type.includes('video') || type.includes('mp4') || type.includes('mov')) {
+          videosCount += 1;
+          fileMonths[month].videos += 1;
+        } else {
+          documentsCount += 1;
+          fileMonths[month].documents += 1;
+        }
+      });
+
+      const fileChartData = Object.keys(fileMonths).sort().map(month => ({
+        date: month,
+        images: fileMonths[month].images,
+        videos: fileMonths[month].videos,
+        documents: fileMonths[month].documents,
+        downloads: 0
+      }));
+
+      setDirectoryData({
+        metrics: [
+          { title: "Total Files", value: totalFiles > 0 ? totalFiles.toLocaleString() : "0", change: totalFiles > 0 ? `${totalFiles} total` : "No uploads yet", icon: ImageIcon, color: "text-primary" },
+          { title: "Images", value: imagesCount > 0 ? imagesCount.toLocaleString() : "0", change: imagesCount > 0 ? `${imagesCount} uploaded` : "No images yet", icon: ImageIcon, color: "text-primary" },
+          { title: "Videos", value: videosCount > 0 ? videosCount.toLocaleString() : "0", change: videosCount > 0 ? `${videosCount} uploaded` : "No videos yet", icon: Download, color: "text-primary" },
+          { title: "Documents & Other", value: documentsCount > 0 ? documentsCount.toLocaleString() : "0", change: documentsCount > 0 ? `${documentsCount} uploaded` : "No documents yet", icon: Download, color: "text-primary" }
+        ],
+        chartData: fileChartData.length ? fileChartData : [{ date: 'No Uploads', images: 0, videos: 0, documents: 0, downloads: 0 }],
+        hasFiles: totalFiles > 0
+      });
+
     } catch (error) {
       console.error("Error fetching analytics:", error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const directoryData = {
-    metrics: [
-      { title: "Total Files", value: "45,678", change: "+17.6%", icon: ImageIcon, color: "text-primary" },
-      { title: "Images", value: "32,456", change: "+15.2%", icon: ImageIcon, color: "text-primary" },
-      { title: "Videos", value: "8,234", change: "+24.7%", icon: Download, color: "text-primary" },
-      { title: "Downloads", value: "234.5k", change: "+29.3%", icon: Download, color: "text-primary" }
-    ],
-    chartData: deterministicDirectoryBenchmarks
   };
 
   if (isLoading) {
@@ -599,10 +635,10 @@ export default function AdminAnalytics() {
             </div>
           </TabsContent>
 
-          {/* Directory Analytics (Mock Data Fallback) */}
+          {/* Directory Analytics */}
           <TabsContent value="directory" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {directoryData.metrics.map((metric, index) => (
+              {directoryData.metrics.map((metric: any, index: number) => (
                 <Card key={index} className="noir-card border-border/80 bg-card">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
@@ -619,54 +655,65 @@ export default function AdminAnalytics() {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="noir-card border-border/80 bg-card">
-                <CardHeader className="border-b border-border/60">
-                  <h3 className="text-lg font-display font-medium flex items-center gap-2 text-foreground">
-                    <BarChart3 className="h-5 w-5 text-primary" /> Total Media Files
-                  </h3>
-                  <p className="text-sm text-muted-foreground">Distribution of file types over time</p>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="h-[400px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={directoryData.chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-                        <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} />
-                        <Legend />
-                        <Line type="monotone" dataKey="images" name="Images" stroke={CHART_COLORS.yellow.primary} strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="videos" name="Videos" stroke={CHART_COLORS.yellow.secondary} strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="documents" name="Documents" stroke={CHART_COLORS.yellow.tertiary} strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
+            {!directoryData.hasFiles ? (
+              <Card className="noir-card border-border/80 bg-card p-12 text-center">
+                <ImageIcon className="h-10 w-10 text-muted-foreground opacity-30 mx-auto mb-3" />
+                <h3 className="font-display text-lg font-medium text-foreground">No Directory Uploads Yet</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
+                  Directory file distribution and media type analytics will appear dynamically as creators upload project assets.
+                </p>
               </Card>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="noir-card border-border/80 bg-card">
+                  <CardHeader className="border-b border-border/60">
+                    <h3 className="text-lg font-display font-medium flex items-center gap-2 text-foreground">
+                      <BarChart3 className="h-5 w-5 text-primary" /> Total Media Files
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Distribution of file types over time</p>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="h-[400px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={directoryData.chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                          <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                          <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} />
+                          <Legend />
+                          <Line type="monotone" dataKey="images" name="Images" stroke={CHART_COLORS.yellow.primary} strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="videos" name="Videos" stroke={CHART_COLORS.yellow.secondary} strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="documents" name="Documents" stroke={CHART_COLORS.yellow.tertiary} strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <Card className="noir-card border-border/80 bg-card">
-                <CardHeader className="border-b border-border/60">
-                  <h3 className="text-lg font-display font-medium flex items-center gap-2 text-foreground">
-                    <Download className="h-5 w-5 text-primary" /> Media Downloads
-                  </h3>
-                  <p className="text-sm text-muted-foreground">Download trends over time</p>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="h-[400px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={directoryData.chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-                        <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={TOOLTIP_STYLE} />
-                        <Bar dataKey="downloads" name="Total Downloads" fill={CHART_STYLES.lineChart.activeUsers} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                <Card className="noir-card border-border/80 bg-card">
+                  <CardHeader className="border-b border-border/60">
+                    <h3 className="text-lg font-display font-medium flex items-center gap-2 text-foreground">
+                      <Download className="h-5 w-5 text-primary" /> Media Distribution
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Uploaded media files across recent periods</p>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <div className="h-[400px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={directoryData.chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
+                          <XAxis dataKey="date" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                          <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} />
+                          <Bar dataKey="images" name="Images" fill={CHART_COLORS.yellow.primary} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="videos" name="Videos" fill={CHART_COLORS.yellow.secondary} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </TabsContent>
 
           {/* Locations Analytics */}

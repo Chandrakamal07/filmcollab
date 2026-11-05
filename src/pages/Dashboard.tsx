@@ -90,13 +90,15 @@ export default function Dashboard() {
 
     // Fetch latest active project owned by or joined by current user
     if (currentUserId) {
-      supabase
-        .from("projects")
-        .select("*")
-        .eq("created_by", currentUserId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .then(async ({ data, error }) => {
+      const fetchFeaturedProject = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("projects")
+            .select("*")
+            .eq("created_by", currentUserId)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
           if (!error && data && data.length > 0) {
             setFeaturedProject(data[0]);
           } else {
@@ -113,10 +115,11 @@ export default function Dashboard() {
               setFeaturedProject(null);
             }
           }
-        })
-        .catch(() => {
+        } catch {
           setFeaturedProject(null);
-        });
+        }
+      };
+      fetchFeaturedProject();
     }
 
     // Fetch latest opportunities for "Opportunities for you"
@@ -410,9 +413,14 @@ export default function Dashboard() {
                     type="button"
                     onClick={() => {
                       const targetView = projectQuickTab.toLowerCase();
-                      const url = featuredProject?.id
-                        ? `/projects/${featuredProject.id}?view=${targetView === "files" ? "overview" : targetView}`
-                        : "/projects";
+                      let url = "/projects";
+                      if (featuredProject?.id) {
+                        if (targetView === "files") {
+                          url = `/directory?project=${featuredProject.id}`;
+                        } else {
+                          url = `/projects/${featuredProject.id}?view=${targetView}`;
+                        }
+                      }
                       navigate(url);
                     }}
                     className="ml-auto pb-2.5 text-xs font-mono text-primary hover:underline"
@@ -509,7 +517,10 @@ export default function Dashboard() {
                     <StaggerItem key={opp.id || index} index={index}>
                       <DimensionalCard
                         maxTilt={4}
-                        onClick={() => navigate(opp.id ? `/jobs/${opp.id}` : "/jobs")}
+                        onClick={() => {
+                          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(opp.id || "");
+                          navigate(isUuid ? `/jobs/${opp.id}` : "/jobs");
+                        }}
                         className="cursor-pointer p-3 rounded-xl bg-[#1A1C21] border-white/[0.07] hover:border-primary/40 group"
                       >
                         <DimensionalLayer depth={12} className="flex items-center gap-4">

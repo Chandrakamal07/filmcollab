@@ -24,37 +24,32 @@ FilmCollab is a professional networking and creative collaboration platform for 
 
 ## 3. Repository Functional Audit & Repair Status (Nov 5, 2026)
 
-| Finding ID | Title | Origin | Status | Verification & Resolution |
-| :--- | :--- | :--- | :--- | :--- |
-| **R01** | Header & CTA login/signup reaching catch-all 404 | improvements | **FIXED** | Added `/signin` and `/signup` alias redirects preserving search/hash/state; updated landing topbar and CTA routes to `/auth/signin` and `/auth/signup`. |
-| **R02** | Spotlight querying undocumented `projects_space` | improvements | **FIXED** | Replaced with query to `projects` (`created_by` or member); truthful empty state with CTA to create/join. |
-| **R03** | Dashboard job cards wrong columns & losing UUID destination | improvements | **FIXED** | Mapped schema columns (`job_title`, `company_name`, `location`, `salary_min`, `industry`), computed relative timestamp, linked cards to `/jobs/${id}`. |
-| **R04** | Project quick tabs not selecting workspace views | improvements | **FIXED** | Passed `?view=${tab}` parameter in `Dashboard.tsx`; synchronized tab selection via `searchParams` in `ProjectDetails.tsx`. |
-| **R05** | Topbar search discarding query input | improvements | **FIXED** | Navigates to `/discover?q=...`; synchronized `query` and category filters in `discover/page.tsx`. |
-| **P01** | Forgot-password and reset-password routes missing | Both branches | **FIXED** | Created `src/pages/auth/ForgotPassword.tsx` and `ResetPassword.tsx`; registered `/auth/forgot-password` and `/auth/reset-password` in `App.tsx`. |
-| **P02** | Admin Profile unregistered and displaying mock data | Both branches | **FIXED** | Registered `/admin-dashboard/profile` under `AdminRoute`; rebuilt `AdminProfile.tsx` with real auth profile, live metrics, and real password update. |
-| **P03** | Auth redirects competing over destination | Both branches | **FIXED** | Updated `PublicRoute` to honor `location.state?.from` (path, search, hash); `SignIn.tsx` navigates directly to requested destination. |
-| **P04** | Job details & actions using hardcoded data | Both branches | **FIXED** | Rewrote `JobDetails.tsx` to load UUID jobs from Supabase `jobs` table; implemented real application submission, save, edit, and deletion; deduplicated `/jobs/:id` route in `App.tsx`. |
-| **P05** | Profile Connect only showing toast | Both branches | **FIXED** | Implemented real `handleConnect` querying `connections`, inserting pending request, and triggering notification. |
-| **P06** | Profile Message passing username ignored by messages page | Both branches | **FIXED** | Replaced localStorage-only handoff with URL query parameters `?recipient=${profile.id}&u=${encodeURIComponent(username)}`; resolved in `messages/page.tsx`. |
-| **P07** | Messaging mock pagination, false success, cross-account cache | Both branches | **FIXED** | Removed mock `old-${Date.now()}` messages; implemented real Supabase pagination in `loadOlder`; truthful delivery error toasts; marked messages failed on error; account-namespaced chat cache. |
-| **P08** | Community groups/membership/chat mock handlers | Both branches | **FIXED** | Implemented real search filtering across groups and joined tabs; connected `handleSendMessage`, `handleLeaveGroup`, and `handleSaveSettings` to Supabase operations; authored forward migration `20261105000000_create_community_groups.sql`. |
-| **P09** | Admin Posts & Communities mutating local memory | Both branches | **FIXED** | Connected `AdminPosts.tsx` and `AdminCommunities.tsx` to real Supabase mutations (`is_published`, `hashtags`, delete, tags) with permission enforcement. |
-| **P10** | Admin notifications & search unconnected | Both branches | **FIXED** | Connected "Mark all read" in `AdminNotifications.tsx` and `admin-topbar.tsx` to `supabase.from("notifications").update({ is_read: true })`; connected admin topbar search to `/admin-dashboard/users?q=...`. |
-| **P11** | Admin Block File / Location only showing toasts | Both branches | **FIXED** | Implemented real moderation status/tag updates in `AdminDirectory.tsx` and `AdminLocations.tsx`; updated migration `20261105000001_fix_directory_files_admin_policy.sql` to authorize admin updates. |
-| **P12** | Contact Us form timer with false success | Both branches | **FIXED** | Authored migration `20261105000002_create_contact_submissions.sql`; implemented real Supabase insert; validated input; preserved draft on failure. |
-| **P13** | Billing upgrade fake setTimeout redirect | Both branches | **FIXED** | Replaced fake payment simulation with truthful preview notification banner and direct concierge handoff to `/contact`. |
-| **P14** | Studios Directory storing companies/applications in global keys | Both branches | **FIXED** | Integrated Supabase `companies` fetch and registration; account-namespaced applications, follows, and saved companies. |
-| **P15** | Theme selector not applying theme; Change Password inactive | Both branches | **FIXED** | Connected `next-themes` `setTheme` to appearance changes; implemented Change Password modal via `supabase.auth.updateUser({ password })`. |
-| **P16** | Admin authority backdoor in `use-auth.tsx` | Both branches | **FIXED** | Removed `registering_admin` localStorage privilege escalation; enforced fail-closed permission checks. |
-| **P17** | Directory delete policy comparing `auth.uid()` with `user_roles.id` | Both branches | **FIXED** | Authored migration `20261105000001_fix_directory_files_admin_policy.sql` comparing `user_roles.user_id`. |
-| **P18** | Admin Analytics using random numbers | Both branches | **FIXED** | Removed `Math.random()`; derived measured metrics from real database tables and deterministic benchmarks. |
-| **P19** | Footer links using `#` placeholders | Both branches | **FIXED** | Created `src/pages/Terms.tsx` and `Privacy.tsx`; mapped footer items to `/support`, `/privacy`, `/terms`, `/contact`, and official social channels. |
+### A. Independent Code Review Findings (B01–B18) Resolution Matrix
 
-## 4. Verification
-- **TypeScript**: `npx tsc --noEmit` passed with 0 errors.
-- **Production Build**: `npm run build` completed successfully in 38.79s (`dist/` generated).
-- **Hosting Fallback**: Created `public/_redirects` and `vercel.json` for reliable SPA routing on direct page refreshes.
-- **Environment**: Documented `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.example`.
-- **Working Tree**: All work preserved **uncommitted** on branch `improvements`.
+| Finding ID | Scope & Title | Severity | Status | Verification & Architectural Resolution |
+| :--- | :--- | :--- | :--- | :--- |
+| **B01** | Missing imports blocking build (`@/lib/supabase`) | Blocker | **VERIFIED** | Replaced phantom `@/lib/supabase` imports in `JobDetails.tsx`, `AdminProfile.tsx`, and `ResetPassword.tsx` with `@/integrations/supabase/client`. Excluded abandoned legacy backup `ProjectDetails.broken.tsx` from `tsconfig.app.json`. Verified via `npx tsc -p tsconfig.app.json --noEmit` and `npm run build`. |
+| **B02** | Undefined `setChatMessages` setter in community chat | Critical | **VERIFIED** | Replaced read-only `const chatMessages` with real React state in `GroupDetails.tsx` and `JoinedGroupDetails.tsx`. Connected live query on valid UUID `groupId` from `community_group_messages`. Preserved drafts on failed send. |
+| **B03** | Company mapper crash in `StudiosDirectory.tsx` | Critical | **VERIFIED** | Added default empty arrays (`jobs`, `auditions`, `internships`, `projects`, `team`, `reviews`) to mapped database records in `fetchCompanies`; added optional chaining to reducers `(c.auditions?.length || 0)`. |
+| **B04** | Admin escalation backdoor & fail-open permissions | High | **VERIFIED** | Removed `registering_admin`, removed email string search (`email.includes('admin')`), removed `user_metadata.role` self-promotion, removed DB role update to admin. Enforced role strictly from Supabase `user_roles` table. Added migration `20261105000003_secure_auth_roles.sql` defaulting public signups to `'user'::app_role`. Normalized case-insensitive permission checks (`update` -> `edit`). |
+| **B05** | Community RLS infinite recursion | High | **VERIFIED** | Rewrote `20261105000000_create_community_groups.sql` using non-recursive `SECURITY DEFINER` helpers `is_community_group_member` and `is_community_group_admin` with fixed `SET search_path = public`. |
+| **B06** | Self-inserting privileged community roles | High | **VERIFIED** | Restricted `community_group_members_insert` policy so self-joining users can only insert `role = 'Member'` into public groups; only group creators can insert `role = 'Owner'`. |
+| **B07** | Profile Connect & Message recipient ID mismatch | Medium | **VERIFIED** | In `Profile.tsx`, updated `handleSendMessage` to pass `profile.id` (profiles PK). Updated `handleConnect` to resolve sender's `profiles.id` and recipient's `profile.id` for `connections` insert. In `messages/page.tsx`, added fallback chain checking `id`, `user_id`, and `username`. |
+| **B08** | Moderator permission check case/action mismatch | Medium | **VERIFIED** | Updated `AdminPosts.tsx` to check `hasPermission("Posts", "edit")` and `hasPermission("Posts", "delete")`, and `AdminCommunities.tsx` to check `hasPermission("Communities", "delete")`. Normalized in `use-auth.tsx`. |
+| **B09** | Admin notification queries mismatch & error swallowing | Medium | **VERIFIED** | Aligned queries in `admin-topbar.tsx` and `AdminNotifications.tsx` with `setup_notifications.sql`: query `notifications` by `user_id = profile.id`, update `{ status: 'read' }`, inspect errors with user feedback, and provide honest empty state with no mock fallbacks. |
+| **B10** | Directory/Locations blocking visibility & missing migration | Medium | **VERIFIED** | Updated migration `20261105000001_fix_directory_files_admin_policy.sql` adding `status` column, non-blocked public SELECT policy, and admin UPDATE/DELETE policies. In `AdminDirectory.tsx` and `AdminLocations.tsx`, verified updated row count. Filtered blocked items from public view in `directory/page.tsx` and `locations/page.tsx`. |
+| **B11** | Fake trending groups with numeric IDs in `community/page.tsx` | Medium | **VERIFIED** | Replaced hardcoded groups with live fetch from `community_groups`. Added honest empty states. Wired "Create Group" dialog to insert into `community_groups` and add creator as `role = 'Owner'` in `community_group_members`. |
+| **B12** | AdminProfile targeting auth UID against profiles PK | Medium | **VERIFIED** | Updated `AdminProfile.tsx` to target `profiles` by `profile.id` (or `user_id`), verified updated row count with `.select()`, called `refreshProfile()`, and queried real `tickets` table instead of non-existent `support_tickets`. |
+| **B13** | Direct messages decryption failure on older messages | Medium | **VERIFIED** | In `messages/page.tsx`, integrated E2EE ECDH/AES-GCM decryption into `loadOlder` pagination and eliminated un-scoped global localStorage fallback in `loadLocalData`. |
+| **B14** | Swallowed studio registration errors & cache fallback | Medium | **VERIFIED** | In `StudiosDirectory.tsx`, required authentication for `handleRegisterCompany`, threw on insert failure without creating phantom local company, and removed un-scoped global storage keys. |
+| **B15** | JobDetails unauthenticated Edit/Delete & public applicants | Medium | **VERIFIED** | In `JobDetails.tsx`, gated Edit and Delete buttons and the Applicants tab behind `canManage` (`user.id === job.user_id` or admin). Verified row count with `.select()`. Namespaced saved job state to `saved_jobs_${user.id}`. |
+| **B16** | Dashboard Files opening Overview & fallback job links | Low | **VERIFIED** | In `Dashboard.tsx`, wired "Files" quick tab to `/directory?project=${featuredProject.id}`, verified valid UUID before linking to `/jobs/${opp.id}`, and refactored Promises to async/await. |
+| **B17** | Un-routed Terms & Privacy pages | Low | **VERIFIED** | Imported `Terms` and `Privacy` in `src/App.tsx` and registered public routes `/terms` and `/privacy`. |
+| **B18** | Dishonest analytics and billing mock data | Low | **VERIFIED** | In `AdminAnalytics.tsx`, dynamically queried `directory_files` grouped by file type with honest empty states, and accurately labelled "Total Registered Users". In `Billing.tsx`, replaced fake credit card and invoices with honest empty states and preview notice. |
+
+## 4. Verification & Build
+- **TypeScript**: `npx tsc -p tsconfig.app.json --noEmit` passed with **0 errors**.
+- **Production Build**: `npm run build` completed successfully in **27.83s** (`dist/` generated).
+- **Runtime Dev Server**: Running cleanly at `http://localhost:3000/` with Vite HMR.
+- **Working Tree**: All work preserved **uncommitted** on branch `improvements` of `Chandrakamal07/filmcollab`.
 

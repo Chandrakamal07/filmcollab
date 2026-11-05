@@ -133,12 +133,16 @@ export default function AdminDirectory() {
         ? currentTags.filter((t: string) => t !== "Blocked")
         : [...currentTags, "Blocked"];
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("directory_files")
         .update({ status: newStatus, tags: updatedTags })
-        .eq("id", itemId);
+        .eq("id", itemId)
+        .select();
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No file was updated. You may not have administrative privileges.");
+      }
 
       setDirectoryItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, tags: updatedTags } : i));
       toast.success(isBlocked ? "File unblocked successfully" : "File blocked successfully");

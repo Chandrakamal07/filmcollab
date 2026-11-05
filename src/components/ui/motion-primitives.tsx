@@ -103,6 +103,7 @@ StaggerItem.displayName = "StaggerItem";
 
 export interface DimensionalCardProps extends React.HTMLAttributes<HTMLDivElement> {
   maxTilt?: number;
+  tiltStrength?: number;
   glareOpacity?: number;
   interactive?: boolean;
 }
@@ -112,8 +113,9 @@ export interface DimensionalCardProps extends React.HTMLAttributes<HTMLDivElemen
  * dynamic radial amber/specular highlight glare, and separated Z-depth layers.
  */
 export const DimensionalCard = React.forwardRef<HTMLDivElement, DimensionalCardProps>(
-  ({ className, children, maxTilt = 6.5, glareOpacity = 0.16, interactive = true, onMouseMove, onMouseLeave, ...props }, ref) => {
+  ({ className, children, maxTilt, tiltStrength, glareOpacity = 0.16, interactive = true, onMouseMove, onMouseLeave, ...props }, ref) => {
     const prefersReducedMotion = useReducedMotion();
+    const effectiveTilt = maxTilt ?? tiltStrength ?? 6.5;
     const pointerX = useMotionValue(0.5);
     const pointerY = useMotionValue(0.5);
     const isHovered = useMotionValue(0);
@@ -123,8 +125,8 @@ export const DimensionalCard = React.forwardRef<HTMLDivElement, DimensionalCardP
     const smoothY = useSpring(pointerY, springConfig);
     const smoothHover = useSpring(isHovered, { stiffness: 220, damping: 26 });
 
-    const rotateX = useTransform(smoothY, [0, 1], [maxTilt, -maxTilt]);
-    const rotateY = useTransform(smoothX, [0, 1], [-maxTilt, maxTilt]);
+    const rotateX = useTransform(smoothY, [0, 1], [effectiveTilt, -effectiveTilt]);
+    const rotateY = useTransform(smoothX, [0, 1], [-effectiveTilt, effectiveTilt]);
     const scale = useTransform(smoothHover, [0, 1], [1, 1.015]);
     const glareX = useTransform(smoothX, [0, 1], ["0%", "100%"]);
     const glareY = useTransform(smoothY, [0, 1], ["0%", "100%"]);
@@ -183,7 +185,7 @@ export const DimensionalCard = React.forwardRef<HTMLDivElement, DimensionalCardP
             "group/dim relative rounded-xl border border-border/80 bg-card text-card-foreground shadow-noir transition-[border-color,box-shadow] duration-200 hover:border-primary/45 hover:shadow-noir-lg",
             className,
           )}
-          {...(props as HTMLMotionProps<"div">)}
+          {...(props as unknown as HTMLMotionProps<"div">)}
         >
           <motion.div
             aria-hidden="true"
@@ -225,11 +227,13 @@ DimensionalLayer.displayName = "DimensionalLayer";
 
 export interface ImageRevealProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   wrapperClassName?: string;
+  containerClassName?: string;
   overlayClassName?: string;
 }
 
 export const ImageReveal: React.FC<ImageRevealProps> = ({
   wrapperClassName,
+  containerClassName,
   overlayClassName,
   className,
   alt = "",
@@ -237,9 +241,10 @@ export const ImageReveal: React.FC<ImageRevealProps> = ({
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const [loaded, setLoaded] = React.useState(false);
+  const effectiveWrapperClass = wrapperClassName || containerClassName;
 
   return (
-    <div className={cn("relative overflow-hidden bg-surface-elevated", wrapperClassName)}>
+    <div className={cn("relative overflow-hidden bg-surface-elevated", effectiveWrapperClass)}>
       <motion.img
         alt={alt}
         onLoad={() => setLoaded(true)}
@@ -255,7 +260,7 @@ export const ImageReveal: React.FC<ImageRevealProps> = ({
         }
         transition={{ duration: 0.52, ease: STUDIO_NOIR_EASE }}
         className={cn("w-full h-full object-cover", className)}
-        {...(imgProps as HTMLMotionProps<"img">)}
+        {...(imgProps as unknown as HTMLMotionProps<"img">)}
       />
       <div
         className={cn(

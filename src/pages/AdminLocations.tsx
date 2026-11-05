@@ -154,12 +154,16 @@ export default function AdminLocations() {
         ? currentTags.filter((t: string) => t !== "Blocked")
         : [...currentTags, "Blocked"];
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("shooting_locations")
         .update({ tags: updatedTags })
-        .eq("id", id);
+        .eq("id", id)
+        .select();
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No location was updated. Permission denied.");
+      }
 
       setLocations(prev =>
         prev.map(l => (l.id === id ? { ...l, tags: updatedTags } : l))

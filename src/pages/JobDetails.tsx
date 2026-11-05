@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Job {
   id: string;
@@ -61,13 +61,16 @@ export default function JobDetails() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Job>>({});
+
+  const isOwner = Boolean(user?.id && job?.user_id && user.id === job.user_id);
+  const canManage = isOwner || Boolean(isAdmin && isAdmin());
 
   // Hardcoded jobs data (same as in Jobs.tsx)
   const hardcodedJobs: Job[] = [
@@ -251,65 +254,96 @@ export default function JobDetails() {
 
   const handleDelete = async () => {
     if (!job) return;
+    if (!canManage) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You do not have permission to delete this job posting.",
+      });
+      return;
+    }
+
     try {
-      const { error } = await supabase.from("jobs").delete().eq("id", job.id);
+      const { data, error } = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", job.id)
+        .select();
+
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was deleted. Please verify your permissions.");
+      }
+
       toast({
         title: "Job deleted",
         description: "The job has been deleted successfully."
       });
       navigate("/jobs");
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete job.";
       toast({
         variant: "destructive",
         title: "Deletion Failed",
-        description: err.message || "Failed to delete job."
+        description: msg,
       });
     }
   };
 
   const handleUpdateJob = async () => {
-    if (job && editForm) {
-      const skillsArray = typeof editForm.skills_required === 'string' 
-        ? editForm.skills_required.split(',').map(s => s.trim())
-        : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
+    if (!job || !editForm) return;
+    if (!canManage) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You do not have permission to modify this job posting.",
+      });
+      return;
+    }
 
-      try {
-        const { error } = await supabase.from("jobs").update({
-          job_title: editForm.title || job.title,
-          company_name: editForm.company || job.company,
-          location: editForm.location || job.location,
-          salary_min: editForm.min_salary || job.min_salary,
-          salary_max: editForm.max_salary || job.max_salary,
-          job_description: editForm.description || job.description,
-          requirements: editForm.requirements || job.requirements,
-          benefits: editForm.benefits || job.benefits,
-          job_type: editForm.job_type || job.job_type,
-          experience_level: editForm.experience_level || job.experience_level,
-          industry: editForm.category || job.category,
-          skills_required: skillsArray,
-        }).eq("id", job.id);
+    const skillsArray = typeof editForm.skills_required === 'string' 
+      ? editForm.skills_required.split(',').map(s => s.trim()).filter(Boolean)
+      : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
 
-        if (error) throw error;
+    try {
+      const { data, error } = await supabase.from("jobs").update({
+        job_title: editForm.title || job.title,
+        company_name: editForm.company || job.company,
+        location: editForm.location || job.location,
+        salary_min: editForm.min_salary || job.min_salary,
+        salary_max: editForm.max_salary || job.max_salary,
+        job_description: editForm.description || job.description,
+        requirements: editForm.requirements || job.requirements,
+        benefits: editForm.benefits || job.benefits,
+        job_type: editForm.job_type || job.job_type,
+        experience_level: editForm.experience_level || job.experience_level,
+        industry: editForm.category || job.category,
+        skills_required: skillsArray,
+      }).eq("id", job.id).select();
 
-        const updatedJob = {
-          ...job,
-          ...editForm,
-          skills_required: skillsArray
-        };
-        setJob(updatedJob as Job);
-        setShowEditDialog(false);
-        toast({
-          title: "Job updated",
-          description: "The job has been updated successfully."
-        });
-      } catch (err: any) {
-        toast({
-          variant: "destructive",
-          title: "Update Failed",
-          description: err.message || "Failed to update job details."
-        });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job record was updated. Please verify your permissions.");
       }
+
+      const updatedJob = {
+        ...job,
+        ...editForm,
+        skills_required: skillsArray
+      };
+      setJob(updatedJob as Job);
+      setShowEditDialog(false);
+      toast({
+        title: "Job updated",
+        description: "The job has been updated successfully."
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update job details.";
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: msg
+      });
     }
   };
 
@@ -438,11 +472,45 @@ export default function JobDetails() {
     }
   };
 
+  useEffect(() => {
+    if (user?.id && jobId) {
+      try {
+        const savedKey = `saved_jobs_${user.id}`;
+        const savedList = JSON.parse(localStorage.getItem(savedKey) || "[]");
+        setIsSaved(Array.isArray(savedList) && savedList.includes(jobId));
+      } catch {
+        setIsSaved(false);
+      }
+    }
+  }, [user?.id, jobId]);
+
   const handleSave = () => {
-    setIsSaved(!isSaved);
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Sign in required",
+        description: "Please sign in to save job postings to your profile.",
+      });
+      return;
+    }
+
+    const nextState = !isSaved;
+    setIsSaved(nextState);
+
+    try {
+      const savedKey = `saved_jobs_${user.id}`;
+      const savedList: string[] = JSON.parse(localStorage.getItem(savedKey) || "[]");
+      const updated = nextState
+        ? Array.from(new Set([...savedList, jobId!]))
+        : savedList.filter((id) => id !== jobId);
+      localStorage.setItem(savedKey, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not persist saved jobs:", e);
+    }
+
     toast({
-      title: isSaved ? "Job unsaved" : "Job saved",
-      description: isSaved ? "Job removed from saved jobs." : "Job added to saved jobs."
+      title: nextState ? "Job saved" : "Job unsaved",
+      description: nextState ? "Job saved to your profile collection." : "Job removed from saved jobs.",
     });
   };
 
@@ -543,14 +611,18 @@ export default function JobDetails() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleEdit} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button variant="outline" onClick={handleDelete} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+                {canManage && (
+                  <>
+                    <Button variant="outline" onClick={handleEdit} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button variant="outline" onClick={handleDelete} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </>
+                )}
                 <Button variant="outline" onClick={handleSave} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
                   <Bookmark className={`h-4 w-4 mr-2 ${isSaved ? 'fill-primary text-primary' : ''}`} />
                   {isSaved ? 'Saved' : 'Save'}
@@ -566,10 +638,12 @@ export default function JobDetails() {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-surface-elevated border border-border/80">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
-            <TabsTrigger value="applicants" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Applicants ({applicants.length})</TabsTrigger>
-          </TabsList>
+          {canManage && (
+            <TabsList className="grid w-full grid-cols-2 bg-surface-elevated border border-border/80">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
+              <TabsTrigger value="applicants" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Applicants ({applicants.length})</TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="overview" className="space-y-6">
             {/* Job Details Grid */}
@@ -748,62 +822,64 @@ export default function JobDetails() {
             </div>
           </TabsContent>
 
-          <TabsContent value="applicants" className="space-y-6">
-            <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
-              <CardHeader>
-                <CardTitle className="text-foreground">Job Applicants</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {applicants.map((applicant) => (
-                    <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <h3 className="font-semibold text-foreground">{applicant.name}</h3>
-                            <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status}</Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {applicant.email}
+          {canManage && (
+            <TabsContent value="applicants" className="space-y-6">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
+                <CardHeader>
+                  <CardTitle className="text-foreground">Job Applicants</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {applicants.map((applicant) => (
+                      <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <h3 className="font-semibold text-foreground">{applicant.name}</h3>
+                              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status}</Badge>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {applicant.phone}
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <Mail className="h-3 w-3" />
+                                {applicant.email}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {applicant.phone}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <GraduationCap className="h-3 w-3" />
+                                {applicant.experience}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <GraduationCap className="h-3 w-3" />
-                              {applicant.experience}
+                            <div className="flex flex-wrap gap-1">
+                              {applicant.skills.map((skill, index) => (
+                                <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
+                                  {skill}
+                                </Badge>
+                              ))}
                             </div>
+                            <p className="text-xs text-muted-foreground">
+                              Applied on {formatDate(applicant.appliedDate)}
+                            </p>
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            {applicant.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
-                                {skill}
-                              </Badge>
-                            ))}
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
+                              View Resume
+                            </Button>
+                            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
+                              View Portfolio
+                            </Button>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            Applied on {formatDate(applicant.appliedDate)}
-                          </p>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
-                            View Resume
-                          </Button>
-                          <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
-                            View Portfolio
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Edit Dialog */}

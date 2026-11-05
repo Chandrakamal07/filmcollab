@@ -61,6 +61,9 @@ export default function ShootingLocations() {
 
       if (locError) throw locError;
 
+      const filteredLocations = (locationsData || []).filter((l: any) => 
+        !l.tags?.includes("Blocked") || l.user_id === user?.id
+      );
       let likesData: any[] = [];
       try {
         // 2. Fetch all likes to calculate counts and user wishlist
@@ -74,7 +77,7 @@ export default function ShootingLocations() {
         console.warn("Could not fetch location likes, table may not exist yet.", err);
       }
 
-      const formattedLocations: Location[] = (locationsData || []).map(loc => {
+      const formattedLocations: Location[] = filteredLocations.map(loc => {
         const locationLikes = likesData?.filter(like => like.location_id === loc.id) || [];
         const isWishlisted = user ? locationLikes.some(like => like.user_id === user.id) : false;
         

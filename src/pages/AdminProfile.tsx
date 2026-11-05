@@ -26,11 +26,11 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const AdminProfile = () => {
-  const { user, profile, userRole, adminPermissions } = useAuth();
+  const { user, profile, userRole, adminPermissions, refreshProfile } = useAuth();
   const { toast } = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -76,7 +76,7 @@ const AdminProfile = () => {
         const [usersRes, postsRes, ticketsRes] = await Promise.all([
           supabase.from("profiles").select("id", { count: "exact", head: true }),
           supabase.from("posts").select("id", { count: "exact", head: true }),
-          supabase.from("support_tickets").select("id", { count: "exact", head: true }).eq("status", "resolved"),
+          supabase.from("tickets").select("id", { count: "exact", head: true }).in("status", ["resolved", "closed"]),
         ]);
 
         setStats({
@@ -95,29 +95,40 @@ const AdminProfile = () => {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    const profileId = profile?.id;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          phone: phone,
-          location: location,
-        })
-        .eq("id", user.id);
+      const updateData = {
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        location: location.trim(),
+      };
 
+      const query = profileId
+        ? supabase.from("profiles").update(updateData).eq("id", profileId).select()
+        : supabase.from("profiles").update(updateData).eq("user_id", user.id).select();
+
+      const { data, error } = await query;
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No profile record was updated. Please check database permissions or re-authenticate.");
+      }
+
+      if (refreshProfile) {
+        await refreshProfile();
+      }
 
       toast({
         title: "Profile Updated",
         description: "Your administrator profile details have been saved successfully.",
       });
       setIsEditing(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save profile changes.";
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: err.message || "Failed to save profile changes.",
+        description: msg,
       });
     } finally {
       setSaving(false);

@@ -224,7 +224,7 @@ export default function AdminPosts() {
   };
 
   const handleApprovePost = async (postId: string | number) => {
-    if (!hasPermission("posts", "update")) {
+    if (!hasPermission("Posts", "edit")) {
       toast({
         variant: "destructive",
         title: "Permission denied",
@@ -252,7 +252,7 @@ export default function AdminPosts() {
   };
 
   const handleFlagPost = async (postId: string | number) => {
-    if (!hasPermission("posts", "update")) {
+    if (!hasPermission("Posts", "edit")) {
       toast({
         variant: "destructive",
         title: "Permission denied",
@@ -280,7 +280,7 @@ export default function AdminPosts() {
   };
 
   const handleDeletePost = async (postId: string | number) => {
-    if (!hasPermission("posts", "delete")) {
+    if (!hasPermission("Posts", "delete")) {
       toast({
         variant: "destructive",
         title: "Permission denied",

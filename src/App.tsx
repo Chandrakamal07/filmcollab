@@ -61,6 +61,8 @@ import AdminNotifications from "./pages/AdminNotifications";
 import AdminLocations from "./pages/AdminLocations";
 import AdminLocationDetail from "./pages/AdminLocationDetail";
 import AdminSettings from "./pages/AdminSettings";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -170,6 +172,8 @@ function AppRoutes() {
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<ContactUs />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       {/* Compatibility alias routes */}
       <Route path="/signin" element={<RedirectToSignIn />} />
       <Route path="/signup" element={<RedirectToSignUp />} />

@@ -142,14 +142,35 @@ export default function MessagesPage() {
   useEffect(() => {
     const handleUrlRecipient = async () => {
       if (recipientParam && isUuid(recipientParam)) {
-        setActiveId(recipientParam);
         setIsMobileChatOpen(true);
-        const { data: recProfile } = await supabase
+        let recProfile = null;
+        const { data: byId } = await supabase
           .from("profiles")
           .select("id, full_name, username, avatar_url, category")
           .eq("id", recipientParam)
           .maybeSingle();
+        recProfile = byId;
+
+        if (!recProfile) {
+          const { data: byUserId } = await supabase
+            .from("profiles")
+            .select("id, full_name, username, avatar_url, category")
+            .eq("user_id", recipientParam)
+            .maybeSingle();
+          recProfile = byUserId;
+        }
+
+        if (!recProfile && usernameParam) {
+          const { data: byUsername } = await supabase
+            .from("profiles")
+            .select("id, full_name, username, avatar_url, category")
+            .eq("username", usernameParam)
+            .maybeSingle();
+          recProfile = byUsername;
+        }
+
         if (recProfile) {
+          setActiveId(recProfile.id);
           const fullName = recProfile.full_name || recProfile.username || "Film Professional";
           const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
           setConnectedUsers((prev) => {
@@ -166,6 +187,8 @@ export default function MessagesPage() {
               }
             ];
           });
+        } else {
+          setActiveId(recipientParam);
         }
       } else if (usernameParam) {
         const { data: recProfile } = await supabase
@@ -227,7 +250,7 @@ export default function MessagesPage() {
           privKey = await importPrivateKey(keys.privateKeyJwk);
 
           // Attempt to save to Supabase. Ignore if column doesn't exist yet (for smooth rollout)
-          await supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id).catch(() => {});
+          await Promise.resolve(supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id)).catch(() => {});
         }
 
         setPrivateKey(privKey);
@@ -241,7 +264,7 @@ export default function MessagesPage() {
 
   // Load and merge all data
   const loadLocalData = useCallback(() => {
-    const saved = localStorage.getItem(`chat_conversations${storagePrefix}`) || localStorage.getItem("chat_conversations");
+    const saved = storagePrefix ? localStorage.getItem(`chat_conversations${storagePrefix}`) : null;
     let initialConvs = seedConversations;
     if (saved) {
       try {
@@ -889,14 +912,50 @@ export default function MessagesPage() {
           return;
         }
 
-        const mappedOlder: ChatMessage[] = olderDbMessages.reverse().map((m) => ({
-          id: m.id,
-          sender: m.sender_id === currentUserId ? "me" : "them",
-          type: (m.type as MessageType) || "text",
-          content: m.content,
-          timestamp: new Date(m.created_at).getTime(),
-          read: m.is_read
-        }));
+        // Derive sharedKey for activeConv if privateKey exists
+        let sharedKey: CryptoKey | null = null;
+        if (privateKey) {
+          try {
+            const { data: otherP } = await supabase
+              .from("profiles")
+              .select("public_key")
+              .eq("id", activeConv.id)
+              .maybeSingle();
+
+            if (otherP?.public_key) {
+              const otherPubKey = await importPublicKey(JSON.parse(otherP.public_key));
+              sharedKey = await deriveAESKey(privateKey, otherPubKey);
+            }
+          } catch (e) {
+            console.debug("E2EE derive failed for older msgs:", e);
+          }
+        }
+
+        const mappedOlder: ChatMessage[] = await Promise.all(
+          olderDbMessages.reverse().map(async (m) => {
+            let content = m.content;
+            if (content && typeof content === "string" && content.startsWith("ENCRYPTED:")) {
+              if (sharedKey) {
+                try {
+                  const [, iv, cipher] = content.split(":");
+                  content = await decryptMessage(sharedKey, iv, cipher);
+                } catch {
+                  content = "🔒 [Encrypted Message - Unable to decrypt]";
+                }
+              } else {
+                content = "🔒 [Encrypted Message - Key missing]";
+              }
+            }
+            return {
+              id: m.id,
+              sender: m.sender_id === currentUserId ? "me" : "them",
+              type: (m.type as MessageType) || "text",
+              content,
+              timestamp: new Date(m.created_at).getTime(),
+              read: m.is_read
+            };
+          })
+        );
 
         setConversations((prev) =>
           prev.map((c) =>
