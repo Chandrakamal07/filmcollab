@@ -243,7 +243,7 @@ export default function AdminJobs() {
   const handleSaveJobTags = async (jobId: string) => {
     try {
       if (!editingTags) return;
-      const { error } = await supabase.rpc('admin_update_job_tags', { 
+      const { error } = await (supabase.rpc as any)('admin_update_job_tags', { 
         p_job_id: jobId, 
         p_tags: editingTags.tags 
       });

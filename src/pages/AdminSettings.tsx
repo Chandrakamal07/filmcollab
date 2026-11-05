@@ -230,11 +230,11 @@ export default function AdminSettings() {
 
       if (settings.id) {
         // Update existing
-        const res = await supabase.from("site_settings").update(settingsData).eq("id", settings.id);
+        const res = await supabase.from("site_settings").update(settingsData as any).eq("id", settings.id);
         error = res.error;
       } else {
         // Insert new
-        const res = await supabase.from("site_settings").insert([settingsData]);
+        const res = await supabase.from("site_settings").insert([settingsData as any]);
         error = res.error;
       }
 
@@ -302,10 +302,10 @@ export default function AdminSettings() {
 
       let saveError;
       if (editingPlan.id) {
-        const { error } = await supabase.from("subscription_plans").update(planData).eq("id", editingPlan.id);
+        const { error } = await supabase.from("subscription_plans").update(planData as any).eq("id", editingPlan.id);
         saveError = error;
       } else {
-        const { error } = await supabase.from("subscription_plans").insert([planData]);
+        const { error } = await supabase.from("subscription_plans").insert([planData as any]);
         saveError = error;
       }
       

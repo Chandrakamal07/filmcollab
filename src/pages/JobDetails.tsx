@@ -28,7 +28,8 @@ import {
   User,
   Mail,
   Phone,
-  GraduationCap
+  GraduationCap,
+  Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -61,7 +62,7 @@ export default function JobDetails() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, isAdmin } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
@@ -202,45 +203,48 @@ export default function JobDetails() {
     }
   ];
 
-  // Hardcoded applicants data
-  const applicants = [
-    {
-      id: "app-1",
-      name: "Sarah Johnson",
-      email: "sarah.johnson@email.com",
-      phone: "+1 (555) 123-4567",
-      experience: "8 years",
-      skills: ["Film Direction", "Storytelling", "Leadership", "Project Management"],
-      appliedDate: "2024-01-16",
-      status: "Under Review",
-      resume: "sarah_johnson_resume.pdf",
-      portfolio: "sarahjohnson.com"
-    },
-    {
-      id: "app-2", 
-      name: "Michael Chen",
-      email: "michael.chen@email.com",
-      phone: "+1 (555) 234-5678",
-      experience: "6 years",
-      skills: ["Film Direction", "Creative Vision", "Team Management", "Post-Production"],
-      appliedDate: "2024-01-17",
-      status: "Interview Scheduled",
-      resume: "michael_chen_resume.pdf",
-      portfolio: "michaelchenfilms.com"
-    },
-    {
-      id: "app-3",
-      name: "Emily Rodriguez",
-      email: "emily.rodriguez@email.com", 
-      phone: "+1 (555) 345-6789",
-      experience: "10 years",
-      skills: ["Film Direction", "Budget Management", "Leadership", "Creative Vision"],
-      appliedDate: "2024-01-18",
-      status: "Under Review",
-      resume: "emily_rodriguez_resume.pdf",
-      portfolio: "emilyrodriguez.com"
-    }
-  ];
+  // Real applicants data loaded from database
+  const [applicants, setApplicants] = useState<any[]>([]);
+  const [isLoadingApplicants, setIsLoadingApplicants] = useState(false);
+
+  useEffect(() => {
+    if (!jobId || !canManage) return;
+    const fetchApplicants = async () => {
+      setIsLoadingApplicants(true);
+      try {
+        const { data, error } = await supabase
+          .from("job_applications")
+          .select(`
+            id,
+            job_id,
+            user_id,
+            name,
+            email,
+            phone,
+            experience,
+            skills,
+            resume_url,
+            portfolio_url,
+            cover_letter,
+            status,
+            created_at,
+            profiles:user_id (id, full_name, email, avatar_url)
+          `)
+          .eq("job_id", jobId)
+          .order("created_at", { ascending: false });
+
+        if (error && error.code !== "42P01") {
+          console.warn("Could not fetch applicants:", error);
+        }
+        setApplicants(data || []);
+      } catch (err) {
+        console.warn("Error fetching applicants:", err);
+      } finally {
+        setIsLoadingApplicants(false);
+      }
+    };
+    fetchApplicants();
+  }, [jobId, canManage]);
 
   const handleEdit = () => {
     if (job) {
@@ -318,7 +322,7 @@ export default function JobDetails() {
         job_type: editForm.job_type || job.job_type,
         experience_level: editForm.experience_level || job.experience_level,
         industry: editForm.category || job.category,
-        skills_required: skillsArray,
+        skills_required: Array.isArray(skillsArray) ? skillsArray : [String(skillsArray)],
       }).eq("id", job.id).select();
 
       if (error) throw error;
@@ -440,7 +444,10 @@ export default function JobDetails() {
     try {
       const { error } = await supabase.from("job_applications").insert({
         job_id: job.id,
-        user_id: user.id
+        user_id: user.id,
+        name: profile?.full_name || user.email?.split("@")[0] || "Applicant",
+        email: user.email || (profile as any)?.email || "",
+        status: "Under Review"
       });
 
       if (error && error.code !== "23505") {
@@ -829,53 +836,98 @@ export default function JobDetails() {
                   <CardTitle className="text-foreground">Job Applicants</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {applicants.map((applicant) => (
-                      <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
-                              <h3 className="font-semibold text-foreground">{applicant.name}</h3>
-                              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status}</Badge>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {applicant.email}
+                  {isLoadingApplicants ? (
+                    <div className="flex h-32 items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : applicants.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground space-y-2">
+                      <User className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                      <p className="font-medium text-foreground">No applications yet</p>
+                      <p className="text-sm">When candidates apply to this position, their dossiers will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {applicants.map((applicant) => {
+                        const applicantName = applicant.name || applicant.profiles?.full_name || "Applicant";
+                        const applicantEmail = applicant.email || applicant.profiles?.email || "No email";
+                        const applicantPhone = applicant.phone || "Not provided";
+                        const applicantExp = applicant.experience || "Not specified";
+                        const applicantSkills: string[] = Array.isArray(applicant.skills) ? applicant.skills : [];
+                        const appliedDateStr = applicant.created_at || applicant.appliedDate || new Date().toISOString();
+
+                        return (
+                          <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-muted-foreground" />
+                                  <h3 className="font-semibold text-foreground">{applicantName}</h3>
+                                  <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status || "Under Review"}</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Mail className="h-3 w-3" />
+                                    {applicantEmail}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="h-3 w-3" />
+                                    {applicantPhone}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <GraduationCap className="h-3 w-3" />
+                                    {applicantExp}
+                                  </div>
+                                </div>
+                                {applicantSkills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {applicantSkills.map((skill, index) => (
+                                      <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
+                                        {skill}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                  Applied on {formatDate(appliedDateStr)}
+                                </p>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {applicant.phone}
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <GraduationCap className="h-3 w-3" />
-                                {applicant.experience}
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    if (applicant.resume_url) {
+                                      window.open(applicant.resume_url, '_blank', 'noopener,noreferrer');
+                                    } else {
+                                      toast({ title: "No resume attached", description: "The applicant did not provide a direct resume link." });
+                                    }
+                                  }}
+                                  className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
+                                >
+                                  View Resume
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    if (applicant.portfolio_url) {
+                                      window.open(applicant.portfolio_url, '_blank', 'noopener,noreferrer');
+                                    } else {
+                                      toast({ title: "No portfolio attached", description: "The applicant did not link a portfolio website." });
+                                    }
+                                  }}
+                                  className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
+                                >
+                                  View Portfolio
+                                </Button>
                               </div>
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {applicant.skills.map((skill, index) => (
-                                <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
-                                  {skill}
-                                </Badge>
-                              ))}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Applied on {formatDate(applicant.appliedDate)}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
-                              View Resume
-                            </Button>
-                            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary">
-                              View Portfolio
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

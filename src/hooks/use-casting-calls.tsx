@@ -145,7 +145,7 @@ export function useCastingCalls() {
 
       const { data, error } = await supabase
         .from('casting_applicants')
-        .insert(newApp)
+        .insert(newApp as any)
         .select()
         .single();
 
@@ -236,7 +236,7 @@ export function useCastingCalls() {
 
       const { data, error } = await supabase
         .from('casting_calls')
-        .insert(dbRow)
+        .insert(dbRow as any)
         .select()
         .single();
 

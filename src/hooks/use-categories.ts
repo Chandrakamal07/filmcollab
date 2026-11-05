@@ -23,7 +23,7 @@ export function useCategories() {
         throw error;
       }
 
-      return (data || []) as Category[];
+      return (data || []) as unknown as Category[];
     },
     staleTime: 1000 * 60 * 60 * 24, // 24 hours
   });

@@ -34,7 +34,7 @@ export default function NewIndustryHubPost() {
           if (selectedPostType === "events") table = "industry_events";
           if (selectedPostType === "courses") table = "industry_courses";
           
-          const { data, error } = await supabase.from(table).select("*").eq("id", editId).single();
+          const { data, error } = await (supabase as any).from(table).select("*").eq("id", editId).single();
           if (error) throw error;
           
           if (data) {
@@ -200,8 +200,8 @@ export default function NewIndustryHubPost() {
         };
 
         let { error } = editId 
-          ? await supabase.from("industry_events").update(payload).eq("id", editId) 
-          : await supabase.from("industry_events").insert([payload]);
+          ? await supabase.from("industry_events").update(payload as any).eq("id", editId) 
+          : await supabase.from("industry_events").insert([payload as any]);
 
         if (error && error.code === "42703") {
           console.warn("New event columns don't exist. Falling back to old schema.", error);
@@ -211,8 +211,8 @@ export default function NewIndustryHubPost() {
           delete fallbackPayload.registration_link;
           
           const result = editId 
-            ? await supabase.from("industry_events").update(fallbackPayload).eq("id", editId)
-            : await supabase.from("industry_events").insert([fallbackPayload]);
+            ? await supabase.from("industry_events").update(fallbackPayload as any).eq("id", editId)
+            : await supabase.from("industry_events").insert([fallbackPayload as any]);
           error = result.error;
           
           toast({
@@ -255,16 +255,16 @@ export default function NewIndustryHubPost() {
         };
 
         let { error } = editId 
-          ? await supabase.from("industry_courses").update(payload).eq("id", editId) 
-          : await supabase.from("industry_courses").insert([payload]);
+          ? await supabase.from("industry_courses").update(payload as any).eq("id", editId) 
+          : await supabase.from("industry_courses").insert([payload as any]);
         if (error && error.code === "42703") {
           console.warn("New course columns don't exist. Falling back to old schema.", error);
           const fallbackPayload = { ...payload };
           delete fallbackPayload.website_link;
           
           const result = editId 
-            ? await supabase.from("industry_courses").update(fallbackPayload).eq("id", editId)
-            : await supabase.from("industry_courses").insert([fallbackPayload]);
+            ? await supabase.from("industry_courses").update(fallbackPayload as any).eq("id", editId)
+            : await supabase.from("industry_courses").insert([fallbackPayload as any]);
           error = result.error;
         }
 

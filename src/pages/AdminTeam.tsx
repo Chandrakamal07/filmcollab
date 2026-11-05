@@ -84,6 +84,7 @@ export default function AdminTeam() {
       const { error } = await supabase
         .from('admin_team_members')
         .insert({
+          user_id: profileData.id,
           profile_id: profileData.id,
           role: newMember.role,
           status: newMember.status,

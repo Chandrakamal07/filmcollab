@@ -76,10 +76,14 @@ export default function GroupDetails() {
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [loadingGroup, setLoadingGroup] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [group, setGroup] = useState<any>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [groupSettings, setGroupSettings] = useState({
-    name: "My Film Production Group",
-    description: "A private group for my upcoming film project. Collaborating with trusted team members.",
-    privacy: "private", // private, public
+    name: "",
+    description: "",
+    privacy: "public",
     allowMemberInvites: true,
     allowMemberPosts: true,
     requireApproval: false,
@@ -88,99 +92,6 @@ export default function GroupDetails() {
     messageRetentionDays: 30
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Mock group data - in real app, this would be fetched based on groupId
-  const group = {
-    id: groupId,
-    name: "My Film Production Group",
-    description: "A private group for my upcoming film project. Collaborating with trusted team members.",
-    members: 12,
-    posts: 45,
-    category: "Production",
-    tags: ["production", "private", "collaboration"],
-    createdBy: "You",
-    createdDate: "2024-11-15",
-    status: "Active",
-    rules: [
-      "Be respectful to all members",
-      "Keep discussions relevant to film production",
-      "No spam or self-promotion without permission",
-      "Share resources and knowledge generously"
-    ],
-    recentActivity: [
-      { action: "New member joined", user: "Sarah Chen", time: "2 hours ago" },
-      { action: "Posted in chat", user: "Mike Johnson", time: "3 hours ago" },
-      { action: "Shared resource", user: "Lisa Park", time: "1 day ago" }
-    ]
-  };
-
-  const members: GroupMember[] = [
-    { id: "1", name: "You", role: "Group Admin", avatar: "Y", joinedDate: "2024-11-15", isAdmin: true, isModerator: false, online: true },
-    { id: "2", name: "Sarah Chen", role: "Producer", avatar: "SC", joinedDate: "2024-11-16", isAdmin: false, isModerator: true, online: true },
-    { id: "3", name: "Mike Johnson", role: "Director", avatar: "MJ", joinedDate: "2024-11-17", isAdmin: false, isModerator: false, online: false },
-    { id: "4", name: "Lisa Park", role: "Cinematographer", avatar: "LP", joinedDate: "2024-11-18", isAdmin: false, isModerator: false, online: true },
-    { id: "5", name: "David Kim", role: "Editor", avatar: "DK", joinedDate: "2024-11-19", isAdmin: false, isModerator: false, online: false },
-    { id: "6", name: "Emma Rodriguez", role: "Sound Designer", avatar: "ER", joinedDate: "2024-11-20", isAdmin: false, isModerator: false, online: true }
-  ];
-
-  const demoChatMessages: ChatMessage[] = [
-    {
-      id: "1",
-      userId: "2",
-      userName: "Sarah Chen",
-      userAvatar: "SC",
-      message: "Hey everyone! Just wanted to share the updated production schedule. We're ahead of schedule on pre-production!",
-      timestamp: "2 hours ago",
-      type: "text",
-      isModerator: true
-    },
-    {
-      id: "2",
-      userId: "1",
-      userName: "You",
-      userAvatar: "Y",
-      message: "That's fantastic news, Sarah! Thanks for keeping us updated. The team is doing amazing work.",
-      timestamp: "2 hours ago",
-      type: "text",
-      isAdmin: true
-    },
-    {
-      id: "3",
-      userId: "3",
-      userName: "Mike Johnson",
-      userAvatar: "MJ",
-      message: "I've been reviewing the script changes. The new dialogue flows much better. Great work on the revisions!",
-      timestamp: "1 hour ago",
-      type: "text"
-    },
-    {
-      id: "4",
-      userId: "4",
-      userName: "Lisa Park",
-      userAvatar: "LP",
-      message: "I've uploaded some location photos to the shared drive. Check them out when you get a chance.",
-      timestamp: "45 minutes ago",
-      type: "text"
-    },
-    {
-      id: "5",
-      userId: "5",
-      userName: "David Kim",
-      userAvatar: "DK",
-      message: "The rough cut is looking good. I'll have the first edit ready by tomorrow evening.",
-      timestamp: "30 minutes ago",
-      type: "text"
-    },
-    {
-      id: "6",
-      userId: "6",
-      userName: "Emma Rodriguez",
-      userAvatar: "ER",
-      message: "Sound design is progressing well. I've created some ambient tracks that should work perfectly for the forest scenes.",
-      timestamp: "15 minutes ago",
-      type: "text"
-    }
-  ];
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
@@ -196,6 +107,103 @@ export default function GroupDetails() {
     if (!id) return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   };
+
+  useEffect(() => {
+    if (!groupId) {
+      setLoadingGroup(false);
+      return;
+    }
+
+    if (!isUuid(groupId)) {
+      setLoadingGroup(false);
+      return;
+    }
+
+    const fetchGroupAndMembers = async () => {
+      setLoadingGroup(true);
+      try {
+        const { data: gData, error: gErr } = await supabase
+          .from("community_groups")
+          .select("*")
+          .eq("id", groupId)
+          .single();
+
+        if (gErr) throw gErr;
+        if (gData) {
+          const settings = (gData.settings || {}) as Record<string, any>;
+          setGroup({
+            id: gData.id,
+            name: gData.name,
+            description: gData.description || "",
+            members: 1,
+            posts: 0,
+            category: gData.category || "Filmmaking",
+            tags: Array.isArray(gData.tags) ? gData.tags : [],
+            createdBy: gData.created_by,
+            createdDate: gData.created_at ? new Date(gData.created_at).toLocaleDateString() : "Recent",
+            status: "Active",
+            rules: [
+              "Be respectful to all members",
+              "Keep discussions relevant to film production",
+              "Share resources and knowledge generously",
+              "No spam or self-promotion without permission"
+            ],
+            recentActivity: []
+          });
+
+          setGroupSettings({
+            name: gData.name || "",
+            description: gData.description || "",
+            privacy: gData.privacy || "public",
+            allowMemberInvites: settings.allowMemberInvites ?? true,
+            allowMemberPosts: settings.allowMemberPosts ?? true,
+            requireApproval: settings.requireApproval ?? false,
+            notifications: settings.notifications ?? true,
+            autoDeleteMessages: settings.autoDeleteMessages ?? false,
+            messageRetentionDays: settings.messageRetentionDays ?? 30
+          });
+        }
+
+        // Fetch real members
+        const { data: mRows, error: mErr } = await supabase
+          .from("community_group_members")
+          .select("id, role, joined_at, user_id")
+          .eq("group_id", groupId);
+
+        if (!mErr && mRows && mRows.length > 0) {
+          const uids = mRows.map((m: any) => m.user_id);
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, user_id, full_name, avatar_url")
+            .in("user_id", uids);
+
+          const profMap = new Map((profs || []).map((p: any) => [p.user_id, p]));
+          const formatted: GroupMember[] = mRows.map((m: any) => {
+            const p = profMap.get(m.user_id);
+            const name = m.user_id === user?.id ? "You" : (p?.full_name || "Community Member");
+            return {
+              id: m.id,
+              name,
+              role: m.role || "Member",
+              avatar: name.slice(0, 2).toUpperCase(),
+              joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().slice(0, 10) : "",
+              isAdmin: m.role === "Owner" || m.role === "Admin",
+              isModerator: m.role === "Moderator",
+              online: m.user_id === user?.id,
+            };
+          });
+          setMembers(formatted);
+          setGroup((prev: any) => prev ? { ...prev, members: formatted.length } : prev);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to load group details:", err);
+      } finally {
+        setLoadingGroup(false);
+      }
+    };
+
+    fetchGroupAndMembers();
+  }, [groupId, user?.id]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -228,7 +236,7 @@ export default function GroupDetails() {
       };
       fetchGroupMessages();
     } else {
-      setChatMessages(demoChatMessages);
+      setChatMessages([]);
     }
   }, [groupId, user?.id, profile?.full_name]);
 
@@ -296,6 +304,35 @@ export default function GroupDetails() {
       handleSendMessage();
     }
   };
+
+  if (loadingGroup) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+            <p className="text-sm">Loading group collective...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!group) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground mb-2">Group Not Found</h1>
+            <p className="text-muted-foreground mb-6">The requested collective or guild could not be found.</p>
+            <Button onClick={() => navigate("/community")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Community
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -703,37 +740,59 @@ export default function GroupDetails() {
                   <div className="flex gap-3 pt-4 border-t border-border/60">
                     <Button 
                       className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover"
+                      disabled={savingSettings || !group}
                       onClick={async () => {
+                        if (!user || !isUuid(groupId) || !group) return;
+                        setSavingSettings(true);
                         try {
-                          if (user && isUuid(groupId)) {
-                            const { error } = await supabase
-                              .from("community_groups")
-                              .update({
-                                name: groupSettings.name,
-                                description: groupSettings.description,
-                                privacy: groupSettings.privacy,
-                                settings: groupSettings
-                              })
-                              .eq("id", groupId);
-                            if (error) throw error;
+                          const { data: updatedGroup, error } = await supabase
+                            .from("community_groups")
+                            .update({
+                              name: groupSettings.name.trim(),
+                              description: groupSettings.description.trim(),
+                              privacy: groupSettings.privacy,
+                              settings: {
+                                allowMemberInvites: groupSettings.allowMemberInvites,
+                                allowMemberPosts: groupSettings.allowMemberPosts,
+                                requireApproval: groupSettings.requireApproval,
+                                notifications: groupSettings.notifications,
+                                autoDeleteMessages: groupSettings.autoDeleteMessages,
+                                messageRetentionDays: groupSettings.messageRetentionDays
+                              }
+                            })
+                            .eq("id", groupId)
+                            .select()
+                            .single();
+
+                          if (error) throw error;
+                          if (updatedGroup) {
+                            setGroup((prev: any) => ({
+                              ...prev,
+                              name: updatedGroup.name,
+                              description: updatedGroup.description,
+                              privacy: updatedGroup.privacy,
+                            }));
                           }
                           toast({
                             title: "Settings saved",
                             description: "Group preferences updated successfully."
                           });
                           setShowSettings(false);
-                        } catch (err: any) {
+                        } catch (err: unknown) {
+                          const msg = err instanceof Error ? err.message : "Could not persist group settings.";
                           console.error("Failed to save settings:", err);
                           toast({
                             variant: "destructive",
                             title: "Save failed",
-                            description: err?.message || "Could not persist group settings."
+                            description: msg
                           });
+                        } finally {
+                          setSavingSettings(false);
                         }
                       }}
                     >
                       <Save className="w-4 h-4 mr-2" />
-                      Save Changes
+                      {savingSettings ? "Saving..." : "Save Changes"}
                     </Button>
                     <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setShowSettings(false)}>
                       Cancel

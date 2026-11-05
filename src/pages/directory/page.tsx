@@ -391,6 +391,8 @@ export default function DirectoryPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const projectId = searchParams.get("project");
+  const [projectName, setProjectName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DirType>("images");
   const [items, setItems] = useState<DirItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -428,6 +430,26 @@ export default function DirectoryPage() {
       if (user?.id) setCurrentUserId(user.id);
     });
   }, []);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectName(null);
+      return;
+    }
+    const fetchProjectName = async () => {
+      try {
+        const { data } = await supabase.from("projects").select("title").eq("id", projectId).maybeSingle();
+        if (data?.title) {
+          setProjectName(data.title);
+        } else {
+          setProjectName(`Project ${projectId.slice(0, 8)}`);
+        }
+      } catch {
+        setProjectName(`Project ${projectId.slice(0, 8)}`);
+      }
+    };
+    fetchProjectName();
+  }, [projectId]);
 
   // Toggle Like Handler (Requirement 4: Remove views, instead add likes)
   const handleLikeToggle = async (id: string, e: React.MouseEvent) => {
@@ -571,19 +593,24 @@ export default function DirectoryPage() {
 
   // React Query for caching directory files so it loads instantly when navigating back
   const { data: fetchedItems, isLoading: isQueryLoading } = useQuery({
-    queryKey: ['directory_files'],
+    queryKey: ['directory_files', projectId],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
       if (userId) setCurrentUserId(userId);
 
-      const { data, error } = await supabase
+      let queryBuilder = supabase
         .from("directory_files")
         .select(`
           *,
           profiles:user_id (id, full_name, username)
-        `)
-        .order("created_at", { ascending: false });
+        `);
+
+      if (projectId) {
+        queryBuilder = queryBuilder.eq("project_id", projectId);
+      }
+
+      const { data, error } = await queryBuilder.order("created_at", { ascending: false });
 
       if (error && error.code !== '42P01') throw error;
       if (!data) return [];
@@ -670,6 +697,24 @@ export default function DirectoryPage() {
                   ? "Browse all the creative files and media references you have favorited." 
                   : "Explore creative reference media, conceptual breakdowns, documents, scripts, and foley."}
               </p>
+              {projectId && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Badge className="bg-primary/15 text-primary border border-primary/30 flex items-center gap-1.5 py-1 px-3 text-xs">
+                    <span>Project Filter: <strong>{projectName || projectId}</strong></span>
+                    <button
+                      onClick={() => {
+                        const nextParams = new URLSearchParams(searchParams);
+                        nextParams.delete("project");
+                        setSearchParams(nextParams);
+                      }}
+                      className="ml-1 hover:text-foreground rounded-full p-0.5 hover:bg-primary/20 transition-colors"
+                      title="Clear project filter"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </Badge>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
               <div className="relative flex-1 sm:flex-initial sm:min-w-[220px]">
@@ -1381,6 +1426,7 @@ export default function DirectoryPage() {
         open={showAddFileDialog} 
         onOpenChange={setShowAddFileDialog} 
         userId={currentUserId}
+        projectId={projectId}
         onUploadSuccess={() => {
           // Re-fetch items on success without reloading
           queryClient.invalidateQueries({ queryKey: ['directory_files'] });

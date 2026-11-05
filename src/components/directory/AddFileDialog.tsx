@@ -14,9 +14,10 @@ interface AddFileDialogProps {
   onOpenChange: (open: boolean) => void;
   onUploadSuccess?: () => void;
   userId?: string;
+  projectId?: string | null;
 }
 
-export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: AddFileDialogProps) {
+export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, projectId }: AddFileDialogProps) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [selectedAddFiles, setSelectedAddFiles] = useState<File[]>([]);
   const [addFileTitle, setAddFileTitle] = useState("");
@@ -150,6 +151,7 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
         .from('directory_files')
         .insert({
           user_id: userId,
+          project_id: projectId || null,
           title: finalTitle,
           file_url: publicUrl,
           additional_urls: additionalUrls.length > 0 ? additionalUrls : [],

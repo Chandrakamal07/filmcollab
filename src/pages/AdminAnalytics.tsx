@@ -80,7 +80,7 @@ export default function AdminAnalytics() {
     setIsLoading(true);
     try {
       // 1. Fetch Users Data
-      const { data: profiles } = await supabase.from('profiles').select('created_at, category');
+      const { data: profiles } = await supabase.from('profiles').select('created_at, category, updated_at, avatar_url');
       
       const totalUsers = profiles?.length || 0;
       const thirtyDaysAgo = new Date();
@@ -229,13 +229,29 @@ export default function AdminAnalytics() {
         value: typeDistribution[key]
       })).sort((a, b) => b.value - a.value).slice(0, 8);
 
+      // Fetch real job applications count
+      let realJobAppsCount = 0;
+      try {
+        const { count } = await supabase.from('job_applications').select('*', { count: 'exact', head: true });
+        if (count !== null) realJobAppsCount = count;
+      } catch (e) {
+        console.warn("Could not query job_applications count:", e);
+      }
+
+      const activeUsers = profiles?.filter(p => {
+        if (!p.updated_at) return false;
+        return new Date(p.updated_at).getTime() >= thirtyDaysAgo.getTime();
+      }).length || newUsers;
+
+      const verifiedUsers = profiles?.filter(p => (p as any).verified || p.avatar_url).length || 0;
+
       // Set states
       setUsersData({
         metrics: [
-          { title: "Total Registered Users", value: totalUsers.toLocaleString(), change: "+12.5%", icon: Users, color: "text-primary" },
-          { title: `New Users (${timeRange}d)`, value: newUsers.toLocaleString(), change: "+8.3%", icon: UserPlus, color: "text-primary" },
-          { title: "Active Users", value: Math.floor(totalUsers * 0.7).toLocaleString(), change: "+15.2%", icon: Activity, color: "text-primary" },
-          { title: "User Retention", value: "78.5%", change: "+2.1%", icon: Target, color: "text-primary" }
+          { title: "Total Registered Users", value: totalUsers.toLocaleString(), change: "—", icon: Users, color: "text-primary" },
+          { title: `New Users (${timeRange}d)`, value: newUsers.toLocaleString(), change: "—", icon: UserPlus, color: "text-primary" },
+          { title: `Active Users (${timeRange}d)`, value: activeUsers.toLocaleString(), change: "—", icon: Activity, color: "text-primary" },
+          { title: "Verified Profiles", value: verifiedUsers.toLocaleString(), change: "—", icon: Target, color: "text-primary" }
         ],
         chartData: userChartData.length ? userChartData : [{ month: 'No Data', total: 0, new: 0, active: 0 }],
         rolesData: rolesData.length ? rolesData : [{ name: 'No Data', value: 1 }]
@@ -243,20 +259,20 @@ export default function AdminAnalytics() {
 
       setProjectsData({
         metrics: [
-          { title: "Total Projects", value: totalProjects.toLocaleString(), change: "+14.2%", icon: FolderOpen, color: "text-primary" },
-          { title: "Active Projects", value: activeProjects.toLocaleString(), change: "+9.8%", icon: Zap, color: "text-primary" },
-          { title: "Completed", value: completedProjects.toLocaleString(), change: "+16.3%", icon: Target, color: "text-primary" },
-          { title: "Project Views", value: "89.3k", change: "+19.4%", icon: Eye, color: "text-primary" }
+          { title: "Total Projects", value: totalProjects.toLocaleString(), change: "—", icon: FolderOpen, color: "text-primary" },
+          { title: "Active Projects", value: activeProjects.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
+          { title: "Completed", value: completedProjects.toLocaleString(), change: "—", icon: Target, color: "text-primary" },
+          { title: "Project Views", value: "Not instrumented", change: "—", icon: Eye, color: "text-primary" }
         ],
         chartData: projectChartData.length ? projectChartData : [{ date: 'No Data', projects: 0, uniqueUsers: 0 }]
       });
 
       setJobsData({
         metrics: [
-          { title: "Total Jobs", value: totalJobs.toLocaleString(), change: "+21.3%", icon: Briefcase, color: "text-primary" },
-          { title: "Active Jobs", value: activeJobs.toLocaleString(), change: "+12.7%", icon: Briefcase, color: "text-primary" },
-          { title: "Applications", value: "8,932", change: "+28.9%", icon: UserCheck, color: "text-primary" },
-          { title: "Job Views", value: "67.4k", change: "+33.1%", icon: Eye, color: "text-primary" }
+          { title: "Total Jobs", value: totalJobs.toLocaleString(), change: "—", icon: Briefcase, color: "text-primary" },
+          { title: "Active Jobs", value: activeJobs.toLocaleString(), change: "—", icon: Briefcase, color: "text-primary" },
+          { title: "Applications", value: realJobAppsCount.toLocaleString(), change: "—", icon: UserCheck, color: "text-primary" },
+          { title: "Job Views", value: "Not instrumented", change: "—", icon: Eye, color: "text-primary" }
         ],
         chartData: jobChartData.length ? jobChartData : [{ date: 'No Data', jobs: 0, uniqueUsers: 0 }]
       });

@@ -260,7 +260,7 @@ const Settings = () => {
       // Fetch categories
       const { data: catData } = await supabase.from('categories').select('name, department');
       if (catData) {
-        setAvailableCategories(catData.sort((a, b) => a.department.localeCompare(b.department) || a.name.localeCompare(b.name)));
+        setAvailableCategories((catData as any[]).sort((a, b) => (a.department || '').localeCompare(b.department || '') || (a.name || '').localeCompare(b.name || '')));
       }
 
       if (profile?.id) {
@@ -271,11 +271,12 @@ const Settings = () => {
           .maybeSingle();
           
         if (data) {
-          if (data.privacy_settings) setPrivacySettings(prev => ({ ...prev, ...data.privacy_settings }));
-          if (data.visible_to_categories) setVisibleToCategories(data.visible_to_categories);
-          if (data.notification_settings) setNotificationSettings(prev => ({ ...prev, ...data.notification_settings }));
-          if (data.appearance_settings) setAppearanceSettings(prev => ({ ...prev, ...data.appearance_settings }));
-          if (data.security_settings) setSecuritySettings(prev => ({ ...prev, ...data.security_settings }));
+          const s = data as any;
+          if (s.privacy_settings) setPrivacySettings(prev => ({ ...prev, ...s.privacy_settings }));
+          if (s.visible_to_categories) setVisibleToCategories(s.visible_to_categories);
+          if (s.notification_settings) setNotificationSettings(prev => ({ ...prev, ...s.notification_settings }));
+          if (s.appearance_settings) setAppearanceSettings(prev => ({ ...prev, ...s.appearance_settings }));
+          if (s.security_settings) setSecuritySettings(prev => ({ ...prev, ...s.security_settings }));
         }
       }
     };
@@ -340,10 +341,10 @@ const Settings = () => {
         
         let error;
         if (existing) {
-          const res = await supabase.from('settings').update(updateData).eq('profile_id', profile.id);
+          const res = await supabase.from('settings').update(updateData as any).eq('profile_id', profile.id);
           error = res.error;
         } else {
-          const res = await supabase.from('settings').insert({ profile_id: profile.id, ...updateData });
+          const res = await supabase.from('settings').insert({ profile_id: profile.id, ...updateData } as any);
           error = res.error;
         }
         

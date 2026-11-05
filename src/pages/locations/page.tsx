@@ -35,7 +35,7 @@ interface Location {
 
 export default function ShootingLocations() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [propertyTypeFilter, setPropertyTypeFilter] = useState("all");
   const [budgetFilter, setBudgetFilter] = useState("all");
@@ -61,9 +61,12 @@ export default function ShootingLocations() {
 
       if (locError) throw locError;
 
-      const filteredLocations = (locationsData || []).filter((l: any) => 
-        !l.tags?.includes("Blocked") || l.user_id === user?.id
-      );
+      const filteredLocations = (locationsData || []).filter((l: any) => {
+        const isBlocked = l.status === "blocked" || (l.tags && l.tags.includes("Blocked"));
+        const isOwner = l.created_by === user?.id;
+        const adminAccess = isAdmin();
+        return !isBlocked || isOwner || adminAccess;
+      });
       let likesData: any[] = [];
       try {
         // 2. Fetch all likes to calculate counts and user wishlist
@@ -84,11 +87,11 @@ export default function ShootingLocations() {
         return {
           id: loc.id,
           name: loc.name,
-          type: loc.type,
+          type: loc.property_type || (loc as any).type,
           city: loc.city,
           state: loc.state,
-          price: loc.price,
-          price_type: loc.price_type,
+          price: loc.daily_rate || loc.hourly_rate || (loc as any).price,
+          price_type: (loc as any).price_type || 'per_day',
           image_url: loc.image_url,
           owner_name: loc.owner_name,
           likesCount: locationLikes.length,

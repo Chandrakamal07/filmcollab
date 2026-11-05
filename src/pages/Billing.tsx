@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/utils';
 import {
   CreditCard,
   Check,
@@ -23,7 +24,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 
 const Billing = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +50,7 @@ const Billing = () => {
 
   // Authoritative current user plan
   const currentPlan = {
-    name: profile?.role === 'admin' ? 'Studio Pro (Admin)' : 'Free Creator',
+    name: isAdmin() ? 'Studio Pro (Admin)' : 'Free Creator',
     price: 0,
     period: 'month',
     features: [
@@ -131,10 +132,12 @@ const Billing = () => {
                 <p className="text-sm text-muted-foreground">Billed monthly</p>
               </div>
               <div className="text-right">
-                <Badge className="mb-2 bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20">
-                  Active
+                <Badge className={cn("mb-2", isAdmin() ? "bg-primary/15 text-primary border border-primary/30" : "bg-muted text-muted-foreground border border-border")}>
+                  {isAdmin() ? "Active (Admin Access)" : "Free Tier"}
                 </Badge>
-                <p className="text-sm text-muted-foreground font-mono">Next billing: Jan 15, 2025</p>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {isAdmin() ? "No subscription charges (Platform Admin)" : "No active billing cycle (Free tier)"}
+                </p>
               </div>
             </div>
 

@@ -244,7 +244,9 @@ export default function CommunityPage() {
         });
 
       if (memberErr) {
-        console.warn("Could not insert creator member record:", memberErr);
+        // Atomic compensation: clean up orphaned group record so no unusable setup remains
+        await supabase.from("community_groups").delete().eq("id", newGroup.id);
+        throw new Error(`Failed to establish owner membership: ${memberErr.message}. Group creation rolled back.`);
       }
 
       toast({

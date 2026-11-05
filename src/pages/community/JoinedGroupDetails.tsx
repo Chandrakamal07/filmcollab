@@ -75,103 +75,10 @@ export default function JoinedGroupDetails() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
+  const [loadingGroup, setLoadingGroup] = useState(true);
+  const [group, setGroup] = useState<any>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Mock group data - in real app, this would be fetched based on groupId
-  const group = {
-    id: groupId,
-    name: "Independent Filmmakers Network",
-    description: "A community for independent filmmakers to share resources, collaborate, and support each other.",
-    members: 2847,
-    posts: 156,
-    category: "Filmmaking",
-    tags: ["independent", "filmmaking", "collaboration"],
-    createdBy: "Sarah Johnson",
-    createdDate: "2024-01-15",
-    status: "Active",
-    joinedDate: "2024-11-20",
-    userRole: "Member",
-    rules: [
-      "Be respectful to all members",
-      "Keep discussions relevant to independent filmmaking",
-      "Share resources and knowledge generously",
-      "No spam or self-promotion without permission"
-    ],
-    recentActivity: [
-      { action: "New member joined", user: "Alex Chen", time: "1 hour ago" },
-      { action: "Posted in chat", user: "Maria Garcia", time: "2 hours ago" },
-      { action: "Shared resource", user: "David Kim", time: "3 hours ago" }
-    ]
-  };
-
-  const members: GroupMember[] = [
-    { id: "1", name: "Sarah Johnson", role: "Group Admin", avatar: "SJ", joinedDate: "2024-01-15", isAdmin: true, isModerator: false, online: true },
-    { id: "2", name: "Mike Chen", role: "Moderator", avatar: "MC", joinedDate: "2024-02-10", isAdmin: false, isModerator: true, online: true },
-    { id: "3", name: "Lisa Park", role: "Member", avatar: "LP", joinedDate: "2024-03-05", isAdmin: false, isModerator: false, online: false },
-    { id: "4", name: "David Kim", role: "Member", avatar: "DK", joinedDate: "2024-03-15", isAdmin: false, isModerator: false, online: true },
-    { id: "5", name: "Emma Rodriguez", role: "Member", avatar: "ER", joinedDate: "2024-04-01", isAdmin: false, isModerator: false, online: false },
-    { id: "6", name: "James Wilson", role: "Member", avatar: "JW", joinedDate: "2024-04-10", isAdmin: false, isModerator: false, online: true },
-    { id: "7", name: "You", role: "Member", avatar: "Y", joinedDate: "2024-11-20", isAdmin: false, isModerator: false, online: true }
-  ];
-
-  const demoChatMessages: ChatMessage[] = [
-    {
-      id: "1",
-      userId: "1",
-      userName: "Sarah Johnson",
-      userAvatar: "SJ",
-      message: "Welcome everyone! Great to see so many independent filmmakers joining our community. Let's support each other and share our experiences!",
-      timestamp: "3 hours ago",
-      type: "text",
-      isAdmin: true
-    },
-    {
-      id: "2",
-      userId: "2",
-      userName: "Mike Chen",
-      userAvatar: "MC",
-      message: "Has anyone worked with the new Sony FX6? I'm considering it for my next documentary project.",
-      timestamp: "2 hours ago",
-      type: "text",
-      isModerator: true
-    },
-    {
-      id: "3",
-      userId: "3",
-      userName: "Lisa Park",
-      userAvatar: "LP",
-      message: "I've used the FX6 for a few projects. The low-light performance is excellent and the autofocus is really reliable. What's your budget range?",
-      timestamp: "2 hours ago",
-      type: "text"
-    },
-    {
-      id: "4",
-      userId: "4",
-      userName: "David Kim",
-      userAvatar: "DK",
-      message: "I'm looking for collaborators for a short film I'm directing. Anyone interested in cinematography or sound design?",
-      timestamp: "1 hour ago",
-      type: "text"
-    },
-    {
-      id: "5",
-      userId: "5",
-      userName: "Emma Rodriguez",
-      userAvatar: "ER",
-      message: "I'd be interested in sound design! What's the timeline for your project?",
-      timestamp: "45 minutes ago",
-      type: "text"
-    },
-    {
-      id: "6",
-      userId: "7",
-      userName: "You",
-      userAvatar: "Y",
-      message: "This community is amazing! I'm learning so much from everyone's experiences. Thanks for sharing your knowledge!",
-      timestamp: "30 minutes ago",
-      type: "text"
-    }
-  ];
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
@@ -187,6 +94,89 @@ export default function JoinedGroupDetails() {
     if (!id) return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   };
+
+  useEffect(() => {
+    if (!groupId) {
+      setLoadingGroup(false);
+      return;
+    }
+    if (!isUuid(groupId)) {
+      setLoadingGroup(false);
+      return;
+    }
+
+    const fetchGroupAndMembers = async () => {
+      setLoadingGroup(true);
+      try {
+        const { data: gData, error: gErr } = await supabase
+          .from("community_groups")
+          .select("*")
+          .eq("id", groupId)
+          .single();
+
+        if (gErr) throw gErr;
+        if (gData) {
+          setGroup({
+            id: gData.id,
+            name: gData.name,
+            description: gData.description || "",
+            members: 1,
+            posts: 0,
+            category: gData.category || "Filmmaking",
+            tags: Array.isArray(gData.tags) ? gData.tags : [],
+            createdBy: gData.created_by,
+            createdDate: gData.created_at ? new Date(gData.created_at).toLocaleDateString() : "Recent",
+            status: "Active",
+            rules: [
+              "Be respectful to all members",
+              "Keep discussions relevant to independent filmmaking",
+              "Share resources and knowledge generously",
+              "No spam or self-promotion without permission"
+            ],
+            recentActivity: []
+          });
+        }
+
+        // Fetch real members
+        const { data: mRows, error: mErr } = await supabase
+          .from("community_group_members")
+          .select("id, role, joined_at, user_id")
+          .eq("group_id", groupId);
+
+        if (!mErr && mRows && mRows.length > 0) {
+          const uids = mRows.map((m: any) => m.user_id);
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, user_id, full_name, avatar_url")
+            .in("user_id", uids);
+
+          const profMap = new Map((profs || []).map((p: any) => [p.user_id, p]));
+          const formatted: GroupMember[] = mRows.map((m: any) => {
+            const p = profMap.get(m.user_id);
+            const name = m.user_id === user?.id ? "You" : (p?.full_name || "Community Member");
+            return {
+              id: m.id,
+              name,
+              role: m.role || "Member",
+              avatar: name.slice(0, 2).toUpperCase(),
+              joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().slice(0, 10) : "",
+              isAdmin: m.role === "Owner" || m.role === "Admin",
+              isModerator: m.role === "Moderator",
+              online: m.user_id === user?.id,
+            };
+          });
+          setMembers(formatted);
+          setGroup((prev: any) => prev ? { ...prev, members: formatted.length } : prev);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to load joined group details:", err);
+      } finally {
+        setLoadingGroup(false);
+      }
+    };
+
+    fetchGroupAndMembers();
+  }, [groupId, user?.id]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -219,7 +209,7 @@ export default function JoinedGroupDetails() {
       };
       fetchGroupMessages();
     } else {
-      setChatMessages(demoChatMessages);
+      setChatMessages([]);
     }
   }, [groupId, user?.id, profile?.full_name]);
 

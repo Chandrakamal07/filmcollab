@@ -258,7 +258,7 @@ export default function DiscoverPage() {
         settings?: any[];
       }
 
-      const mappedUsers: User[] = ((profilesData as DBProfile[]) || [])
+      const mappedUsers: User[] = ((profilesData as unknown as DBProfile[]) || [])
         .filter((p: DBProfile) => {
           if (profile?.id && p.id === profile.id) return false;
           if (user?.id && p.user_id === user.id) return false;

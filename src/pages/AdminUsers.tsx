@@ -287,7 +287,7 @@ export default function AdminUsers() {
           .eq("id", selectedUserId)
           .maybeSingle();
         if (error) throw error;
-        setSelectedProfile(data);
+        setSelectedProfile(data as any);
 
         // Fetch user projects
         const { data: projData, error: projError } = await supabase

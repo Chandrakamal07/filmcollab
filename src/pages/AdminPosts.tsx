@@ -43,62 +43,16 @@ export default function AdminPosts() {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-
-  // Initial fallback posts data
-  const initialPosts = [
-    {
-      id: "1",
-      content: "Just finished an amazing film project!",
-      type: "Text",
-      date: "2024-03-15",
-      status: "Published",
-      creator: {
-        id: "1",
-        name: "Michael Chen",
-        username: "michael",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=michael",
-        category: "Direction & Production"
-      },
-      tags: ["Trending", "Featured"]
-    },
-    {
-      id: "2",
-      content: "Behind the scenes photo",
-      type: "Image",
-      date: "2024-03-14",
-      status: "Pending",
-      creator: {
-        id: "2",
-        name: "Leo Martinez",
-        username: "leo",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=leo",
-        category: "Cinematography & Camera"
-      },
-      tags: ["Popular"]
-    },
-    {
-      id: "3",
-      content: "Check out this video",
-      type: "Video",
-      date: "2024-03-13",
-      status: "Flagged",
-      creator: {
-        id: "3",
-        name: "Amelia Thompson",
-        username: "amelia",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=amelia",
-        category: "Actors & Performers"
-      },
-      tags: ["Editor's Pick", "Sponsored"]
-    }
-  ];
-
-  const [posts, setPosts] = useState<any[]>(initialPosts);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Load real posts from Supabase
   useEffect(() => {
     const fetchPosts = async () => {
       try {
+        setIsLoading(true);
+        setFetchError(null);
         const { data, error } = await supabase
           .from("posts")
           .select(`
@@ -116,9 +70,13 @@ export default function AdminPosts() {
           `)
           .order("created_at", { ascending: false });
 
-        if (error) throw error;
-        if (data && data.length > 0) {
-          const mapped = data.map((p: any) => {
+        if (error) {
+          if (error.code !== "42P01") {
+            setFetchError(error.message);
+          }
+          setPosts([]);
+        } else {
+          const mapped = (data || []).map((p: any) => {
             const prof = p.profiles || {};
             const name = prof.full_name || prof.username || "Creator";
             const mediaType = (p.media_types && p.media_types[0]) || (p.media_urls && p.media_urls.length > 0 ? "Image" : "Text");
@@ -141,8 +99,11 @@ export default function AdminPosts() {
           });
           setPosts(mapped);
         }
-      } catch (err) {
-        console.warn("Could not load real posts, retaining fallback:", err);
+      } catch (err: any) {
+        setFetchError(err.message || "Failed to load posts");
+        setPosts([]);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchPosts();
@@ -232,11 +193,18 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Approve failed",
+        description: "Cannot approve invalid or non-persisted post ID."
+      });
+      return;
+    }
     try {
-      if (isUuid(postId)) {
-        const { error } = await supabase.from("posts").update({ is_published: true }).eq("id", postId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("posts").update({ is_published: true }).eq("id", strId);
+      if (error) throw error;
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Published" } : p));
       toast({
         title: "Post approved",
@@ -260,11 +228,18 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Flag failed",
+        description: "Cannot flag invalid or non-persisted post ID."
+      });
+      return;
+    }
     try {
-      if (isUuid(postId)) {
-        const { error } = await supabase.from("posts").update({ is_published: false }).eq("id", postId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("posts").update({ is_published: false }).eq("id", strId);
+      if (error) throw error;
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Flagged" } : p));
       toast({
         title: "Post flagged",
@@ -288,11 +263,18 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: "Cannot delete invalid or non-persisted post ID."
+      });
+      return;
+    }
     try {
-      if (isUuid(postId)) {
-        const { error } = await supabase.from("posts").delete().eq("id", postId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("posts").delete().eq("id", strId);
+      if (error) throw error;
       setPosts(prev => prev.filter(p => p.id !== postId));
       toast({
         title: "Post deleted",
@@ -313,12 +295,19 @@ export default function AdminPosts() {
 
   const handleSavePostTags = async (postId: string | number) => {
     if (!editingTags) return;
+    const strId = String(postId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Update failed",
+        description: "Cannot update tags for invalid or non-persisted post ID."
+      });
+      return;
+    }
     const newTags = editingTags.tags;
     try {
-      if (isUuid(postId)) {
-        const { error } = await supabase.from("posts").update({ hashtags: newTags }).eq("id", postId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("posts").update({ hashtags: newTags }).eq("id", strId);
+      if (error) throw error;
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, tags: newTags } : p));
       setEditingTags(null);
       toast({
@@ -426,7 +415,23 @@ export default function AdminPosts() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPosts.map((post) => {
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                          <span>Loading posts from database...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredPosts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        {fetchError ? `Error: ${fetchError}` : "No posts found matching the criteria."}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredPosts.map((post) => {
                     const StatusIcon = getStatusIcon(post.status);
                     return (
                       <TableRow key={post.id} className="border-border/60 hover:bg-surface-hover/50">
@@ -575,7 +580,7 @@ export default function AdminPosts() {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  }))}
                 </TableBody>
               </Table>
             </div>

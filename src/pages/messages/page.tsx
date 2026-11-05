@@ -801,8 +801,8 @@ export default function MessagesPage() {
             title: "Message Delivery Failed",
             description: error.message || "Message could not be saved to the server."
           });
-          setConversations((prev) =>
-            prev.map((c) =>
+          setConversations((prev) => {
+            const updated = prev.map((c) =>
               c.id === activeId
                 ? {
                     ...c,
@@ -811,8 +811,10 @@ export default function MessagesPage() {
                     )
                   }
                 : c
-            )
-          );
+            );
+            saveLocalData(updated);
+            return updated;
+          });
         } else {
           loadChatData(); // Reload from db to overwrite temp message with db version
         }
@@ -823,8 +825,8 @@ export default function MessagesPage() {
           title: "Message Delivery Failed",
           description: err?.message || "Failed to communicate with message server."
         });
-        setConversations((prev) =>
-          prev.map((c) =>
+        setConversations((prev) => {
+          const updated = prev.map((c) =>
             c.id === activeId
               ? {
                   ...c,
@@ -833,9 +835,88 @@ export default function MessagesPage() {
                   )
                 }
               : c
-          )
-        );
+          );
+          saveLocalData(updated);
+          return updated;
+        });
       }
+    }
+  };
+
+  const handleRetryMessage = async (msgToRetry: ChatMessage) => {
+    if (!activeId || !user) return;
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    if (isGuestSession) return;
+
+    // Optimistically reset failed state to pending
+    setConversations((prev) => {
+      const updated = prev.map((c) =>
+        c.id === activeId
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === msgToRetry.id ? { ...m, failed: false } : m
+              )
+            }
+          : c
+      );
+      saveLocalData(updated);
+      return updated;
+    });
+
+    try {
+      let payload = msgToRetry.content;
+      if (privateKey) {
+        try {
+          const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
+          if (rxData && rxData.public_key) {
+            const otherPubKey = await importPublicKey(JSON.parse(rxData.public_key));
+            const sharedKey = await deriveAESKey(privateKey, otherPubKey);
+            const encrypted = await encryptMessage(sharedKey, msgToRetry.content);
+            payload = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
+          }
+        } catch(e) {
+          console.warn("E2EE encryption failed during retry:", e);
+        }
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        sender_id: currentUserId,
+        receiver_id: activeId,
+        content: payload,
+        type: msgToRetry.type,
+        is_read: false
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Message sent",
+        description: "Your message has been delivered."
+      });
+      loadChatData();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Retry failed",
+        description: err?.message || "Could not deliver message."
+      });
+      setConversations((prev) => {
+        const updated = prev.map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgToRetry.id ? { ...m, failed: true } : m
+                )
+              }
+            : c
+        );
+        saveLocalData(updated);
+        return updated;
+      });
     }
   };
 
@@ -1311,8 +1392,18 @@ export default function MessagesPage() {
                                 <span>{formatTime(m.timestamp)}</span>
                                 {isMe && (
                                   m.failed ? (
-                                    <span className="text-destructive font-sans font-medium text-[10px] flex items-center gap-1">
-                                      Delivery failed
+                                    <span className="text-destructive font-sans font-medium text-[10px] flex items-center gap-1.5">
+                                      <span>Delivery failed</span>
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRetryMessage(m);
+                                        }}
+                                        className="underline hover:text-destructive/80 font-semibold cursor-pointer"
+                                      >
+                                        Retry
+                                      </button>
                                     </span>
                                   ) : m.id.startsWith('msg_temp_') ? (
                                     <Check className="w-3.5 h-3.5 text-primary-foreground/70" />

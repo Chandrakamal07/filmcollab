@@ -166,7 +166,7 @@ const Notifications = () => {
       const { error } = await supabase
         .from('notifications')
         .update({ status: 'read' })
-        .eq('id', notificationId);
+        .eq('id', String(notificationId));
 
       if (error) throw error;
 
@@ -217,7 +217,7 @@ const Notifications = () => {
       const { error } = await supabase
         .from('notifications')
         .delete()
-        .eq('id', notificationId);
+        .eq('id', String(notificationId));
 
       if (error) throw error;
 

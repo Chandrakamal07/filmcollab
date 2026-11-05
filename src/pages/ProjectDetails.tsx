@@ -1039,7 +1039,7 @@ export default function ProjectDetails() {
     try {
       const { error } = await supabase
         .from("projects")
-        .update({ [dbColumn]: newValue })
+        .update({ [dbColumn]: newValue } as any)
         .eq("id", projectId);
 
       if (error) throw error;

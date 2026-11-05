@@ -35,11 +35,12 @@ import {
 export default function LocationDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   
   const [location, setLocation] = useState<any>(null);
   const [creatorName, setCreatorName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isBlockedLocation, setIsBlockedLocation] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
 
@@ -112,14 +113,14 @@ export default function LocationDetails() {
     setIsSubmitting(true);
     try {
       await supabase.from('property_site_visits').insert({
-        location_id: id,
+        location_id: id || '',
         user_id: user.id,
-        owner_id: location.created_by,
+        owner_id: location.created_by || null,
         selected_day: selectedDays.join(', '),
         selected_time: `${visitStartTime} to ${visitEndTime}`,
         message: visitMessage,
         status: 'pending'
-      });
+      } as any);
       await supabase.from('notifications').insert({
         user_id: location.created_by,
         title: 'New Site Visit Request',
@@ -157,6 +158,17 @@ export default function LocationDetails() {
         .single();
         
       if (locError) throw locError;
+
+      const isBlocked = locData.status === 'blocked' || (locData.tags && locData.tags.includes('Blocked'));
+      const isOwner = locData.created_by === user?.id;
+      const adminAccess = isAdmin();
+
+      if (isBlocked && !isOwner && !adminAccess) {
+        setIsBlockedLocation(true);
+        setLocation(null);
+        return;
+      }
+
       setLocation(locData);
 
       if (locData && locData.created_by) {
@@ -241,6 +253,23 @@ export default function LocationDetails() {
       <AppLayout>
         <div className="flex h-[60vh] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (isBlockedLocation) {
+    return (
+      <AppLayout>
+        <div className="flex h-[60vh] flex-col items-center justify-center space-y-4 max-w-md mx-auto text-center px-4">
+          <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
+          <h2 className="font-display text-2xl font-bold text-foreground">Location Unavailable</h2>
+          <p className="text-sm text-muted-foreground">
+            This shooting location is currently unavailable or undergoing moderation review.
+          </p>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={() => navigate("/locations")}>
+            Back to Locations
+          </Button>
         </div>
       </AppLayout>
     );

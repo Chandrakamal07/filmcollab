@@ -42,76 +42,28 @@ export default function AdminCommunities() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [editingTags, setEditingTags] = useState<{ id: string | number; tags: string[] } | null>(null);
+  const [communities, setCommunities] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fallback communities data
-  const initialCommunities = [
-    {
-      id: "1",
-      name: "Filmmakers Hub",
-      description: "A community for professional filmmakers",
-      totalMembers: 1245,
-      activeMembers: 856,
-      creator: {
-        id: "1",
-        name: "John Smith",
-        username: "johnsmith",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=john"
-      },
-      status: "Active",
-      dateCreated: "2024-02-15",
-      lastActive: "2024-03-15",
-      tags: ["Featured", "Verified", "Popular"]
-    },
-    {
-      id: "2",
-      name: "Cinematography Masters",
-      description: "Advanced cinematography techniques and discussions",
-      totalMembers: 876,
-      activeMembers: 543,
-      creator: {
-        id: "2",
-        name: "Sarah Johnson",
-        username: "sarahj",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sarah"
-      },
-      status: "Active",
-      dateCreated: "2024-02-20",
-      lastActive: "2024-03-14",
-      tags: ["Trending", "Public"]
-    },
-    {
-      id: "3",
-      name: "Sound Design Network",
-      description: "For sound designers and audio engineers",
-      totalMembers: 654,
-      activeMembers: 321,
-      creator: {
-        id: "3",
-        name: "Mike Wilson",
-        username: "mikew",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=mike"
-      },
-      status: "Inactive",
-      dateCreated: "2024-02-25",
-      lastActive: "2024-03-10",
-      tags: ["Private"]
-    }
-  ];
-
-  const [communities, setCommunities] = useState<any[]>(initialCommunities);
-
-  // Fetch real community groups from Supabase if table exists
+  // Fetch real community groups from Supabase
   useEffect(() => {
     const fetchCommunities = async () => {
       try {
+        setIsLoading(true);
+        setFetchError(null);
         const { data, error } = await supabase
           .from("community_groups")
           .select("id, name, description, category, tags, privacy, created_at, created_by")
           .order("created_at", { ascending: false });
 
-        if (error) throw error;
-        if (data && data.length > 0) {
-          const mapped = data.map((g: any) => ({
+        if (error) {
+          if (error.code !== "42P01") {
+            setFetchError(error.message);
+          }
+          setCommunities([]);
+        } else {
+          const mapped = (data || []).map((g: any) => ({
             id: g.id,
             name: g.name,
             description: g.description || "Community group",
@@ -123,15 +75,18 @@ export default function AdminCommunities() {
               username: "admin",
               avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${g.name}`
             },
-            status: "Active",
+            status: g.tags?.includes("Blocked") ? "Blocked" : "Active",
             dateCreated: new Date(g.created_at).toISOString().split("T")[0],
             lastActive: new Date(g.created_at).toISOString().split("T")[0],
             tags: g.tags && g.tags.length > 0 ? g.tags : [g.privacy === "private" ? "Private" : "Public"]
           }));
           setCommunities(mapped);
         }
-      } catch (err) {
-        console.warn("Could not fetch database communities, using initial set:", err);
+      } catch (err: any) {
+        setFetchError(err.message || "Failed to load community groups");
+        setCommunities([]);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchCommunities();
@@ -147,12 +102,19 @@ export default function AdminCommunities() {
 
   const handleSaveCommunityTags = async (communityId: string | number) => {
     if (!editingTags) return;
+    const strId = String(communityId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Save failed",
+        description: "Cannot modify invalid or non-persisted community ID."
+      });
+      return;
+    }
     const newTags = editingTags.tags;
     try {
-      if (isUuid(communityId)) {
-        const { error } = await supabase.from("community_groups").update({ tags: newTags }).eq("id", communityId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("community_groups").update({ tags: newTags }).eq("id", strId);
+      if (error) throw error;
       setCommunities(prev => prev.map(c => c.id === communityId ? { ...c, tags: newTags } : c));
       setEditingTags(null);
       toast({
@@ -177,11 +139,18 @@ export default function AdminCommunities() {
       });
       return;
     }
+    const strId = String(communityId);
+    if (!isUuid(strId)) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: "Cannot delete invalid or non-persisted community ID."
+      });
+      return;
+    }
     try {
-      if (isUuid(communityId)) {
-        const { error } = await supabase.from("community_groups").delete().eq("id", communityId);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("community_groups").delete().eq("id", strId);
+      if (error) throw error;
       setCommunities(prev => prev.filter(c => c.id !== communityId));
       toast({
         title: "Community deleted",
@@ -301,7 +270,23 @@ export default function AdminCommunities() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCommunities.map((community) => (
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                          <span>Loading communities from database...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredCommunities.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        {fetchError ? `Error: ${fetchError}` : "No communities found matching the criteria."}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredCommunities.map((community) => (
                     <TableRow key={community.id} className="border-border/60 hover:bg-surface-hover/50">
                       <TableCell>
                         <div className="flex flex-col">
@@ -452,7 +437,7 @@ export default function AdminCommunities() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )))}
                 </TableBody>
               </Table>
             </div>

@@ -201,7 +201,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fullName = metadata.full_name || email.split('@')[0] || 'User';
         const firstName = metadata.first_name || '';
         const lastName = metadata.last_name || '';
-        const role = metadata.role || (email.toLowerCase().includes('admin') ? 'admin' : 'user');
+        // Always default to regular 'user'; administrative privileges are strictly governed by server-side user_roles
+        const role = 'user';
 
         const newProfile = {
           user_id: userId,
@@ -211,8 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: email,
           role: role,
           username: email.split('@')[0] || `user_${userId.slice(0, 5)}`,
-          follower_count: 0,
-          project_count: 0,
+          followers_count: 0,
+          projects_count: 0,
         };
 
         const { data: insertedProfile, error: insertError } = await withTimeout(
@@ -235,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             first_name: firstName,
             last_name: lastName,
             email: email,
-            role: role,
+            role: 'user',
             username: email.split('@')[0] || `user_${userId.slice(0, 5)}`,
             follower_count: 0,
             project_count: 0,
@@ -319,13 +320,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchProfile(userId);
   };
 
+  const isGuestSession = () => {
+    return Boolean(
+      !session ||
+      user?.id?.startsWith("guest-") ||
+      user?.id?.includes("mock") ||
+      Boolean(localStorage.getItem("guest_session"))
+    );
+  };
+
   const isAdmin = () => {
-    return userRole?.role === 'admin' || profile?.role === 'admin';
+    // Fail-closed: Guest sessions can NEVER receive administrative authority
+    if (isGuestSession()) return false;
+    // Must have a live verified Supabase session and user
+    if (!session || !user) return false;
+    // Authority must come strictly and exclusively from the database user_roles record
+    return userRole?.role === 'admin';
   };
 
   const hasPermission = (page: string, action?: string) => {
-    // Fail-closed: Must have admin status
+    // Fail-closed: Must have valid authenticated admin status
     if (!isAdmin()) return false;
+    if (isGuestSession()) return false;
     
     const normalizedPage = (page || '').toLowerCase();
     const normalizedAction = action 
@@ -361,9 +377,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (guestSessionSaved) {
       try {
         const { guestUser, guestProfile, guestRole } = JSON.parse(guestSessionSaved);
+        // Force guest role to 'user' in memory to prevent any privilege escalation via local storage tampering
+        const sanitizedRole: UserRole = {
+          ...guestRole,
+          role: 'user',
+        };
         setUser(guestUser);
         setProfile(guestProfile);
-        setUserRole(guestRole);
+        setUserRole(sanitizedRole);
         setLoading(false);
         return;
       } catch (e) {
@@ -453,11 +474,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       full_name: isAdminRole ? `${capitalizedPrefix} Admin` : `${capitalizedPrefix} User`,
       first_name: capitalizedPrefix,
       last_name: isAdminRole ? "Admin" : "User",
-      bio: isAdminRole ? "System Administrator." : "Creative professional.",
+      bio: isAdminRole ? "Preview Administrator." : "Creative professional.",
       industry: "Film & Entertainment",
       experience_level: "Expert",
       skills: isAdminRole ? ["Administration", "Moderation"] : ["Directing"],
-      role: isAdminRole ? "admin" : "user",
+      role: "user",
       category: isAdminRole ? "Admin" : "Director",
       location: "Los Angeles, CA",
       is_verified: true,
@@ -472,7 +493,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const guestRole = {
       id: isAdminRole ? "admin-local-mock-role" : "user-local-mock-role",
       user_id: guestUser.id,
-      role: isAdminRole ? "admin" : "user",
+      role: "user",
       created_at: new Date().toISOString()
     } as UserRole;
 

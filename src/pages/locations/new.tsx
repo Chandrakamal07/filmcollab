@@ -98,36 +98,37 @@ export default function NewLocation() {
         const { data, error } = await supabase.from('shooting_locations').select('*').eq('id', editId).single();
         if (error) throw error;
         if (data) {
+          const loc = data as any;
           setIsEditing(true);
           setFormData({
-            name: data.name || "",
-            type: data.type || "",
-            description: data.description || "",
-            country: data.country || "India",
-            state: data.state || "",
-            city: data.city || "",
-            landmark: data.landmark || "",
-            address: data.address || "",
-            mapUrl: data.map_url || "",
-            priceHour: data.price_hour?.toString() || "",
-            priceDay: data.price?.toString() || "", 
+            name: loc.name || "",
+            type: loc.type || loc.property_type || "",
+            description: loc.description || "",
+            country: loc.country || "India",
+            state: loc.state || "",
+            city: loc.city || "",
+            landmark: loc.landmark || "",
+            address: loc.address || "",
+            mapUrl: loc.map_url || "",
+            priceHour: loc.price_hour?.toString() || loc.hourly_rate?.toString() || "",
+            priceDay: loc.price?.toString() || loc.daily_rate?.toString() || "", 
             timings: "", 
-            instructions: data.instructions || "",
-            contactName: data.owner_name || "",
-            phone: data.phone || "",
-            email: data.email || "",
-            securityDeposit: data.security_deposit?.toString() || ""
+            instructions: loc.instructions || "",
+            contactName: loc.owner_name || "",
+            phone: loc.phone || loc.owner_phone || "",
+            email: loc.email || loc.owner_email || "",
+            securityDeposit: loc.security_deposit?.toString() || ""
           });
 
           // Parse timings JSON
-          if (data.media_urls && data.media_urls.length > 0) {
-            setExistingMedia(data.media_urls);
-          } else if (data.image_url) {
-            setExistingMedia([data.image_url]);
+          if (loc.media_urls && loc.media_urls.length > 0) {
+            setExistingMedia(loc.media_urls);
+          } else if (loc.image_url) {
+            setExistingMedia([loc.image_url]);
           }
-          if (data.timings) {
+          if (loc.timings) {
             try {
-              const parsedTimings = typeof data.timings === 'string' ? JSON.parse(data.timings) : data.timings;
+              const parsedTimings = typeof loc.timings === 'string' ? JSON.parse(loc.timings) : loc.timings;
               if (Array.isArray(parsedTimings) && parsedTimings.length > 0) {
                 setTimingList(parsedTimings);
               }
@@ -233,14 +234,14 @@ export default function NewLocation() {
         // Update existing
         const { error: updateError } = await supabase
           .from('shooting_locations')
-          .update(locationData)
+          .update(locationData as any)
           .eq('id', editId);
         error = updateError;
       } else {
         // Insert new
         const { error: insertError } = await supabase
           .from('shooting_locations')
-          .insert(locationData);
+          .insert(locationData as any);
         error = insertError;
       }
 

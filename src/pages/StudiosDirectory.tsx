@@ -153,6 +153,54 @@ export default function StudiosDirectory() {
     fetchCompanies();
   }, []);
 
+  // Sync real applications from Supabase for company owners
+  useEffect(() => {
+    const fetchDbApplications = async () => {
+      if (!user) return;
+      try {
+        const ownedCompanyIds = companies.filter(c => c.userId === user.id && isUuid(c.id)).map(c => c.id);
+        if (ownedCompanyIds.length === 0) return;
+
+        const { data, error } = await supabase
+          .from("company_applications")
+          .select("*")
+          .in("company_id", ownedCompanyIds);
+
+        if (!error && data && data.length > 0) {
+          const mappedDbApps: Application[] = data.map((a: any) => {
+            const comp = companies.find(c => c.id === a.company_id);
+            return {
+              id: a.id,
+              opportunityId: a.company_id,
+              opportunityTitle: a.role,
+              type: (a.role?.toLowerCase().includes("audition") ? "audition" : a.role?.toLowerCase().includes("intern") ? "internship" : "job") as "job" | "audition" | "internship",
+              companyId: a.company_id,
+              companyName: comp?.name || "Studio",
+              applicantName: a.name,
+              applicantEmail: a.email,
+              applicantPhone: a.notes?.match(/Phone:\s*([^|]+)/)?.[1]?.trim() || "",
+              experienceYears: a.notes?.match(/Experience:\s*([^|]+)/)?.[1]?.trim() || "1+ years",
+              coverLetter: a.notes?.match(/Cover Letter:\s*(.*)$/)?.[1]?.trim() || a.notes || "",
+              resumeUrl: a.portfolio,
+              demoReelUrl: a.portfolio,
+              status: (a.status as any) || "Pending",
+              date: new Date(a.created_at).toISOString().split("T")[0]
+            };
+          });
+
+          setApplications(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const newOnes = mappedDbApps.filter(m => !existingIds.has(m.id));
+            return [...newOnes, ...prev];
+          });
+        }
+      } catch (err) {
+        console.warn("Could not fetch database applications:", err);
+      }
+    };
+    fetchDbApplications();
+  }, [user?.id, companies.length]);
+
   // Persist states
   useEffect(() => {
     localStorage.setItem("studios_directory_companies", JSON.stringify(companies));
@@ -325,8 +373,44 @@ export default function StudiosDirectory() {
     }
   }, [viewingCompany]);
 
-  // Helper to update viewing company and general list
-  const updateViewingCompany = (updated: Company) => {
+  const isUuid = (id: string | number | undefined | null): boolean => {
+    return typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  };
+
+  // Helper to update viewing company and general list, with DB persistence for persisted studios
+  const updateViewingCompany = async (updated: Company) => {
+    if (isUuid(updated.id)) {
+      try {
+        await supabase.from("companies").update({
+          name: updated.name,
+          category: updated.category,
+          description: updated.description,
+          founder: updated.founder,
+          established_year: updated.establishedYear,
+          email: updated.email,
+          phone: updated.phone,
+          address: updated.address,
+          website: updated.website,
+          maps_location: updated.mapsLocation,
+          working_hours: updated.workingHours,
+          city: updated.city,
+          state: updated.state,
+          country: updated.country,
+          gst_number: updated.gstNumber,
+          services: updated.services,
+          logo: updated.logo,
+          banner: updated.coverImage,
+          jobs: updated.jobs as any,
+          auditions: updated.auditions as any,
+          internships: updated.internships as any,
+          projects: updated.projects as any,
+          team: updated.team as any,
+          gallery: updated.gallery
+        }).eq("id", updated.id);
+      } catch (e) {
+        console.warn("Could not sync company update to DB:", e);
+      }
+    }
     setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
     setViewingCompany(updated);
   };
@@ -538,7 +622,7 @@ export default function StudiosDirectory() {
     setIsApplicationOpen(true);
   };
 
-  const handleApplySubmit = (e: React.FormEvent) => {
+  const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appForm.name || !appForm.email || !appForm.phone || !appForm.experience || !appForm.coverLetter) {
       toast({
@@ -551,31 +635,64 @@ export default function StudiosDirectory() {
 
     if (!applicationTarget) return;
 
-    const newApp: Application = {
-      id: "app_" + Date.now(),
-      opportunityId: applicationTarget.id,
-      opportunityTitle: applicationTarget.title,
-      type: applicationTarget.type,
-      companyId: applicationTarget.companyId,
-      companyName: applicationTarget.companyName,
-      applicantName: appForm.name,
-      applicantEmail: appForm.email,
-      applicantPhone: appForm.phone,
-      experienceYears: appForm.experience,
-      coverLetter: appForm.coverLetter,
-      resumeUrl: appForm.resumeUrl,
-      demoReelUrl: appForm.demoReelUrl,
-      status: "Pending",
-      date: new Date().toISOString().split("T")[0]
-    };
+    try {
+      let savedAppId = "app_" + Date.now();
+      if (isUuid(applicationTarget.companyId)) {
+        const { data, error } = await supabase.from("company_applications").insert({
+          company_id: applicationTarget.companyId,
+          user_id: user?.id || null,
+          role: applicationTarget.title,
+          name: appForm.name,
+          email: appForm.email,
+          portfolio: appForm.demoReelUrl || appForm.resumeUrl,
+          notes: `Phone: ${appForm.phone} | Experience: ${appForm.experience} | Cover Letter: ${appForm.coverLetter}`,
+          status: "Pending"
+        }).select().single();
 
-    setApplications(prev => [newApp, ...prev]);
-    setIsApplicationOpen(false);
+        if (error) {
+          console.error("Failed persisting company application:", error);
+          toast({
+            variant: "destructive",
+            title: "Submission Failed",
+            description: error.message || "Failed to deliver application to studio server. Your draft has been preserved."
+          });
+          return;
+        }
+        if (data?.id) savedAppId = data.id;
+      }
 
-    toast({
-      title: "Application Submitted Successfully!",
-      description: `Your application for "${applicationTarget.title}" was delivered to ${applicationTarget.companyName}.`,
-    });
+      const newApp: Application = {
+        id: savedAppId,
+        opportunityId: applicationTarget.id,
+        opportunityTitle: applicationTarget.title,
+        type: applicationTarget.type,
+        companyId: applicationTarget.companyId,
+        companyName: applicationTarget.companyName,
+        applicantName: appForm.name,
+        applicantEmail: appForm.email,
+        applicantPhone: appForm.phone,
+        experienceYears: appForm.experience,
+        coverLetter: appForm.coverLetter,
+        resumeUrl: appForm.resumeUrl,
+        demoReelUrl: appForm.demoReelUrl,
+        status: "Pending",
+        date: new Date().toISOString().split("T")[0]
+      };
+
+      setApplications(prev => [newApp, ...prev]);
+      setIsApplicationOpen(false);
+
+      toast({
+        title: "Application Submitted Successfully!",
+        description: `Your application for "${applicationTarget.title}" was delivered to ${applicationTarget.companyName}.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: err?.message || "Failed to deliver application to studio server. Your draft has been preserved."
+      });
+    }
   };
 
   // Action: Register Company
@@ -1212,7 +1329,20 @@ export default function StudiosDirectory() {
   };
 
   // Action: Workspace Application Status update
-  const handleUpdateAppStatus = (appId: string, nextStatus: "Reviewed" | "Shortlisted" | "Rejected") => {
+  const handleUpdateAppStatus = async (appId: string, nextStatus: "Reviewed" | "Shortlisted" | "Rejected") => {
+    if (isUuid(appId)) {
+      try {
+        const { error } = await supabase.from("company_applications").update({ status: nextStatus }).eq("id", appId);
+        if (error) throw error;
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "Status Update Failed",
+          description: err?.message || "Could not persist application status."
+        });
+        return;
+      }
+    }
     setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: nextStatus } : a));
     toast({
       title: "Status Updated",

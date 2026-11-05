@@ -274,15 +274,7 @@ export default function IndustryHubPage() {
       if (newsError) {
         console.warn("Could not fetch industry_news (table might not exist yet)", newsError);
       } else if (newsData) {
-        const mappedNews: News[] = newsData.map((item: {
-          id: string;
-          title: string;
-          description: string;
-          category: string;
-          created_at: string;
-          created_by: string;
-          user_id: string | null;
-        }) => ({
+        const mappedNews: News[] = (newsData as any[]).map((item: any) => ({
           id: item.id,
           title: item.title,
           description: item.description,
@@ -303,21 +295,7 @@ export default function IndustryHubPage() {
       if (eventsError) {
         console.warn("Could not fetch industry_events (table might not exist yet)", eventsError);
       } else if (eventsData) {
-        const mappedEvents: Event[] = eventsData.map((item: {
-          id: string;
-          title: string;
-          description: string;
-          date: string;
-          location: string;
-          is_online: boolean;
-          attendees: number;
-          price: string;
-          created_by: string;
-          user_id: string | null;
-          google_maps_link?: string | null;
-          meeting_link?: string | null;
-          registration_link?: string | null;
-        }) => ({
+        const mappedEvents: Event[] = (eventsData as any[]).map((item: any) => ({
           id: item.id,
           title: item.title,
           description: item.description,
@@ -344,19 +322,7 @@ export default function IndustryHubPage() {
       if (coursesError) {
         console.warn("Could not fetch industry_courses (table might not exist yet)", coursesError);
       } else if (coursesData) {
-        const mappedCourses: Course[] = coursesData.map((item: {
-          id: string;
-          title: string;
-          description: string;
-          duration: string;
-          instructor: string;
-          created_by: string;
-          price: string;
-          enrolled: number;
-          level: string;
-          category: string;
-          user_id: string | null;
-        }) => ({
+        const mappedCourses: Course[] = (coursesData as any[]).map((item: any) => ({
           id: item.id,
           title: item.title,
           description: item.description,
@@ -518,7 +484,7 @@ export default function IndustryHubPage() {
       else if (type === "events") table = "industry_events";
       else if (type === "courses") table = "industry_courses";
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from(table)
         .delete()
         .eq("id", id);
@@ -571,7 +537,7 @@ export default function IndustryHubPage() {
           const { error } = await supabase
             .from("industry_news")
             .update(payload)
-            .eq("id", editingItem.id);
+            .eq("id", String(editingItem.id));
 
           if (error) throw error;
           toast({ title: "News updated successfully" });
@@ -618,8 +584,8 @@ export default function IndustryHubPage() {
         if (editingItem && editingItem.type === "events") {
           let { error } = await supabase
             .from("industry_events")
-            .update(payload)
-            .eq("id", editingItem.id);
+            .update(payload as any)
+            .eq("id", String(editingItem.id));
 
           if (error && error.code === "42703") {
             // Fallback if columns don't exist yet
@@ -631,8 +597,8 @@ export default function IndustryHubPage() {
             
             const result = await supabase
               .from("industry_events")
-              .update(fallbackPayload)
-              .eq("id", editingItem.id);
+              .update(fallbackPayload as any)
+              .eq("id", String(editingItem.id));
             error = result.error;
             
             toast({
@@ -648,7 +614,7 @@ export default function IndustryHubPage() {
         } else {
           let { error } = await supabase
             .from("industry_events")
-            .insert([payload]);
+            .insert([payload as any]);
 
           if (error && error.code === "42703") {
             // Fallback if columns don't exist yet
@@ -660,7 +626,7 @@ export default function IndustryHubPage() {
             
             const result = await supabase
               .from("industry_events")
-              .insert([fallbackPayload]);
+              .insert([fallbackPayload as any]);
             error = result.error;
             
             toast({
@@ -697,7 +663,7 @@ export default function IndustryHubPage() {
           const { error } = await supabase
             .from("industry_courses")
             .update(payload)
-            .eq("id", editingItem.id);
+            .eq("id", String(editingItem.id));
 
           if (error) throw error;
           toast({ title: "Course updated successfully" });

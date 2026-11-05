@@ -1352,7 +1352,7 @@ export default function ProfilePage() {
       let resolvedId = "";
       if (data) {
         const { data: sData } = await supabase.from('settings').select('*').eq('profile_id', data.id).maybeSingle();
-        data.settingsData = sData;
+        (data as any).settingsData = sData;
 
         const mapped = rowToProfile(data, user.email);
         setProfile(mapped);
@@ -1585,7 +1585,7 @@ export default function ProfilePage() {
       try {
         const { error } = await supabase
           .from('profiles')
-          .update({ [dbField]: value })
+          .update({ [dbField]: value } as any)
           .eq('id', profile.id);
         
         if (error) throw error;
