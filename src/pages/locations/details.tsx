@@ -82,53 +82,65 @@ export default function LocationDetails() {
     if (!enquiryMessage.trim()) return toast.error("Message is required");
     setIsSubmitting(true);
     try {
-      // Resolve receiver profile ID (messages FK points to profiles.id)
+      // Resolve receiver profile ID and public key via public_profiles (M11, M14, M15)
       let receiverProfileId = location.created_by;
+      let receiverPublicKey: string | null = null;
       const { data: recProfile } = await supabase
-        .from('profiles')
-        .select('id')
+        .from('public_profiles')
+        .select('id, public_key')
         .or(`id.eq.${location.created_by},user_id.eq.${location.created_by}`)
         .limit(1)
         .maybeSingle();
       if (recProfile?.id) {
         receiverProfileId = recProfile.id;
+        receiverPublicKey = recProfile.public_key ?? null;
+      } else {
+        const { data: rxProfile } = await supabase
+          .from('public_profiles')
+          .select('id, public_key')
+          .eq('id', receiverProfileId)
+          .maybeSingle();
+        if (rxProfile?.id) {
+          receiverProfileId = rxProfile.id;
+          receiverPublicKey = rxProfile.public_key ?? null;
+        }
       }
 
       let senderProfileId = profile?.id;
+      let senderPublishedKey = profile?.public_key;
       if (!senderProfileId && user?.id) {
-        const { data: sProf } = await supabase.from('profiles').select('id').or(`id.eq.${user.id},user_id.eq.${user.id}`).limit(1).maybeSingle();
-        if (sProf?.id) senderProfileId = sProf.id;
+        const { data: sProf } = await supabase.from('profiles').select('id, public_key').or(`id.eq.${user.id},user_id.eq.${user.id}`).limit(1).maybeSingle();
+        if (sProf?.id) {
+          senderProfileId = sProf.id;
+          senderPublishedKey = sProf.public_key;
+        }
       }
       senderProfileId = senderProfileId || user.id;
 
-      let messageContent = enquiryMessage.trim();
-
-      // Retrieve recipient public key for E2EE if available (M14)
-      const { data: rxProfile } = await supabase
-        .from('profiles')
-        .select('public_key')
-        .eq('id', receiverProfileId)
-        .maybeSingle();
-
-      if (rxProfile?.public_key) {
-        try {
-          const { privKey } = await getOrInitUserE2EE(senderProfileId);
-          const { envelope } = await encryptForRecipientOrThrow({
-            senderPrivateKey: privKey,
-            recipientPublicKeyJwkOrStr: rxProfile.public_key,
-            plaintext: messageContent
-          });
-          messageContent = envelope;
-        } catch (encErr) {
-          console.warn("E2EE encryption warning for enquiry:", encErr);
+      // Mandatory E2EE key initialization and sender public key publication (M14, M15)
+      const { privKey, pubKeyStr } = await getOrInitUserE2EE(senderProfileId);
+      if (!senderPublishedKey || senderPublishedKey !== pubKeyStr) {
+        const { error: pubKeyErr } = await supabase
+          .from('profiles')
+          .update({ public_key: pubKeyStr })
+          .eq('id', senderProfileId);
+        if (pubKeyErr) {
+          throw new Error(`Failed to publish sender encryption key: ${pubKeyErr.message}`);
         }
       }
+
+      // Mandatory fail-closed encryption: never fall back to plaintext on missing or malformed key (M14, M15)
+      const { envelope: messageContent } = await encryptForRecipientOrThrow({
+        senderPrivateKey: privKey,
+        recipientPublicKeyJwkOrStr: receiverPublicKey,
+        plaintext: enquiryMessage.trim()
+      });
 
       const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-      // 1. Insert message
+      // 1. Insert encrypted message
       const { error: msgErr } = await supabase.from('messages').insert({
         sender_id: senderProfileId,
         receiver_id: receiverProfileId,
@@ -140,13 +152,16 @@ export default function LocationDetails() {
 
       // 2. Insert notification (secondary, authorized server RPC)
       try {
-        await supabase.rpc('send_authorized_notification', {
+        const { error: notifRpcErr } = await supabase.rpc('send_authorized_notification', {
           p_recipient_id: receiverProfileId,
           p_title: 'New Property Enquiry',
           p_message: `Someone sent an enquiry for ${location.name}`,
           p_type: 'message',
           p_link: `/locations/${location.id}`
         });
+        if (notifRpcErr) {
+          console.warn("Secondary notification could not be delivered:", notifRpcErr);
+        }
       } catch (notifErr) {
         console.warn("Secondary notification could not be delivered:", notifErr);
       }
@@ -170,7 +185,7 @@ export default function LocationDetails() {
     try {
       let ownerProfileId = location.created_by;
       const { data: oProfile } = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('id')
         .or(`id.eq.${location.created_by},user_id.eq.${location.created_by}`)
         .limit(1)
@@ -191,13 +206,21 @@ export default function LocationDetails() {
 
       if (visitErr) throw visitErr;
 
-      // Notify owner
-      await supabase.from('notifications').insert({
-        user_id: ownerProfileId,
-        title: 'New Site Visit Request',
-        description: `Someone requested a site visit for ${location.name}`,
-        type: 'booking'
-      });
+      // Notify owner via authorized server RPC
+      try {
+        const { error: notifRpcErr } = await supabase.rpc('send_authorized_notification', {
+          p_recipient_id: ownerProfileId,
+          p_title: 'New Site Visit Request',
+          p_message: `Someone requested a site visit for ${location.name}`,
+          p_type: 'booking',
+          p_link: `/locations/${location.id}`
+        });
+        if (notifRpcErr) {
+          console.warn("Secondary site visit notification could not be delivered:", notifRpcErr);
+        }
+      } catch (notifErr) {
+        console.warn("Secondary site visit notification could not be delivered:", notifErr);
+      }
 
       toast.success("Site visit requested successfully!");
       setIsBookVisitOpen(false);
@@ -244,7 +267,7 @@ export default function LocationDetails() {
       setLocation(locData);
 
       if (locData && locData.created_by) {
-        const { data: profile } = await supabase.from('profiles').select('full_name, first_name, last_name').or(`id.eq.${locData.created_by},user_id.eq.${locData.created_by}`).limit(1).maybeSingle();
+        const { data: profile } = await supabase.from('public_profiles').select('full_name, first_name, last_name').or(`id.eq.${locData.created_by},user_id.eq.${locData.created_by}`).limit(1).maybeSingle();
         if (profile) {
           setCreatorName(profile.full_name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || locData.owner_name);
         } else {

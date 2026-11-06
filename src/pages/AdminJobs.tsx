@@ -145,7 +145,15 @@ export default function AdminJobs() {
   const handleDeleteJob = async (jobId: string) => {
     if (!confirm("Are you sure you want to delete this job?")) return;
     try {
-      await supabase.from("jobs").delete().eq("id", jobId);
+      const { data, error } = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", jobId)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was deleted. Permission denied or record not found.");
+      }
       setJobs(prev => prev.filter(j => j.id !== jobId));
       toast({ title: "Job deleted" });
     } catch (e: any) {
@@ -155,23 +163,27 @@ export default function AdminJobs() {
 
   const handleUpdateStatus = async (jobId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("jobs")
         .update({ status: newStatus })
-        .eq("id", jobId);
+        .eq("id", jobId)
+        .select("id");
       
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was updated. Permission denied or record not found.");
+      }
       
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: newStatus } : j));
       toast({
         title: "Status Updated",
         description: `Job status changed to ${newStatus}.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating status:", error);
       toast({
         title: "Update Failed",
-        description: "Could not change the job status.",
+        description: error?.message || "Could not change the job status.",
         variant: "destructive"
       });
     }
@@ -211,14 +223,13 @@ export default function AdminJobs() {
         return;
       }
 
-      const { error } = await supabase.from('notifications').insert({
-        user_id: targetUserId,
-        title: notificationTitle.trim(),
-        description: fullDescription,
-        type: "job",
-        priority: "high",
-        status: "unread",
-        action_url: `/jobs/${notifyJob.id}`
+      const { error } = await supabase.rpc('send_authorized_notification', {
+        p_recipient_id: targetUserId,
+        p_title: notificationTitle.trim(),
+        p_description: fullDescription,
+        p_type: "job",
+        p_priority: "high",
+        p_action_url: `/jobs/${notifyJob.id}`
       });
       if (error) throw error;
       toast({

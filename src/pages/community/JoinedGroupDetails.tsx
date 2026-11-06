@@ -144,9 +144,22 @@ export default function JoinedGroupDetails() {
           .eq("group_id", groupId);
 
         if (!mErr && mRows && mRows.length > 0) {
+          const myMemberRow = mRows.find((m: any) => m.user_id === user?.id);
+          if (myMemberRow?.role === "Pending") {
+            toast({
+              variant: "destructive",
+              title: "Membership Pending Approval",
+              description: "You cannot view or send messages in this group until an administrator approves your request.",
+            });
+            setGroup(null);
+            setLoadingGroup(false);
+            navigate("/community");
+            return;
+          }
+
           const uids = mRows.map((m: any) => m.user_id);
           const { data: profs } = await supabase
-            .from("profiles")
+            .from("public_profiles")
             .select("id, user_id, full_name, avatar_url")
             .in("user_id", uids);
 

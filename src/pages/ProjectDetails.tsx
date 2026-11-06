@@ -798,16 +798,13 @@ export default function ProjectDetails() {
       if (error) throw error;
 
       if (project && project.created_by && project.created_by !== currentUser.id) {
-        let creatorProfileId = project.created_by;
-        const { data: cProf } = await supabase.from('profiles').select('id').or(`id.eq.${project.created_by},user_id.eq.${project.created_by}`).limit(1).maybeSingle();
-        if (cProf?.id) creatorProfileId = cProf.id;
-
-        supabase.from("notifications").insert({
-          user_id: creatorProfileId,
-          title: "New Project Application",
-          description: `Someone applied to join your project: ${project.title}`,
-          type: "project",
-          action_url: `/projects?projectId=${project.id}`
+        supabase.rpc("send_authorized_notification", {
+          p_recipient_id: project.created_by,
+          p_title: "New Project Application",
+          p_description: `Someone applied to join your project: ${project.title}`,
+          p_type: "project",
+          p_priority: "medium",
+          p_action_url: `/projects?projectId=${project.id}`
         }).then(({ error: notifError }) => {
           if (notifError) console.error("Notification error:", notifError);
         });
@@ -923,24 +920,28 @@ export default function ProjectDetails() {
   const handleDeleteProject = async () => {
     if (!projectId) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("projects")
         .delete()
-        .eq("id", projectId);
+        .eq("id", projectId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No project was deleted. Permission denied.");
+      }
 
       toast({
         title: "Project Deleted",
         description: "The project has been successfully deleted.",
       });
       navigate("/projects");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting project:", err);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete project.",
+        description: err?.message || "Failed to delete project.",
       });
     }
   };
@@ -948,7 +949,8 @@ export default function ProjectDetails() {
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase
+      const normalizedVisibility = (editForm.project_status || "Public").toLowerCase() === "public" ? "public" : "private";
+      const { data, error } = await supabase
         .from("projects")
         .update({
           title: editForm.title,
@@ -957,6 +959,7 @@ export default function ProjectDetails() {
           category: editForm.category,
           status: editForm.status,
           project_status: editForm.project_status,
+          visibility: normalizedVisibility,
           team_size: projectMembers.length,
           budget_min: editForm.budget_min ? Number(editForm.budget_min) : null,
           budget_max: editForm.budget_max ? Number(editForm.budget_max) : null,
@@ -964,9 +967,13 @@ export default function ProjectDetails() {
           duration_minutes: editForm.duration_minutes ? Number(editForm.duration_minutes) : null,
           episodes: editForm.episodes ? Number(editForm.episodes) : null,
         })
-        .eq("id", projectId);
+        .eq("id", projectId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No project was updated. Permission denied.");
+      }
 
       setProject(prev => prev ? {
         ...prev,
@@ -1267,8 +1274,18 @@ export default function ProjectDetails() {
         }
       }
       
-      if (notificationsToInsert.length > 0) {
-        await supabase.from("notifications").insert(notificationsToInsert);
+      for (const notif of notificationsToInsert) {
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: notif.user_id,
+          p_title: notif.title,
+          p_description: notif.description,
+          p_type: notif.type,
+          p_priority: "medium",
+          p_action_url: notif.action_url
+        });
+        if (notifErr) {
+          console.warn("Could not send mention notification:", notifErr);
+        }
       }
     } catch (err) {
       console.error("Error sending message:", err);
@@ -1346,18 +1363,17 @@ export default function ProjectDetails() {
         }]);
 
         // Send notification to the user
-        let targetProfileId = memberData.user_id;
-        const { data: tProf } = await supabase.from('profiles').select('id').or(`id.eq.${memberData.user_id},user_id.eq.${memberData.user_id}`).limit(1).maybeSingle();
-        if (tProf?.id) targetProfileId = tProf.id;
-
-        await supabase.from("notifications").insert({
-          user_id: targetProfileId,
-          title: "Application Accepted",
-          description: `Your application to join ${project?.title || 'the project'} has been accepted!`,
-          type: "application_update",
-          status: "unread",
-          action_url: `/projects/${projectId}`
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: memberData.user_id,
+          p_title: "Application Accepted",
+          p_description: `Your application to join ${project?.title || 'the project'} has been accepted!`,
+          p_type: "application_update",
+          p_priority: "medium",
+          p_action_url: `/projects/${projectId}`
         });
+        if (notifErr) {
+          console.warn("Could not send application accepted notification:", notifErr);
+        }
       }
       
       toast({
@@ -1393,18 +1409,18 @@ export default function ProjectDetails() {
       setApplicants(prev => prev.filter(applicant => applicant.id !== applicantId));
       
       if (memberData?.user_id) {
-        let targetProfileId = memberData.user_id;
-        const { data: tProf } = await supabase.from('profiles').select('id').or(`id.eq.${memberData.user_id},user_id.eq.${memberData.user_id}`).limit(1).maybeSingle();
-        if (tProf?.id) targetProfileId = tProf.id;
-
         // Send notification to the user
-        await supabase.from("notifications").insert({
-          user_id: targetProfileId,
-          title: "Application Status Update",
-          description: `Your application to join ${project?.title || 'the project'} was not accepted at this time.`,
-          type: "application_update",
-          status: "unread"
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: memberData.user_id,
+          p_title: "Application Status Update",
+          p_description: `Your application to join ${project?.title || 'the project'} was not accepted at this time.`,
+          p_type: "application_update",
+          p_priority: "medium",
+          p_action_url: `/projects/${projectId}`
         });
+        if (notifErr) {
+          console.warn("Could not send application rejection notification:", notifErr);
+        }
       }
       
       toast({
@@ -1554,7 +1570,7 @@ export default function ProjectDetails() {
                 const userIds = (membersData as Array<{ user_id: string }>).map((m) => m.user_id).filter(Boolean);
                 if (userIds.length > 0) {
                   const { data: profilesData } = await supabase
-                    .from("profiles")
+                    .from("public_profiles")
                     .select("id, full_name, username, category")
                     .in("id", userIds);
 

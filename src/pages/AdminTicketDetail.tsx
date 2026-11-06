@@ -120,32 +120,40 @@ export default function AdminTicketDetail() {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ status: newStatus })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
+      }
       setTicket({ ...ticket, status: newStatus });
       toast({ title: "Status updated" });
-    } catch (error) {
-      toast({ title: "Failed to update status", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: error?.message || "Failed to update status", variant: "destructive" });
     }
   };
 
   const handleAssigneeChange = async (newAssigneeId: string) => {
     try {
       const val = newAssigneeId === "unassigned" ? null : newAssigneeId;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ assigned_to: val })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
+      }
       setTicket({ ...ticket, assigned_to: val });
       toast({ title: "Assignee updated" });
-    } catch (error) {
-      toast({ title: "Failed to reassign ticket", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: error?.message || "Failed to reassign ticket", variant: "destructive" });
     }
   };
 
@@ -205,14 +213,18 @@ export default function AdminTicketDetail() {
   const toggleChatEnabled = async () => {
     const newValue = !ticket.chat_enabled;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ chat_enabled: newValue })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) {
         console.error("Error toggling chat:", error);
         throw error;
+      }
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
       }
       setTicket({ ...ticket, chat_enabled: newValue });
       toast({ title: `Chat ${newValue ? "enabled" : "disabled"}` });

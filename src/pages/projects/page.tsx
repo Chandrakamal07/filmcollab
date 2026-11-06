@@ -388,7 +388,7 @@ export default function ProjectsPage() {
 
       // Fetch profiles to map created_by to usernames
       const { data: profilesData } = await supabase
-        .from("profiles")
+        .from("public_profiles")
         .select("id, username, full_name");
 
       // Fetch user's joined projects
@@ -553,6 +553,7 @@ export default function ProjectsPage() {
         ? data.skills_required.split(',').map(skill => skill.trim()).filter(skill => skill.length > 0)
         : [];
 
+      const normalizedVisibility = (data.project_status || "Public").toLowerCase() === "public" ? "public" : "private";
       // Insert new project into Supabase table
       const { data: insertedData, error } = await supabase
         .from("projects")
@@ -563,6 +564,7 @@ export default function ProjectsPage() {
           category: data.category,
           status: data.status,
           project_status: data.project_status || "Public",
+          visibility: normalizedVisibility,
           location: data.location,
           budget_min: data.budget_min && data.budget_min > 0 ? data.budget_min : null,
           budget_max: data.budget_max && data.budget_max > 0 ? data.budget_max : null,
@@ -700,12 +702,13 @@ export default function ProjectsPage() {
       
       const project = projects.find(p => p.id === projectId);
       if (project && project.created_by && project.created_by !== user.id) {
-        supabase.from("notifications").insert({
-          user_id: project.created_by,
-          title: "New Project Application",
-          description: `Someone applied to join your project: ${project.title}`,
-          type: "project",
-          action_url: `/projects?projectId=${project.id}`
+        supabase.rpc("send_authorized_notification", {
+          p_recipient_id: project.created_by,
+          p_title: "New Project Application",
+          p_description: `Someone applied to join your project: ${project.title}`,
+          p_type: "project",
+          p_priority: "medium",
+          p_action_url: `/projects?projectId=${project.id}`
         }).then(({ error: notifError }) => {
           if (notifError) console.error("Notification error:", notifError);
         });

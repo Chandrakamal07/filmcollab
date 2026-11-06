@@ -33,6 +33,7 @@ interface Profile {
   portfolio_url?: string | null;
   linkedin_url?: string | null;
   github_url?: string | null;
+  public_key?: string | null;
   is_verified?: boolean | null;
   followers_count?: number | null;
   projects_count?: number | null;
@@ -47,7 +48,7 @@ interface Profile {
 interface UserRole {
   id: string;
   user_id: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'moderator' | 'support';
   created_at: string;
 }
 
@@ -154,15 +155,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Fetch admin permissions if applicable
+      // Fetch admin/staff permissions if applicable (M06)
       let adminPermsData = null;
-      if (finalProfileData && (finalProfileData.role === 'admin' || (roleData && roleData.some(r => r.role === 'admin')))) {
+      const hasStaffRole = Boolean(
+        roleData && roleData.some(r => r.role === 'admin' || r.role === 'moderator' || r.role === 'support')
+      );
+      if (finalProfileData && (finalProfileData.role === 'admin' || hasStaffRole)) {
         const permsResult = await withTimeout(
           Promise.resolve(
             supabase
               .from('admin_team_members')
               .select('*')
-              .eq('profile_id', profileData.id)
+              .or(`profile_id.eq.${finalProfileData.id},user_id.eq.${userId}`)
+              .limit(1)
               .maybeSingle()
           ),
           10000,
@@ -284,7 +289,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (roleData && roleData.length > 0) {
         console.log('User roles fetched from database:', roleData);
-        const activeRole = roleData.find(r => r.role === 'admin') || roleData[0];
+        const activeRole =
+          roleData.find(r => r.role === 'admin') ||
+          roleData.find(r => r.role === 'moderator') ||
+          roleData.find(r => r.role === 'support') ||
+          roleData[0];
         setUserRole(activeRole as UserRole);
       } else {
         // No role found in DB — assign default regular 'user' role
@@ -334,12 +343,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isGuestSession()) return false;
     // Must have a live verified Supabase session and user
     if (!session || !user) return false;
-    // Authority must come strictly and exclusively from the database user_roles record
-    return userRole?.role === 'admin';
+    // Authority must come strictly and exclusively from the database user_roles record (and active team status when scoped)
+    if (userRole?.role === 'admin') return true;
+    if (
+      (userRole?.role === 'moderator' || userRole?.role === 'support') &&
+      adminPermissions?.status === 'Active'
+    ) {
+      return true;
+    }
+    return false;
   };
 
   const hasPermission = (page: string, action?: string) => {
-    // Fail-closed: Must have valid authenticated admin status
+    // Fail-closed: Must have valid authenticated admin/staff status
     if (!isAdmin()) return false;
     if (isGuestSession()) return false;
     
@@ -351,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // If scoped team permissions exist, enforce them
     if (adminPermissions) {
       if (adminPermissions.status !== 'Active') return false;
-      if (adminPermissions.role === 'Admin') return true;
+      if (adminPermissions.role === 'Admin' && userRole?.role === 'admin') return true;
 
       const perms = adminPermissions.permissions || {};
       const matchedKey = Object.keys(perms).find(k => k.toLowerCase() === normalizedPage);

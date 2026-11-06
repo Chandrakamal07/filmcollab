@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { 
+import {
   Trash2,
   CheckCircle,
   Clock,
@@ -44,14 +44,14 @@ const generateProjectId = (uuid: string) => {
 
 export default function AdminProjects() {
   // Available tags for projects (will be fetched dynamically)
-  const [globalTags, setGlobalTags] = useState<{label: string, color: string}[]>([]);
+  const [globalTags, setGlobalTags] = useState<{ label: string, color: string }[]>([]);
 
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [editingTags, setEditingTags] = useState<{ id: string; tags: string[] } | null>(null);
-  
+
   const [projects, setProjects] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,23 +136,27 @@ export default function AdminProjects() {
 
   const handleUpdateStatus = async (projectId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("projects")
         .update({ status: newStatus })
-        .eq("id", projectId);
-      
+        .eq("id", projectId)
+        .select("id");
+
       if (error) throw error;
-      
+      if (!data || data.length === 0) {
+        throw new Error("No project was updated. Permission denied.");
+      }
+
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: newStatus } : p));
       toast({
         title: "Status Updated",
         description: `Project status changed to ${newStatus}.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating status:", error);
       toast({
         title: "Update Failed",
-        description: "Could not update project status.",
+        description: error?.message || "Could not update project status.",
         variant: "destructive"
       });
     }
@@ -160,25 +164,29 @@ export default function AdminProjects() {
 
   const handleDeleteProject = async (projectId: string) => {
     if (!window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) return;
-    
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("projects")
         .delete()
-        .eq("id", projectId);
-      
+        .eq("id", projectId)
+        .select("id");
+
       if (error) throw error;
-      
+      if (!data || data.length === 0) {
+        throw new Error("No project was deleted. Permission denied.");
+      }
+
       setProjects(prev => prev.filter(p => p.id !== projectId));
       toast({
         title: "Project Deleted",
         description: "The project has been successfully removed."
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting project:", error);
       toast({
         title: "Delete Failed",
-        description: "Could not delete the project.",
+        description: error?.message || "Could not delete the project.",
         variant: "destructive"
       });
     }
@@ -191,24 +199,28 @@ export default function AdminProjects() {
   const handleSaveProjectTags = async (projectId: string) => {
     if (!editingTags) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("projects")
         .update({ project_tags: editingTags.tags })
-        .eq("id", projectId);
-      
+        .eq("id", projectId)
+        .select("id");
+
       if (error) throw error;
-      
+      if (!data || data.length === 0) {
+        throw new Error("No project was updated. Permission denied.");
+      }
+
       setProjects(prev => prev.map(p => p.id === projectId ? { ...p, project_tags: editingTags.tags } : p));
       setEditingTags(null);
       toast({
         title: "Tags Updated",
         description: "Project tags have been successfully saved."
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating tags:", error);
       toast({
         title: "Update Failed",
-        description: "Could not save project tags.",
+        description: error?.message || "Could not save project tags.",
         variant: "destructive"
       });
     }
@@ -250,27 +262,24 @@ export default function AdminProjects() {
     try {
       setIsSendingNotification(true);
       const fullDescription = `${notificationMessage.trim()}\n\nProject Details:\nTitle: ${notifyProject.title}\nCategory: ${notifyProject.category}\nStatus: ${notifyProject.status}`;
-      
+
       const targetUserId = notifyProject.created_by || notifyUser?.id;
-      
+
       if (!targetUserId) {
         throw new Error("Target user ID is missing");
       }
 
-      const { error } = await supabase
-        .from("notifications")
-        .insert({
-          user_id: targetUserId,
-          title: notificationTitle.trim(),
-          description: fullDescription,
-          type: "project",
-          priority: "high",
-          status: "unread",
-          action_url: `/projects/${notifyProject.id}`
-        });
-        
+      const { error } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: targetUserId,
+        p_title: notificationTitle.trim(),
+        p_description: fullDescription,
+        p_type: "project",
+        p_priority: "high",
+        p_action_url: `/projects/${notifyProject.id}`
+      });
+
       if (error) throw error;
-      
+
       toast({
         title: "Notification Sent",
         description: `Successfully sent notification to ${notifyUser.username || notifyUser.full_name || 'the user'}.`
@@ -291,18 +300,18 @@ export default function AdminProjects() {
   // Filter projects based on search and filters
   const filteredProjects = projects.filter(project => {
     const creator = profiles.find(p => p.id === project.created_by) || {};
-    const matchesSearch = 
+    const matchesSearch =
       (project.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (project.description || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (creator.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (creator.username || "").toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const projectType = project.project_type || project.category || "";
     const matchesCategory = categoryFilter === "all" || projectType.toLowerCase() === categoryFilter.toLowerCase();
-    
+
     const status = project.status || "open";
     const matchesStatus = statusFilter === "all" || status.toLowerCase() === statusFilter.toLowerCase();
-    
+
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
@@ -316,7 +325,7 @@ export default function AdminProjects() {
             <h1 className="text-3xl font-display font-bold text-foreground">Projects Management</h1>
             <p className="text-muted-foreground mt-1 text-sm">Approve or reject project listings</p>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -327,7 +336,7 @@ export default function AdminProjects() {
                 className="pl-9 h-9 bg-surface-elevated border-border/80"
               />
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-[140px] h-9 bg-surface-elevated border-border/80">
@@ -342,7 +351,7 @@ export default function AdminProjects() {
                   <SelectItem value="music video">Music Video</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[120px] h-9 bg-surface-elevated border-border/80">
                   <SelectValue />
@@ -393,7 +402,7 @@ export default function AdminProjects() {
                     const status = project.status || "open";
                     const StatusIcon = getStatusIcon(status);
                     const creator = profiles.find((p: any) => p.id === project.created_by);
-                    
+
                     return (
                       <TableRow key={project.id} className="border-border/60 hover:bg-surface-hover/50">
                         <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
@@ -415,7 +424,7 @@ export default function AdminProjects() {
                         </TableCell>
                         <TableCell>
                           <span className="text-sm font-mono font-medium text-foreground whitespace-nowrap">
-                            {project.budget_min || project.budget_max 
+                            {project.budget_min || project.budget_max
                               ? `${project.budget_currency || '₹'} ${project.budget_min || 0} - ${project.budget_max || 0}`
                               : 'Not Specified'}
                           </span>
@@ -474,7 +483,7 @@ export default function AdminProjects() {
                                 <Bell className="mr-2 h-4 w-4 text-primary" />
                                 Notify Creator
                               </DropdownMenuItem>
-                              
+
                               {status !== 'blocked' ? (
                                 <DropdownMenuItem onClick={() => handleUpdateStatus(project.id, 'blocked')}>
                                   <Ban className="mr-2 h-4 w-4 text-amber-500" />
@@ -486,8 +495,8 @@ export default function AdminProjects() {
                                   Unblock Project
                                 </DropdownMenuItem>
                               )}
-                              
-                              <DropdownMenuItem 
+
+                              <DropdownMenuItem
                                 onClick={() => handleDeleteProject(project.id)}
                                 className="text-destructive focus:text-destructive"
                               >
@@ -519,7 +528,7 @@ export default function AdminProjects() {
             </div>
           </CardContent>
         </Card>
-        
+
         {/* Notify Dialog */}
         <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
           <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
@@ -553,8 +562,8 @@ export default function AdminProjects() {
               <Button variant="outline" onClick={() => setIsNotifyDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+              <Button
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 onClick={handleSendNotification}
                 disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}
               >
@@ -592,7 +601,7 @@ export default function AdminProjects() {
                         )}>
                           {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                         </div>
-                        <Badge 
+                        <Badge
                           variant="secondary"
                           className={getTagBadgeStyle(tag.label)}
                         >
@@ -608,8 +617,8 @@ export default function AdminProjects() {
               <Button variant="outline" onClick={() => setEditingTags(null)}>
                 Cancel
               </Button>
-              <Button 
-                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+              <Button
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 onClick={() => {
                   if (editingTags) {
                     handleSaveProjectTags(editingTags.id);

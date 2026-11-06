@@ -1268,6 +1268,8 @@ export type Database = {
 
           project_status: string | null
 
+          visibility?: string | null
+
           project_type: string
 
           skills_required: string[] | null
@@ -1332,6 +1334,8 @@ export type Database = {
 
           project_status?: string | null
 
+          visibility?: string | null
+
           project_type: string
 
           skills_required?: string[] | null
@@ -1395,6 +1399,8 @@ export type Database = {
           popular?: boolean | null
 
           project_status?: string | null
+
+          visibility?: string | null
 
           project_type?: string
 
@@ -4315,7 +4321,13 @@ export type Database = {
 
     Views: {
 
-      [_ in never]: never
+      public_profiles: {
+
+        Row: Database["public"]["Tables"]["profiles"]["Row"]
+
+        Relationships: []
+
+      }
 
     }
 
@@ -4387,15 +4399,23 @@ export type Database = {
 
         Args: {
 
-          p_recipient_id: string
+          p_recipient_id?: string
+
+          p_user_id?: string
 
           p_title: string
 
-          p_message: string
+          p_message?: string
+
+          p_description?: string
 
           p_type?: string
 
+          p_priority?: string
+
           p_link?: string | null
+
+          p_action_url?: string | null
 
           p_metadata?: Json
 
@@ -4409,7 +4429,7 @@ export type Database = {
 
     Enums: {
 
-      app_role: "user" | "admin"
+      app_role: "user" | "admin" | "moderator" | "support"
 
     }
 
@@ -4649,7 +4669,7 @@ export const Constants = {
 
     Enums: {
 
-      app_role: ["user", "admin"],
+      app_role: ["user", "admin", "moderator", "support"],
 
     },
 

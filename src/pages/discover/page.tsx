@@ -177,13 +177,24 @@ export default function DiscoverPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*, settings(privacy_settings)");
+      const [{ data: profilesData, error: profilesError }, { data: settingsData }] = await Promise.all([
+        supabase.from("public_profiles").select("*"),
+        supabase.from("settings").select("profile_id, privacy_settings, visible_to_categories")
+      ]);
 
       if (profilesError) {
         throw profilesError;
       }
+
+      const settingsByProfileId = new Map<string, any>();
+      (settingsData || []).forEach((s: any) => {
+        if (s.profile_id) settingsByProfileId.set(s.profile_id, s);
+      });
+      (profilesData || []).forEach((p: any) => {
+        if (p.id && settingsByProfileId.has(p.id)) {
+          p.settings = [settingsByProfileId.get(p.id)];
+        }
+      });
 
       let likedUserIds: string[] = [];
       let savedUserIds: string[] = [];
@@ -506,13 +517,17 @@ export default function DiscoverPage() {
             description: `You are now connected with ${userName}!`,
           });
 
-          await supabase.from("notifications").insert({
-            user_id: initiatorId,
-            title: "Connection Accepted",
-            description: `${profile.full_name || profile.username || "Someone"} accepted your connection request.`,
-            type: "connection",
-            action_url: `/profile/${profile.id}`,
+          const { error: acceptNotifErr } = await supabase.rpc("send_authorized_notification", {
+            p_recipient_id: initiatorId,
+            p_title: "Connection Accepted",
+            p_description: `${profile.full_name || profile.username || "Someone"} accepted your connection request.`,
+            p_type: "connection",
+            p_priority: "medium",
+            p_action_url: `/profile/${profile.id}`,
           });
+          if (acceptNotifErr) {
+            console.warn("Could not send connection accepted notification:", acceptNotifErr);
+          }
 
           fetchUsers();
           return;
@@ -557,13 +572,17 @@ export default function DiscoverPage() {
         description: `Connection request sent to ${userName}`,
       });
 
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        title: "New Connection Request",
-        description: `${profile.full_name || profile.username || "Someone"} sent you a connection request.`,
-        type: "connection",
-        action_url: `/profile/${profile.id}`,
+      const { error: reqNotifErr } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: userId,
+        p_title: "New Connection Request",
+        p_description: `${profile.full_name || profile.username || "Someone"} sent you a connection request.`,
+        p_type: "connection",
+        p_priority: "medium",
+        p_action_url: `/profile/${profile.id}`,
       });
+      if (reqNotifErr) {
+        console.warn("Could not send connection request notification:", reqNotifErr);
+      }
 
       fetchUsers();
     } catch (error) {
@@ -636,13 +655,17 @@ export default function DiscoverPage() {
 
         if (insertError) throw insertError;
 
-        await supabase.from("notifications").insert({
-          user_id: userId,
-          title: "New Profile Like",
-          description: `${profile.full_name || profile.username || "Someone"} liked your profile.`,
-          type: "profile",
-          action_url: `/profile/${profile.id}`,
+        const { error: likeNotifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: userId,
+          p_title: "New Profile Like",
+          p_description: `${profile.full_name || profile.username || "Someone"} liked your profile.`,
+          p_type: "profile",
+          p_priority: "low",
+          p_action_url: `/profile/${profile.id}`,
         });
+        if (likeNotifErr) {
+          console.warn("Could not send profile like notification:", likeNotifErr);
+        }
 
         const currentLikesCount = currentUserItem?.likes_count || 0;
         const newLikesCount = currentLikesCount + 1;

@@ -1254,7 +1254,7 @@ export default function ProfilePage() {
       if (!actualUserIdParam && usernameParam) {
         try {
           const { data, error } = await supabase
-            .from('profiles')
+            .from('public_profiles')
             .select('id')
             .eq('username', usernameParam)
             .maybeSingle();
@@ -1298,7 +1298,12 @@ export default function ProfilePage() {
         actualUserIdParamSanitized = undefined;
       }
 
-      let query = supabase.from("profiles").select("*");
+      const isFetchingOwn =
+        !actualUserIdParamSanitized && !usernameParam
+          ? true
+          : actualUserIdParamSanitized === user.id || actualUserIdParamSanitized === authProfile?.id;
+      const targetTable = isFetchingOwn ? "profiles" : "public_profiles";
+      let query = supabase.from(targetTable as "profiles").select("*");
       if (actualUserIdParamSanitized) {
         const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actualUserIdParamSanitized);
         if (isValidUuid) {
@@ -1353,14 +1358,17 @@ export default function ProfilePage() {
           }
 
           if (mapped.allowProfileViews) {
-            await supabase.from("notifications").insert({
-              user_id: targetProfileId,
-              title: "Profile View",
-              description: `Someone viewed your profile.`,
-              type: "profile",
-              action: "view",
-              action_url: `/profile/${user.id}`
+            const { error: viewNotifErr } = await supabase.rpc("send_authorized_notification", {
+              p_recipient_id: targetProfileId,
+              p_title: "Profile View",
+              p_description: `Someone viewed your profile.`,
+              p_type: "profile",
+              p_priority: "low",
+              p_action_url: `/profile/${user.id}`
             });
+            if (viewNotifErr) {
+              console.warn("Could not log profile view notification:", viewNotifErr);
+            }
           }
         }
       } else {

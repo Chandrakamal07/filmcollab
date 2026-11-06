@@ -161,30 +161,141 @@ export async function encryptForRecipientOrThrow(params: {
 }
 
 /**
+ * Compute a deterministic key identifier for an ECDH P-256 public key JWK.
+ */
+export function computeKeyId(jwk: JsonWebKey | null | undefined): string {
+  if (!jwk || !jwk.x || !jwk.y) return "default";
+  return `${jwk.x.slice(0, 8)}_${jwk.y.slice(0, 8)}`;
+}
+
+export interface KeyringEntry {
+  keyId: string;
+  privateKeyJwk: JsonWebKey;
+  publicKeyJwk: JsonWebKey;
+  createdAt: number;
+}
+
+/**
+ * Retrieve all historical keypairs stored for a profile in the local keyring.
+ */
+export function getUserKeyring(profileId: string): KeyringEntry[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`e2ee_keyring_${profileId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Append or preserve a keypair inside the profile's non-destructive local keyring.
+ */
+export function registerKeyInRing(profileId: string, privateKeyJwk: JsonWebKey, publicKeyJwk: JsonWebKey): string {
+  const keyId = computeKeyId(publicKeyJwk);
+  if (typeof localStorage === "undefined") return keyId;
+  const ring = getUserKeyring(profileId);
+  if (!ring.some((e) => e.keyId === keyId || (e.privateKeyJwk?.d && e.privateKeyJwk.d === privateKeyJwk.d))) {
+    ring.unshift({
+      keyId,
+      privateKeyJwk,
+      publicKeyJwk,
+      createdAt: Date.now()
+    });
+    localStorage.setItem(`e2ee_keyring_${profileId}`, JSON.stringify(ring));
+  }
+  return keyId;
+}
+
+/**
+ * Decrypt an ENCRYPTED:... envelope using the active private key or any historical key in the profile's keyring.
+ */
+export async function decryptEnvelopeWithKeyring(params: {
+  envelope: string;
+  recipientProfileId?: string;
+  primaryPrivateKey?: CryptoKey | null;
+  senderPublicKeyJwkOrStr?: string | JsonWebKey | null | undefined;
+  peerPublicKeyJwkOrStr?: string | JsonWebKey | null | undefined;
+  keyring?: Array<{ keyId?: string; privateKeyJwk: JsonWebKey; publicKeyJwk?: JsonWebKey; createdAt?: number | string }>;
+}): Promise<string> {
+  const {
+    envelope,
+    recipientProfileId,
+    primaryPrivateKey,
+    senderPublicKeyJwkOrStr,
+    peerPublicKeyJwkOrStr,
+    keyring
+  } = params;
+  if (!envelope.startsWith("ENCRYPTED:")) return envelope;
+  const effectiveSenderPub = senderPublicKeyJwkOrStr ?? peerPublicKeyJwkOrStr;
+  if (!effectiveSenderPub) {
+    throw new Error("E2EE_SENDER_KEY_UNAVAILABLE: Sender public key is missing.");
+  }
+
+  const jwk: JsonWebKey =
+    typeof effectiveSenderPub === "string"
+      ? JSON.parse(effectiveSenderPub)
+      : effectiveSenderPub;
+  const senderPubKey = await importPublicKey(jwk);
+
+  const parts = envelope.split(":");
+  const iv = parts.length === 4 ? parts[2] : parts[1];
+  const cipher = parts.length === 4 ? parts[3] : parts[2];
+
+  if (primaryPrivateKey) {
+    try {
+      const sharedKey = await deriveAESKey(primaryPrivateKey, senderPubKey);
+      return await decryptMessage(sharedKey, iv, cipher);
+    } catch {
+      // Fall through to historical keyring
+    }
+  }
+
+  const ring = keyring ?? (recipientProfileId ? getUserKeyring(recipientProfileId) : []);
+  for (const entry of ring) {
+    try {
+      const privKey = await importPrivateKey(entry.privateKeyJwk);
+      const sharedKey = await deriveAESKey(privKey, senderPubKey);
+      return await decryptMessage(sharedKey, iv, cipher);
+    } catch {
+      // Try next historical key
+    }
+  }
+
+  throw new Error("E2EE_DECRYPTION_FAILED: No matching key in keyring could decrypt the message.");
+}
+
+/**
  * Retrieve or generate a local ECDH P-256 keypair for a profile.
- * Stored safely in localStorage with profile ID namespace.
+ * Stored safely in localStorage with profile ID namespace and non-destructive keyring history.
  */
 export async function getOrInitUserE2EE(profileId: string) {
   let privKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_priv_${profileId}`) : null;
   let pubKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_pub_${profileId}`) : null;
   let privKey: CryptoKey;
   let pubKeyJwk: JsonWebKey;
+  let privKeyJwk: JsonWebKey;
 
   if (privKeyStr && pubKeyStr) {
-    const jwk = JSON.parse(privKeyStr);
+    privKeyJwk = JSON.parse(privKeyStr);
     pubKeyJwk = JSON.parse(pubKeyStr);
-    privKey = await importPrivateKey(jwk);
+    privKey = await importPrivateKey(privKeyJwk);
   } else {
     const keys = await generateKeyPair();
-    privKeyStr = JSON.stringify(keys.privateKeyJwk);
-    pubKeyStr = JSON.stringify(keys.publicKeyJwk);
+    privKeyJwk = keys.privateKeyJwk;
+    pubKeyJwk = keys.publicKeyJwk;
+    privKeyStr = JSON.stringify(privKeyJwk);
+    pubKeyStr = JSON.stringify(pubKeyJwk);
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(`e2ee_priv_${profileId}`, privKeyStr);
       localStorage.setItem(`e2ee_pub_${profileId}`, pubKeyStr);
     }
-    pubKeyJwk = keys.publicKeyJwk;
-    privKey = await importPrivateKey(keys.privateKeyJwk);
+    privKey = await importPrivateKey(privKeyJwk);
   }
 
-  return { privKey, pubKeyStr, pubKeyJwk };
+  const keyId = registerKeyInRing(profileId, privKeyJwk, pubKeyJwk);
+
+  return { privKey, pubKeyStr, pubKeyJwk, keyId };
 }

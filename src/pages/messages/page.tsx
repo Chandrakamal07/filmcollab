@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow } from "@/lib/e2ee";
+import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring } from "@/lib/e2ee";
 
 type MessageType = "text" | "image" | "video" | "document" | "audio";
 
@@ -40,6 +40,8 @@ interface ChatMessage {
   read: boolean;
   fileName?: string;
   failed?: boolean;
+  clientMessageId?: string;
+  encryptedEnvelope?: string;
 }
 
 interface Conversation {
@@ -88,6 +90,7 @@ interface DBMessage {
   type: string;
   is_read: boolean;
   created_at: string;
+  client_message_id?: string | null;
 }
 
 // Standard Seed fallback data
@@ -234,22 +237,27 @@ export default function MessagesPage() {
         
         let privKey: CryptoKey;
         let pubKeyJwk: JsonWebKey;
+        let privKeyJwk: JsonWebKey;
 
         if (privKeyStr && pubKeyStr) {
-          const jwk = JSON.parse(privKeyStr);
+          privKeyJwk = JSON.parse(privKeyStr);
           pubKeyJwk = JSON.parse(pubKeyStr);
-          privKey = await importPrivateKey(jwk);
+          privKey = await importPrivateKey(privKeyJwk);
         } else {
           // Generate new keys
           const keys = await generateKeyPair();
-          privKeyStr = JSON.stringify(keys.privateKeyJwk);
-          pubKeyStr = JSON.stringify(keys.publicKeyJwk);
+          privKeyJwk = keys.privateKeyJwk;
+          pubKeyJwk = keys.publicKeyJwk;
+          privKeyStr = JSON.stringify(privKeyJwk);
+          pubKeyStr = JSON.stringify(pubKeyJwk);
           localStorage.setItem(`e2ee_priv_${profile.id}`, privKeyStr);
           localStorage.setItem(`e2ee_pub_${profile.id}`, pubKeyStr);
-          pubKeyJwk = keys.publicKeyJwk;
-          privKey = await importPrivateKey(keys.privateKeyJwk);
+          privKey = await importPrivateKey(privKeyJwk);
+        }
 
-          // Attempt to save to Supabase. Ignore if column doesn't exist yet (for smooth rollout)
+        registerKeyInRing(profile.id, privKeyJwk, pubKeyJwk);
+
+        if (!profile.public_key || profile.public_key !== pubKeyStr) {
           await Promise.resolve(supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id)).catch(() => {});
         }
 
@@ -288,7 +296,7 @@ export default function MessagesPage() {
       if (!contactExists) {
         // Fetch from Supabase if we have a UUID
         if (isUuid(redirectedId)) {
-          supabase.from("profiles").select("*").eq("id", redirectedId).single().then(({ data }) => {
+          supabase.from("public_profiles").select("*").eq("id", redirectedId).single().then(({ data }) => {
             if (data) {
               const fullName = data.full_name || data.username || "Anonymous User";
               const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -358,9 +366,9 @@ export default function MessagesPage() {
         });
       }
 
-      // 2. Fetch profiles
+      // 2. Fetch profiles via redacted public_profiles projection (M11)
       const { data: rawProfilesData } = await supabase
-        .from("profiles")
+        .from("public_profiles")
         .select("id, full_name, username, avatar_url, category, public_key");
 
       const profilesData = rawProfilesData as unknown as DBProfile[];
@@ -428,7 +436,8 @@ export default function MessagesPage() {
             type: (m.type as MessageType) || "text",
             content: m.content,
             timestamp: new Date(m.created_at).getTime(),
-            read: m.is_read
+            read: m.is_read,
+            clientMessageId: m.client_message_id || undefined
           });
         });
 
@@ -458,10 +467,28 @@ export default function MessagesPage() {
                       const cipher = parts.length === 4 ? parts[3] : parts[2];
                       m.content = await decryptMessage(sharedKey, iv, cipher);
                    } catch(e) {
-                      m.content = "🔒 [Encrypted Message - Unable to decrypt]";
+                      try {
+                        m.content = await decryptEnvelopeWithKeyring({
+                          envelope: m.content,
+                          recipientProfileId: currentUserId,
+                          primaryPrivateKey: privateKey,
+                          senderPublicKeyJwkOrStr: otherProfile?.public_key
+                        });
+                      } catch {
+                        m.content = "🔒 [Encrypted Message - Unable to decrypt]";
+                      }
                    }
                 } else {
-                   m.content = "🔒 [Encrypted Message - Key missing]";
+                   try {
+                      m.content = await decryptEnvelopeWithKeyring({
+                        envelope: m.content,
+                        recipientProfileId: currentUserId,
+                        primaryPrivateKey: privateKey,
+                        senderPublicKeyJwkOrStr: otherProfile?.public_key
+                      });
+                   } catch {
+                      m.content = "🔒 [Encrypted Message - Key missing]";
+                   }
                 }
              }
              return m;
@@ -490,6 +517,7 @@ export default function MessagesPage() {
       });
 
       // Merge account-scoped outbox of unsent/failed messages so polling never drops retry actions
+      // and deduplicate any failed message whose client_message_id has already been delivered on the server (M26)
       try {
         const cachedRaw = localStorage.getItem(`chat_conversations${storagePrefix}`);
         if (cachedRaw) {
@@ -500,7 +528,10 @@ export default function MessagesPage() {
               const matchedDbConv = dbConversations.find(c => c.id === cConv.id);
               if (matchedDbConv) {
                 for (const fMsg of failedMessages) {
-                  if (!matchedDbConv.messages.some(m => m.id === fMsg.id)) {
+                  const alreadyDeliveredOnServer = matchedDbConv.messages.some(
+                    m => m.id === fMsg.id || (m.clientMessageId && m.clientMessageId === fMsg.id)
+                  );
+                  if (!alreadyDeliveredOnServer) {
                     matchedDbConv.messages.push(fMsg);
                   }
                 }
@@ -510,6 +541,7 @@ export default function MessagesPage() {
               }
             }
           }
+          saveLocalData(dbConversations);
         }
       } catch (err) {
         console.warn("Could not merge outbox failed messages:", err);
@@ -799,14 +831,32 @@ export default function MessagesPage() {
     const isValidReceiver = isUuid(activeId);
 
     if (user && !isGuestSession && isValidSender && isValidReceiver) {
+      let cachedEnvelope: string | undefined;
       try {
-        const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
+        const { data: rxData } = await supabase.from("public_profiles").select("public_key").eq("id", activeId).single();
 
         // Mandatory fail-closed encryption: throws if sender privateKey is null, recipient key missing, or encryption fails
         const { envelope } = await encryptForRecipientOrThrow({
           senderPrivateKey: privateKey,
           recipientPublicKeyJwkOrStr: rxData?.public_key,
           plaintext: content
+        });
+        cachedEnvelope = envelope;
+
+        // Store the exact encrypted envelope on the outbox item before network insert so retries reuse the identical ciphertext (M26)
+        setConversations((prev) => {
+          const updatedWithEnvelope = prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === newMsg.id ? { ...m, encryptedEnvelope: envelope, clientMessageId: newMsg.id } : m
+                  )
+                }
+              : c
+          );
+          saveLocalData(updatedWithEnvelope);
+          return updatedWithEnvelope;
         });
 
         const { error } = await supabase.from("messages").insert({
@@ -853,7 +903,9 @@ export default function MessagesPage() {
               ? {
                   ...c,
                   messages: c.messages.map((m) =>
-                    m.id === newMsg.id ? { ...m, failed: true } : m
+                    m.id === newMsg.id
+                      ? { ...m, failed: true, encryptedEnvelope: cachedEnvelope ?? m.encryptedEnvelope, clientMessageId: newMsg.id }
+                      : m
                   )
                 }
               : c
@@ -887,20 +939,24 @@ export default function MessagesPage() {
       return updated;
     });
 
+    let envelopeToSend = msgToRetry.encryptedEnvelope;
     try {
-      const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
+      const { data: rxData } = await supabase.from("public_profiles").select("public_key").eq("id", activeId).single();
 
-      // Mandatory fail-closed encryption: throws if sender privateKey is null, recipient key missing, or encryption fails
-      const { envelope } = await encryptForRecipientOrThrow({
-        senderPrivateKey: privateKey,
-        recipientPublicKeyJwkOrStr: rxData?.public_key,
-        plaintext: msgToRetry.content
-      });
+      // Reuse the cached encryptedEnvelope from the initial send attempt when present so 23505 reconciliation is deterministic (M26)
+      if (!envelopeToSend || !envelopeToSend.startsWith("ENCRYPTED:")) {
+        const { envelope } = await encryptForRecipientOrThrow({
+          senderPrivateKey: privateKey,
+          recipientPublicKeyJwkOrStr: rxData?.public_key,
+          plaintext: msgToRetry.content
+        });
+        envelopeToSend = envelope;
+      }
 
       const { error } = await supabase.from("messages").insert({
         sender_id: currentUserId,
         receiver_id: activeId,
-        content: envelope,
+        content: envelopeToSend,
         type: msgToRetry.type,
         is_read: false,
         client_message_id: msgToRetry.id
@@ -914,11 +970,26 @@ export default function MessagesPage() {
             .eq("client_message_id", msgToRetry.id)
             .maybeSingle();
 
+          let contentVerified = existingMsg?.content === envelopeToSend;
+          if (!contentVerified && existingMsg?.content?.startsWith("ENCRYPTED:") && privateKey && rxData?.public_key) {
+            try {
+              const decryptedExisting = await decryptEnvelopeWithKeyring({
+                envelope: existingMsg.content,
+                recipientProfileId: currentUserId,
+                primaryPrivateKey: privateKey,
+                senderPublicKeyJwkOrStr: rxData.public_key
+              });
+              contentVerified = decryptedExisting === msgToRetry.content;
+            } catch {
+              contentVerified = false;
+            }
+          }
+
           if (
             !existingMsg ||
             existingMsg.sender_id !== currentUserId ||
             existingMsg.receiver_id !== activeId ||
-            existingMsg.content !== envelope
+            !contentVerified
           ) {
             throw new Error("Message client identifier conflict on retry. Delivery could not be verified.");
           }
@@ -926,6 +997,22 @@ export default function MessagesPage() {
           throw error;
         }
       }
+
+      // Clear failed state from local outbox on verified delivery
+      setConversations((prev) => {
+        const cleaned = prev.map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgToRetry.id ? { ...m, failed: false, encryptedEnvelope: envelopeToSend, clientMessageId: msgToRetry.id } : m
+                )
+              }
+            : c
+        );
+        saveLocalData(cleaned);
+        return cleaned;
+      });
 
       toast({
         title: "Message sent",
@@ -944,7 +1031,7 @@ export default function MessagesPage() {
             ? {
                 ...c,
                 messages: c.messages.map((m) =>
-                  m.id === msgToRetry.id ? { ...m, failed: true } : m
+                  m.id === msgToRetry.id ? { ...m, failed: true, encryptedEnvelope: envelopeToSend ?? m.encryptedEnvelope } : m
                 )
               }
             : c

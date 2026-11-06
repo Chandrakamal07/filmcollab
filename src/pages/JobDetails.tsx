@@ -464,22 +464,17 @@ export default function JobDetails() {
 
       // Send real notification to job poster
       if (job.user_id && job.user_id !== user.id) {
-        let notifyUserId = job.user_id;
-        const { data: posterProfile } = await supabase
-          .from("profiles")
-          .select("id")
-          .or(`id.eq.${job.user_id},user_id.eq.${job.user_id}`)
-          .limit(1)
-          .maybeSingle();
-        if (posterProfile?.id) notifyUserId = posterProfile.id;
-
-        await supabase.from("notifications").insert({
-          user_id: notifyUserId,
-          title: "New Job Application",
-          description: `Someone applied for your job: ${job.title}`,
-          type: "job",
-          action_url: `/jobs/${job.id}`
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: job.user_id,
+          p_title: "New Job Application",
+          p_description: `Someone applied for your job: ${job.title}`,
+          p_type: "job",
+          p_priority: "medium",
+          p_action_url: `/jobs/${job.id}`
         });
+        if (notifErr) {
+          console.warn("Could not send job application notification:", notifErr);
+        }
       }
     } catch (err: any) {
       toast({

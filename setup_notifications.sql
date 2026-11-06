@@ -55,10 +55,18 @@ CREATE POLICY "Users can delete their own notifications"
     )
   );
 
-CREATE POLICY "Anyone can insert notifications"
+CREATE POLICY "notifications_insert_policy"
   ON public.notifications
   FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    OR auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE (p.id = notifications.user_id OR p.user_id = notifications.user_id)
+        AND (p.user_id = auth.uid() OR p.id = auth.uid())
+    )
+  );
 
 -- Create indexes for speed
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);

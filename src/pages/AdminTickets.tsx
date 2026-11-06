@@ -83,12 +83,19 @@ export default function AdminTickets() {
   const handleDeleteTicket = async () => {
     if (!ticketToDelete) return;
     try {
-      const { error } = await supabase.from("tickets").delete().eq("id", ticketToDelete);
+      const { data, error } = await supabase
+        .from("tickets")
+        .delete()
+        .eq("id", ticketToDelete)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was deleted. Permission denied or ticket not found.");
+      }
       setTickets(prev => prev.filter(t => t.id !== ticketToDelete));
       toast({ title: "Ticket deleted successfully" });
-    } catch (error) {
-      toast({ title: "Failed to delete ticket", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Failed to delete ticket", description: error?.message || "Operation failed", variant: "destructive" });
     } finally {
       setTicketToDelete(null);
     }

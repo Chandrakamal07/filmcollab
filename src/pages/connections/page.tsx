@@ -101,7 +101,7 @@ export default function ConnectionsPage() {
       if (connError) throw connError;
 
       const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
+        .from("public_profiles")
         .select("*");
 
       if (profilesError) throw profilesError;

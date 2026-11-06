@@ -4,16 +4,16 @@ Current as of: November 6, 2026
 Workspace: `E:\new-filmcollab`  
 Repository: `Chandrakamal07/filmcollab`  
 Active Branch: `improvements` (PR #1)  
-Local Working Commit: `07af7159a6b1247b8b96e0f901a4f4e81340e100` + complete working tree remediation
+Baseline Commit Inspected: `2f0a220e5f04e0d420ce27d15ce640bf639c8d04` + full forward convergence remediation (`20261107000000_complete_remediation_convergence.sql`)
 
 ## 1. Overview & Architecture
 FilmCollab is a professional networking and creative collaboration platform for the film industry, designed with a bespoke Studio Noir aesthetic.
 - **Frontend Stack**: Vite 5 + React 18 + TypeScript 5.8, Tailwind CSS, shadcn/ui components, Lucide icons, next-themes.
 - **Hero & Media Integration**: Accepted 16:9 vintage golden reel looping video (`/media/main-reel.mp4`, poster `/media/main-reel-poster.webp`) with reduced-motion fallback, responsive framing, and Studio Noir layout.
-- **Backend & Database**: Supabase (PostgreSQL with Row Level Security, Supabase Auth, Storage buckets, Realtime).
-- **Strictly Typed PostgREST Contracts**: `createClient<Database>` in `src/integrations/supabase/client.ts` with comprehensive typed schemas in `src/integrations/supabase/types.ts` including custom server RPCs (`provision_admin_team_member`, `revoke_admin_team_member`, `send_authorized_notification`).
-- **End-to-End Encryption**: Web Crypto API (ECDH P-256 key pair generation + AES-GCM 256-bit symmetric encryption) with fail-closed security for confidential direct messages and location enquiries.
-- **Quality & CI Gate**: Enforced via `.github/workflows/ci.yml`, `npx tsc -b --pretty false` (0 diagnostics), `npm test` (42 implementation-level assertions across 19 suites), `npm run build` (Exit code 0), and `npm run lint` (0 errors, Exit code 0).
+- **Backend & Database**: Supabase (PostgreSQL with Row Level Security, Supabase Auth, Storage buckets, Realtime). Clean chronological replay from `20250108000000_bootstrap_profiles_and_auth.sql` through `20261107000000_complete_remediation_convergence.sql`.
+- **Strictly Typed PostgREST Contracts**: `createClient<Database>` in `src/integrations/supabase/client.ts` with comprehensive typed schemas (`Tables`, `Views.public_profiles`, `Enums.app_role`, and `Functions`) in `src/integrations/supabase/types.ts` including custom server RPCs (`provision_admin_team_member`, `revoke_admin_team_member`, `send_authorized_notification`).
+- **End-to-End Encryption**: Web Crypto API (ECDH P-256 key pair generation + AES-GCM 256-bit symmetric encryption) with non-destructive local key-ring (`registerKeyInRing`, `decryptEnvelopeWithKeyring`, `computeKeyId`), fail-closed security for confidential direct messages and location enquiries, and ciphertext reuse on retry (`encryptedEnvelope`).
+- **Quality & CI Gate**: Enforced via `.github/workflows/ci.yml`, `npx tsc -b --pretty false` (0 diagnostics), `npm test` (48 implementation-level assertions across 20 suites), `npm run build` (Exit code 0), and `npm run lint` (0 errors, Exit code 0).
 
 ## 2. Key Directories & Entry Points
 - `src/App.tsx`: Central application routing, route guards (`PublicRoute`, `ProtectedRoute`, `AdminRoute`), `/login` compatibility alias, and code-split routes via React.lazy with Suspense fallback.
@@ -61,9 +61,8 @@ FilmCollab is a professional networking and creative collaboration platform for 
 
 ## 4. Verification & Quality Gates
 - **TypeScript Gate**: `npx tsc -b --pretty false` -> **0 errors, Exit code 0**
-- **Test Gate**: `npm test` (`node --experimental-strip-types --test tests/*.test.mjs`) -> **42 passed, 0 failed, 19 suites, Exit code 0**
-- **Build Gate**: `npm run build` -> **Exit code 0, 57 route chunks bundled in 51.95s**
-- **Lint Gate**: `npm run lint` -> **Exit code 0, 0 errors, 323 warnings**
+- **Test Gate**: `npm test` (`node --experimental-strip-types --test tests/*.test.mjs`) -> **48 passed, 0 failed, 20 suites, Exit code 0**
+- **Build Gate**: `npm run build` -> **Exit code 0, 57 route chunks bundled**
+- **Lint Gate**: `npm run lint` -> **Exit code 0, 0 errors**
 - **CI Workflow**: `.github/workflows/ci.yml` authored and committed to repository root.
 - **Visual & Media Integrity**: Studio Noir aesthetic and 16:9 vintage golden reel hero video (`/media/main-reel.mp4`, poster `/media/main-reel-poster.webp`) fully preserved.
-- **Security Boundary**: All code changes are local and unpushed. No production writes, migrations, or git pushes have been executed without explicit user authorization.

@@ -6,7 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
     first_name TEXT,
     last_name TEXT,
@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     cover_image_url TEXT,
     bio TEXT,
     profession TEXT,
-    category TEXT DEFAULT 'user',
     skills TEXT[],
     experience TEXT,
     city TEXT,
@@ -76,4 +75,54 @@ CREATE POLICY "profiles_insert_own" ON public.profiles
 DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles
     FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Bootstrap shooting_locations and notifications tables required by 20251006000000_add_notification_triggers.sql
+CREATE TABLE IF NOT EXISTS public.shooting_locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    location_type TEXT,
+    category TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    country TEXT DEFAULT 'India',
+    daily_rate NUMERIC,
+    hourly_rate NUMERIC,
+    price NUMERIC,
+    price_hour NUMERIC,
+    price_type TEXT DEFAULT 'per_day',
+    security_deposit NUMERIC,
+    amenities TEXT[],
+    rules TEXT[],
+    image_url TEXT,
+    images TEXT[],
+    owner_name TEXT,
+    contact_person TEXT,
+    contact_email TEXT,
+    contact_phone TEXT,
+    contact_phone_whatsapp TEXT,
+    created_by UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'active',
+    tags TEXT[] DEFAULT '{}'::text[],
+    featured BOOLEAN DEFAULT FALSE,
+    rating NUMERIC DEFAULT 0,
+    reviews_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.shooting_locations ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'system',
+    status TEXT NOT NULL DEFAULT 'unread',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    action_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 

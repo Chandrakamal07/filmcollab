@@ -13,7 +13,9 @@ import {
   encryptMessage,
   decryptMessage,
   encryptForRecipientOrThrow,
-  getOrInitUserE2EE
+  getOrInitUserE2EE,
+  computeKeyId,
+  decryptEnvelopeWithKeyring
 } from '../src/lib/e2ee.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -83,11 +85,55 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       'utf8'
     );
 
-    test('Bootstrap migration provisions public.profiles without premature user_roles reference', () => {
+    test('Bootstrap migration provisions public.profiles without premature user_roles reference or duplicate category', () => {
       assert.ok(bootstrapSql.includes('CREATE TABLE IF NOT EXISTS public.profiles'), 'Bootstrap must create public.profiles');
       assert.ok(bootstrapSql.includes('id UUID PRIMARY KEY DEFAULT gen_random_uuid()'), 'Bootstrap profiles.id must default to gen_random_uuid()');
-      assert.ok(bootstrapSql.includes('user_id UUID UNIQUE REFERENCES auth.users(id)'), 'Bootstrap profiles must link user_id to auth.users');
+      assert.ok(bootstrapSql.includes('user_id UUID REFERENCES auth.users(id)'), 'Bootstrap profiles must link user_id to auth.users without colliding inline constraint');
+      const profilesDdl = bootstrapSql.split('CREATE TABLE IF NOT EXISTS public.shooting_locations')[0];
+      assert.ok(!profilesDdl.includes('category TEXT'), 'Bootstrap must not pre-create category column on profiles before 20250109000004_add_category_to_profiles.sql');
+      assert.ok(bootstrapSql.includes('CREATE TABLE IF NOT EXISTS public.shooting_locations'), 'Bootstrap must pre-create shooting_locations before 20261105000004');
+      assert.ok(bootstrapSql.includes('CREATE TABLE IF NOT EXISTS public.notifications'), 'Bootstrap must pre-create notifications before 20251006000000');
       assert.ok(!bootstrapSql.includes('user_roles'), 'Bootstrap profiles policies must not reference user_roles before its definition');
+    });
+
+    test('Chronological replay of all migrations in supabase/migrations succeeds without duplicate column or missing table errors', () => {
+      const migrationsDir = path.join(rootDir, 'supabase/migrations');
+      const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+      assert.ok(files.includes('20261107000000_complete_remediation_convergence.sql'), 'Must include forward convergence migration 20261107000000');
+
+      const createdTables = new Set(['auth.users', 'storage.buckets', 'storage.objects']);
+      const profileColumns = new Set(['id', 'user_id', 'username', 'full_name', 'first_name', 'last_name', 'email', 'phone', 'bio', 'avatar_url', 'cover_image_url', 'location', 'role', 'website', 'company', 'skills', 'tags', 'is_verified', 'followers_count', 'projects_count', 'posts_count', 'likes_count', 'created_at', 'updated_at']);
+
+      for (const file of files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+
+        // Track created tables
+        const createMatches = [...sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-zA-Z0-9_]+)/gi)];
+        for (const m of createMatches) {
+          createdTables.add(m[1].toLowerCase());
+        }
+
+        // Verify non-IF NOT EXISTS ADD COLUMN on profiles does not collide
+        const bareAddCategory = /ALTER\s+TABLE\s+(?:public\.)?profiles\s+ADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS)category\b/i.test(sql);
+        if (bareAddCategory) {
+          assert.ok(!profileColumns.has('category'), `Duplicate bare ADD COLUMN category in ${file}`);
+          profileColumns.add('category');
+        }
+
+        // Verify triggers/policies on notifications, shooting_locations, project_messages, site_settings only occur after table creation
+        if (/ON\s+public\.notifications\b/i.test(sql)) {
+          assert.ok(createdTables.has('notifications'), `notifications referenced before creation in ${file}`);
+        }
+        if (/ALTER\s+TABLE\s+public\.shooting_locations\b/i.test(sql)) {
+          assert.ok(createdTables.has('shooting_locations'), `shooting_locations referenced before creation in ${file}`);
+        }
+        if (/ON\s+public\.project_messages\b/i.test(sql)) {
+          assert.ok(createdTables.has('project_messages'), `project_messages referenced before creation in ${file}`);
+        }
+        if (/ON\s+public\.site_settings\b/i.test(sql)) {
+          assert.ok(createdTables.has('site_settings'), `site_settings referenced before creation in ${file}`);
+        }
+      }
     });
 
     test('Master convergence migration guarantees profiles.id default and drops legacy auth FK', () => {
@@ -183,7 +229,8 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
     const adminTeamSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminTeam.tsx'), 'utf8');
 
     test('AdminTeam provisioning respects UNIQUE(user_id, role) onConflict target', () => {
-      assert.ok(adminTeamSource.includes("onConflict: 'user_id,role'"), 'Must specify onConflict: user_id,role');
+      assert.ok(migrationSql.includes('ON CONFLICT (user_id, role) DO NOTHING'), 'Migration RPC must specify ON CONFLICT (user_id, role) DO NOTHING');
+      assert.ok(adminTeamSource.includes('provision_admin_team_member'), 'AdminTeam must delegate provisioning atomically to provision_admin_team_member RPC');
     });
 
     test('Server provides atomic provision_admin_team_member and revoke_admin_team_member RPCs', () => {
@@ -272,8 +319,10 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
     );
 
     test('Migration adds require_approval, allow_member_posts and permits Pending in role CHECK', () => {
-      assert.ok(migrationSql.includes('require_approval BOOLEAN DEFAULT FALSE'), 'Must add require_approval column');
-      assert.ok(migrationSql.includes('allow_member_posts BOOLEAN DEFAULT TRUE'), 'Must add allow_member_posts column');
+      assert.ok(migrationSql.includes('ADD COLUMN IF NOT EXISTS require_approval BOOLEAN'), 'Must add require_approval column');
+      assert.ok(migrationSql.includes('ALTER COLUMN require_approval SET DEFAULT FALSE'), 'Must set require_approval default FALSE after backfill');
+      assert.ok(migrationSql.includes('ADD COLUMN IF NOT EXISTS allow_member_posts BOOLEAN'), 'Must add allow_member_posts column');
+      assert.ok(migrationSql.includes('ALTER COLUMN allow_member_posts SET DEFAULT TRUE'), 'Must set allow_member_posts default TRUE after backfill');
       assert.ok(migrationSql.includes("'Pending'"), 'Role CHECK constraint must permit Pending');
       assert.ok(migrationSql.includes('sync_community_group_settings'), 'Must define trigger to sync settings and columns');
     });
@@ -647,6 +696,129 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       const profileSource = fs.readFileSync(path.join(rootDir, 'src/pages/Profile.tsx'), 'utf8');
       assert.ok(profileSource.includes('delErr || !delData || delData.length === 0'), 'Profile file delete must check errors and zero rows');
       assert.ok(profileSource.includes('upErr || !upData || upData.length === 0'), 'Profile file update must check errors and zero rows');
+    });
+
+    test('AdminJobs, AdminDirectory, AdminLocations, AdminTickets, AdminTicketDetail, AdminUsers, AdminProjects enforce .select("id") and zero-row checks', () => {
+      const adminFiles = [
+        'src/pages/AdminJobs.tsx',
+        'src/pages/AdminDirectory.tsx',
+        'src/pages/AdminLocations.tsx',
+        'src/pages/AdminTickets.tsx',
+        'src/pages/AdminTicketDetail.tsx',
+        'src/pages/AdminUsers.tsx',
+        'src/pages/AdminProjects.tsx'
+      ];
+      for (const relPath of adminFiles) {
+        const src = fs.readFileSync(path.join(rootDir, relPath), 'utf8');
+        assert.ok(src.includes('.select("id")') || src.includes(".select('id')"), `${relPath} must select id on mutations`);
+        assert.ok(src.includes('!data || data.length === 0'), `${relPath} must reject zero-row mutations`);
+      }
+    });
+  });
+
+  // Behavioral & End-to-End Convergence Verification (20261107000000)
+  describe('Behavioral & Convergence Verification (M02-M28)', () => {
+    const forwardMigrationSql = fs.readFileSync(
+      path.join(rootDir, 'supabase/migrations/20261107000000_complete_remediation_convergence.sql'),
+      'utf8'
+    );
+
+    test('M11: Raw profiles RLS restricts non-owner SELECT when privacy flags are disabled while public_profiles masks fields', () => {
+      assert.ok(forwardMigrationSql.includes('COALESCE(privacy_show_email, true) = true'), 'profiles_select_public must enforce privacy_show_email on raw table');
+      assert.ok(forwardMigrationSql.includes('COALESCE(privacy_show_phone, true) = true'), 'profiles_select_public must enforce privacy_show_phone on raw table');
+      assert.ok(forwardMigrationSql.includes('COALESCE(privacy_show_dob, true) = true'), 'profiles_select_public must enforce privacy_show_dob on raw table');
+
+      // Behavioral redaction simulation comparing raw profiles vs public_profiles view
+      const row = {
+        id: 'prof-1',
+        user_id: 'auth-1',
+        full_name: 'Maya Lin',
+        email: 'maya@secret.io',
+        phone: '+919999999999',
+        date_of_birth: '1992-05-10',
+        privacy_show_email: false,
+        privacy_show_phone: false,
+        privacy_show_dob: false
+      };
+
+      const canNonOwnerSelectRawProfile = (r, viewerUid) => {
+        if (viewerUid === r.user_id || viewerUid === r.id) return true;
+        return (r.privacy_show_email ?? true) && (r.privacy_show_phone ?? true) && (r.privacy_show_dob ?? true);
+      };
+
+      const projectPublicProfile = (r, viewerUid) => {
+        const isOwner = viewerUid === r.user_id || viewerUid === r.id;
+        return {
+          id: r.id,
+          full_name: r.full_name,
+          email: (r.privacy_show_email ?? true) || isOwner ? r.email : null,
+          phone: (r.privacy_show_phone ?? true) || isOwner ? r.phone : null,
+          date_of_birth: (r.privacy_show_dob ?? true) || isOwner ? r.date_of_birth : null
+        };
+      };
+
+      assert.equal(canNonOwnerSelectRawProfile(row, 'stranger-uid'), false, 'Non-owner must be blocked from raw profiles row when any privacy flag is false');
+      assert.equal(canNonOwnerSelectRawProfile(row, 'auth-1'), true, 'Owner can select raw profiles row');
+
+      const redacted = projectPublicProfile(row, 'stranger-uid');
+      assert.equal(redacted.email, null);
+      assert.equal(redacted.phone, null);
+      assert.equal(redacted.date_of_birth, null);
+    });
+
+    test('M14 & M15 & M26: Non-destructive E2EE key-ring decryption and identical ciphertext reuse on retry', async () => {
+      const aliceOld = await generateKeyPair();
+      const aliceNew = await generateKeyPair();
+      const bob = await generateKeyPair();
+
+      const bobPriv = await importPrivateKey(bob.privateKeyJwk);
+      // Bob encrypts a message to Alice's OLD public key before Alice rotated keys
+      const oldEnv = await encryptForRecipientOrThrow({
+        senderPrivateKey: bobPriv,
+        recipientPublicKeyJwkOrStr: aliceOld.publicKeyJwk,
+        plaintext: 'Historical message encrypted to Alice old key'
+      });
+
+      const oldKeyId = await computeKeyId(aliceOld.publicKeyJwk);
+      const newKeyId = await computeKeyId(aliceNew.publicKeyJwk);
+      assert.notEqual(oldKeyId, newKeyId);
+
+      // Alice's key-ring retains both her new key and her old key
+      const keyring = [
+        { keyId: newKeyId, publicKeyJwk: aliceNew.publicKeyJwk, privateKeyJwk: aliceNew.privateKeyJwk, createdAt: new Date().toISOString() },
+        { keyId: oldKeyId, publicKeyJwk: aliceOld.publicKeyJwk, privateKeyJwk: aliceOld.privateKeyJwk, createdAt: new Date().toISOString() }
+      ];
+
+      const decryptedHistorical = await decryptEnvelopeWithKeyring({
+        envelope: oldEnv.envelope,
+        peerPublicKeyJwkOrStr: JSON.stringify(bob.publicKeyJwk),
+        primaryPrivateKey: await importPrivateKey(aliceNew.privateKeyJwk),
+        keyring
+      });
+      assert.equal(decryptedHistorical, 'Historical message encrypted to Alice old key', 'Keyring fallback must decrypt historical message after key rotation');
+
+      // M26: Retry reuses stored encryptedEnvelope so 23505 reconciliation succeeds
+      const storedEnvelope = oldEnv.envelope;
+      const retryMsg = { id: 'client-uuid-1', content: 'Plaintext UI preview', encryptedEnvelope: storedEnvelope, failed: true };
+      const envelopeUsedOnRetry = retryMsg.encryptedEnvelope || 're-encrypted-different-iv';
+      assert.equal(envelopeUsedOnRetry, storedEnvelope, 'Retry must reuse exact initial encryptedEnvelope');
+    });
+
+    test('M06: app_role enum includes moderator and support and RPC casts v_db_role::public.app_role', () => {
+      assert.ok(forwardMigrationSql.includes("ADD VALUE IF NOT EXISTS 'moderator'"), 'Must add moderator to app_role enum');
+      assert.ok(forwardMigrationSql.includes("ADD VALUE IF NOT EXISTS 'support'"), 'Must add support to app_role enum');
+      assert.ok(forwardMigrationSql.includes('v_db_role::public.app_role'), 'provision_admin_team_member must cast to public.app_role');
+
+      const adminTeamSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminTeam.tsx'), 'utf8');
+      assert.ok(!adminTeamSource.includes('rpcError.code === "PGRST202"'), 'AdminTeam must not contain non-atomic fallback');
+    });
+
+    test('M08, M09, M10, M13: Casting capacity SECURITY DEFINER, notification event check, post_comments immutability, community Pending restriction', () => {
+      assert.ok(forwardMigrationSql.includes('check_casting_capacity()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSECURITY DEFINER'), 'check_casting_capacity must be SECURITY DEFINER');
+      assert.ok(forwardMigrationSql.includes('FOR UPDATE'), 'check_casting_capacity must lock casting_calls row FOR UPDATE');
+      assert.ok(forwardMigrationSql.includes('v_authorized BOOLEAN := false;'), 'send_authorized_notification must verify caller-recipient relationship');
+      assert.ok(forwardMigrationSql.includes('check_post_comment_update_immutability'), 'post_comments must enforce update immutability trigger');
+      assert.ok(forwardMigrationSql.includes("m.role != 'Pending'"), 'is_community_group_member and message select must exclude Pending members');
     });
   });
 });

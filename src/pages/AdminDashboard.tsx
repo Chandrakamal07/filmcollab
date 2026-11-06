@@ -72,14 +72,36 @@ export default function AdminDashboard() {
           .from("tickets")
           .select("id", { count: "exact", head: true });
 
+        // 5. Fetch active staff members from admin_team_members & user_roles
+        const [{ data: teamRows }, { data: roleRows }] = await Promise.all([
+          supabase.from("admin_team_members").select("profile_id, status"),
+          supabase.from("user_roles").select("user_id, role"),
+        ]);
+
         const profilesList = profiles || [];
         const totalUsers = profilesList.length;
         const totalJobs = jobsCount || 0;
         const totalProjects = projectsCount || 0;
         const totalTickets = ticketsCount || 0;
 
-        // Total team members (Admins)
-        const totalTeamMembers = profilesList.filter(p => p.role?.toLowerCase() === "admin").length;
+        // Total team members (Active staff across admin_team_members, user_roles, and profiles.role)
+        const activeStaffIds = new Set<string>();
+        profilesList.forEach(p => {
+          if (["admin", "moderator", "support"].includes(p.role?.toLowerCase() || "")) {
+            activeStaffIds.add(p.id);
+          }
+        });
+        (teamRows || []).forEach((t: any) => {
+          if (t.profile_id && (t.status || "active").toLowerCase() === "active") {
+            activeStaffIds.add(t.profile_id);
+          }
+        });
+        (roleRows || []).forEach((r: any) => {
+          if (r.user_id && ["admin", "moderator", "support"].includes((r.role || "").toLowerCase())) {
+            activeStaffIds.add(r.user_id);
+          }
+        });
+        const totalTeamMembers = activeStaffIds.size;
 
         // Calculate unique categories from profiles
         const uniqueCategoriesSet = new Set(

@@ -84,7 +84,7 @@ export default function AdminTeam() {
       const targetAuthUserId = profileData.user_id || profileData.id;
 
       // 1. Attempt atomic provisioning via server RPC (M06)
-      const { error: rpcErr } = await supabase.rpc('provision_admin_team_member', {
+      const { data: provisionedMemberId, error: rpcErr } = await supabase.rpc('provision_admin_team_member', {
         p_user_id: targetAuthUserId,
         p_profile_id: profileData.id,
         p_role: newMember.role,
@@ -93,31 +93,10 @@ export default function AdminTeam() {
       });
 
       if (rpcErr) {
-        // Fallback for environments where RPC is direct table access
-        const { data: memberInsertData, error } = await supabase
-          .from('admin_team_members')
-          .insert({
-            user_id: targetAuthUserId,
-            profile_id: profileData.id,
-            role: newMember.role,
-            status: newMember.status,
-            permissions: newMember.permissions
-          })
-          .select("id");
-
-        if (error) throw error;
-        if (!memberInsertData || memberInsertData.length === 0) {
-          throw new Error("Failed to insert team member. Permission denied.");
-        }
-
-        const isAdminRole = newMember.role.toLowerCase() === 'admin';
-        if (newMember.status === 'Active' && isAdminRole) {
-          const { error: roleErr } = await supabase.from('user_roles').upsert({
-            user_id: targetAuthUserId,
-            role: 'admin'
-          }, { onConflict: 'user_id,role' });
-          if (roleErr) throw roleErr;
-        }
+        throw rpcErr;
+      }
+      if (!provisionedMemberId) {
+        throw new Error("Failed to provision team member. Permission denied or atomic transaction rejected.");
       }
       
       toast({ title: "Team member added successfully!" });
@@ -133,21 +112,15 @@ export default function AdminTeam() {
   const handleDeleteMember = async (id: string) => {
     if (!confirm("Remove this member from the team?")) return;
     try {
-      const { error: rpcDelErr } = await supabase.rpc('revoke_admin_team_member', {
+      const { data: revoked, error: rpcDelErr } = await supabase.rpc('revoke_admin_team_member', {
         p_member_id: id
       });
 
       if (rpcDelErr) {
-        const member = teamMembers.find(m => m.id === id);
-        const { data, error } = await supabase.from('admin_team_members').delete().eq('id', id).select("id");
-        if (error) throw error;
-        if (!data || data.length === 0) {
-          throw new Error("Member not found or permission denied.");
-        }
-        if (member?.user_id && (member.role || '').toLowerCase() === 'admin') {
-          const { error: roleDelErr } = await supabase.from('user_roles').delete().eq('user_id', member.user_id).eq('role', 'admin');
-          if (roleDelErr) console.warn("Could not revoke user_roles row:", roleDelErr);
-        }
+        throw rpcDelErr;
+      }
+      if (!revoked) {
+        throw new Error("Member not found or permission denied.");
       }
       setTeamMembers(prev => prev.filter(m => m.id !== id));
       toast({ title: "Member removed" });

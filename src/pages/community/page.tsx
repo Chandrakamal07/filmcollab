@@ -121,7 +121,19 @@ export default function CommunityPage() {
   }, []);
 
   const myJoinedGroups = groups.filter((g) =>
-    g.community_group_members?.some((m: any) => m.user_id === user?.id)
+    g.community_group_members?.some(
+      (m: any) => m.user_id === user?.id && m.role !== "Pending"
+    )
+  );
+
+  const pendingGroupIds = new Set(
+    groups
+      .filter((g) =>
+        g.community_group_members?.some(
+          (m: any) => m.user_id === user?.id && m.role === "Pending"
+        )
+      )
+      .map((g) => g.id)
   );
 
   const myCreatedGroups = groups.filter((g) =>
@@ -160,8 +172,15 @@ export default function CommunityPage() {
       return;
     }
 
-    const isMember = group.community_group_members?.some((m: any) => m.user_id === user.id);
-    if (isMember) {
+    const memberRecord = group.community_group_members?.find((m: any) => m.user_id === user.id);
+    if (memberRecord) {
+      if (memberRecord.role === "Pending") {
+        toast({
+          title: "Approval Pending",
+          description: `Your request to join ${group.name} is still awaiting admin approval.`,
+        });
+        return;
+      }
       navigate(`/community/joined-group/${group.id}`);
       return;
     }
@@ -293,7 +312,9 @@ export default function CommunityPage() {
 
   const handleGroupClick = (group: any) => {
     const isOwner = group.created_by === user?.id;
-    const isMember = group.community_group_members?.some((m: any) => m.user_id === user?.id);
+    const isMember = group.community_group_members?.some(
+      (m: any) => m.user_id === user?.id && m.role !== "Pending"
+    );
 
     if (activeTab === "created" || isOwner) {
       navigate(`/community/group/${group.id}`);
@@ -421,9 +442,13 @@ export default function CommunityPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredTrendingGroups.map((group) => {
-                    const isMember = group.community_group_members?.some((m: any) => m.user_id === user?.id);
+                    const isMember = group.community_group_members?.some(
+                      (m: any) => m.user_id === user?.id && m.role !== "Pending"
+                    );
+                    const isPending = pendingGroupIds.has(group.id);
                     const isOwner = group.created_by === user?.id;
-                    const membersCount = group.community_group_members?.length || 1;
+                    const membersCount =
+                      group.community_group_members?.filter((m: any) => m.role !== "Pending").length || 1;
                     const tags = Array.isArray(group.tags) ? group.tags : [];
 
                     return (
@@ -489,6 +514,14 @@ export default function CommunityPage() {
                                 className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover h-8 text-xs font-medium"
                               >
                                 Open Group
+                              </Button>
+                            ) : isPending ? (
+                              <Button
+                                size="sm"
+                                disabled
+                                className="flex-1 bg-surface-elevated text-muted-foreground border border-border/80 h-8 text-xs font-medium cursor-not-allowed"
+                              >
+                                Pending Approval
                               </Button>
                             ) : (
                               <Button

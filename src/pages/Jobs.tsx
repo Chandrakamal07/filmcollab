@@ -874,17 +874,17 @@ export default function Jobs() {
       
       // Notify the job poster
       if (job.user_id && job.user_id !== user.id) {
-        let recipientProfileId = job.user_id;
-        const { data: rProf } = await supabase.from('profiles').select('id').or(`id.eq.${job.user_id},user_id.eq.${job.user_id}`).limit(1).maybeSingle();
-        if (rProf?.id) recipientProfileId = rProf.id;
-
-        supabase.from("notifications").insert({
-          user_id: recipientProfileId,
-          title: "New Job Application",
-          description: `Someone applied for your job: ${job.job_title}`,
-          type: "job",
-          action_url: `/jobs?jobId=${job.id}`
-        }).then();
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: job.user_id,
+          p_title: "New Job Application",
+          p_description: `Someone applied for your job: ${job.job_title}`,
+          p_type: "job",
+          p_priority: "medium",
+          p_action_url: `/jobs?jobId=${job.id}`
+        });
+        if (notifErr) {
+          console.warn("Could not send job application notification:", notifErr);
+        }
       }
     } catch (error) {
       console.error('Error applying for job:', error);
@@ -923,17 +923,18 @@ export default function Jobs() {
     if (!jobToDelete) return;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('jobs')
         .delete()
-        .eq('id', jobToDelete.id);
+        .eq('id', jobToDelete.id)
+        .select('id');
 
-      if (error) {
+      if (error || !data || data.length === 0) {
         console.error('Error deleting job:', error);
         toast({
           variant: "destructive",
           title: "Error",
-          description: "Failed to delete job"
+          description: error?.message || "Failed to delete job"
         });
       } else {
         toast({

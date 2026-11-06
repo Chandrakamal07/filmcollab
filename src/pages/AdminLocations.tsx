@@ -134,12 +134,19 @@ export default function AdminLocations() {
   const handleDeleteLocation = async () => {
     if (!locationToDelete) return;
     try {
-      const { error } = await supabase.from("shooting_locations").delete().eq("id", locationToDelete);
+      const { data, error } = await supabase
+        .from("shooting_locations")
+        .delete()
+        .eq("id", locationToDelete)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No location was deleted. Permission denied or record not found.");
+      }
       setLocations(prev => prev.filter(l => l.id !== locationToDelete));
       toast({ title: "Location deleted successfully" });
-    } catch (error) {
-      toast({ title: "Failed to delete location", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Failed to delete location", description: error?.message || "Operation failed", variant: "destructive" });
     } finally {
       setLocationToDelete(null);
     }
@@ -203,14 +210,13 @@ export default function AdminLocations() {
     try {
       const fullDescription = `${notifyMessage.trim()}\n\nLocation Details:\nName: ${notifyLocation.name}\nCity: ${notifyLocation.city}, ${notifyLocation.state}\nType: ${notifyLocation.type}`;
 
-      const { error } = await supabase.from("notifications").insert({
-        user_id: targetUserId,
-        title: notifyTitle.trim(),
-        description: fullDescription,
-        type: 'project',
-        priority: 'high',
-        status: 'unread',
-        action_url: `/locations/${notifyLocation.id}`
+      const { error } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: targetUserId,
+        p_title: notifyTitle.trim(),
+        p_description: fullDescription,
+        p_type: 'project',
+        p_priority: 'high',
+        p_action_url: `/locations/${notifyLocation.id}`
       });
 
       if (error) throw error;
@@ -239,12 +245,16 @@ export default function AdminLocations() {
   const handleSaveLocationTags = async (locationId: string) => {
     if (!editingTags) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('shooting_locations')
         .update({ tags: editingTags.tags })
-        .eq('id', locationId);
+        .eq('id', locationId)
+        .select('id');
         
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No location was updated. Permission denied.");
+      }
       
       setLocations(prev => 
         prev.map(loc => 

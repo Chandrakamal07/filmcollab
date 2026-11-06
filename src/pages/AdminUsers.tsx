@@ -407,23 +407,27 @@ export default function AdminUsers() {
   const handleToggleVerification = async (user: UserProfile) => {
     const currentStatus = user.is_verified === true;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ is_verified: !currentStatus })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
 
       setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, is_verified: !currentStatus } : u));
       toast({
         title: !currentStatus ? "User Account Verified" : "User Account Unverified",
         description: `Successfully ${!currentStatus ? "verified" : "unverified"} ${user.username || user.full_name || 'the user'}.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user verification:", error);
       toast({
         title: "Operation failed",
-        description: "Could not update user verification in the database.",
+        description: error?.message || "Could not update user verification in the database.",
         variant: "destructive"
       });
     }
@@ -437,23 +441,27 @@ export default function AdminUsers() {
     }
     try {
       const targetRole = isCurrentlyBlocked ? 'user' : 'blocked';
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ role: targetRole })
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
 
       setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole } : u));
       toast({
         title: isCurrentlyBlocked ? "User Unblocked" : "User Blocked",
         description: `Successfully ${isCurrentlyBlocked ? "unblocked" : "blocked"} user ${user.username || user.full_name || ''}.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling block state:", error);
       toast({
         title: "Block failed",
-        description: "Could not modify block state in database.",
+        description: error?.message || "Could not modify block state in database.",
         variant: "destructive"
       });
     }
@@ -464,23 +472,27 @@ export default function AdminUsers() {
       return;
     }
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .delete()
-        .eq("id", userId);
+        .eq("id", userId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No profile was deleted. Permission denied.");
+      }
 
       setProfiles(prev => prev.filter(u => u.id !== userId));
       toast({
         title: "User deleted",
         description: "User profile deleted from the system.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error);
       toast({
         title: "Delete failed",
-        description: "Could not remove user profile from database.",
+        description: error?.message || "Could not remove user profile from database.",
         variant: "destructive"
       });
     }
@@ -493,12 +505,16 @@ export default function AdminUsers() {
   const handleSaveUserTags = async (userId: string) => {
     if (!editingTags) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ tags: editingTags.tags })
-        .eq("id", userId);
+        .eq("id", userId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
 
       setProfiles(prev => prev.map(u => u.id === userId ? { ...u, tags: editingTags.tags } : u));
       setEditingTags(null);
@@ -506,11 +522,11 @@ export default function AdminUsers() {
         title: "Tags updated",
         description: "User tags successfully synchronized with their profile page."
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving tags:", error);
       toast({
         title: "Failed to save tags",
-        description: "Error persisting tags to the database.",
+        description: error?.message || "Error persisting tags to the database.",
         variant: "destructive"
       });
     }
@@ -547,16 +563,13 @@ export default function AdminUsers() {
     if (!notifyUser || !notificationTitle.trim() || !notificationMessage.trim()) return;
     try {
       setIsSendingNotification(true);
-      const { error } = await supabase
-        .from("notifications")
-        .insert({
-          user_id: notifyUser.id,
-          title: notificationTitle.trim(),
-          description: notificationMessage.trim(),
-          type: "system",
-          priority: "high",
-          status: "unread"
-        });
+      const { error } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: notifyUser.id,
+        p_title: notificationTitle.trim(),
+        p_description: notificationMessage.trim(),
+        p_type: "system",
+        p_priority: "high"
+      });
 
       if (error) throw error;
 

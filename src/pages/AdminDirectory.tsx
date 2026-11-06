@@ -112,13 +112,20 @@ export default function AdminDirectory() {
   const handleDelete = async (itemId: string) => {
     if (window.confirm("Are you sure you want to delete this file?")) {
       try {
-        const { error } = await supabase.from("directory_files").delete().eq("id", itemId);
+        const { data, error } = await supabase
+          .from("directory_files")
+          .delete()
+          .eq("id", itemId)
+          .select("id");
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error("No file was deleted. Permission denied or file not found.");
+        }
         setDirectoryItems(prev => prev.filter(i => i.id !== itemId));
         toast.success("File deleted successfully");
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting file:", error);
-        toast.error("Failed to delete file");
+        toast.error(error?.message || "Failed to delete file");
       }
     }
   };
@@ -171,14 +178,13 @@ export default function AdminDirectory() {
       setIsSendingNotification(true);
       const fullDescription = `${notificationMessage.trim()}\n\nFile Details:\nTitle: ${notifyFile.title}\nType: ${notifyFile.file_type}`;
       
-      const { error } = await supabase.from('notifications').insert({
-        user_id: notifyUser.id,
-        title: notificationTitle.trim(),
-        description: fullDescription,
-        type: 'system',
-        priority: 'high',
-        status: 'unread',
-        action_url: `/directory`
+      const { error } = await supabase.rpc('send_authorized_notification', {
+        p_recipient_id: notifyUser.id,
+        p_title: notificationTitle.trim(),
+        p_description: fullDescription,
+        p_type: 'system',
+        p_priority: 'high',
+        p_action_url: `/directory`
       });
 
       if (error) throw error;
