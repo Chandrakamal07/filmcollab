@@ -68,7 +68,7 @@ const utilityItems = [
 ];
 
 export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarProps) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -114,9 +114,13 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
-      if (!profile?.id) {
+      const activeId = profile?.id || user?.id;
+      const storageKey = activeId ? `chat_conversations_${activeId}` : "chat_conversations_guest";
+      const readKey = activeId ? `read_conversations_${activeId}` : "read_conversations_guest";
+
+      if (!activeId) {
         try {
-          const saved = localStorage.getItem("chat_conversations");
+          const saved = localStorage.getItem(storageKey);
           if (saved) {
             const conversations = JSON.parse(saved);
             const total = conversations.reduce(
@@ -135,11 +139,11 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
         const { data: unreadMsgs, error } = await supabase
           .from("messages")
           .select("sender_id, created_at")
-          .eq("receiver_id", profile.id)
+          .eq("receiver_id", activeId)
           .eq("is_read", false);
 
         if (!error && unreadMsgs) {
-          const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+          const readConvs = JSON.parse(localStorage.getItem(readKey) || "{}");
           const actualUnread = unreadMsgs.filter(
             (m) => new Date(m.created_at).getTime() > (readConvs[m.sender_id] || 0),
           ).length;
@@ -153,7 +157,7 @@ export function Sidebar({ className, isCollapsed = false, onToggle }: SidebarPro
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 4000);
     return () => clearInterval(interval);
-  }, [profile?.id]);
+  }, [profile?.id, user?.id]);
 
   const isDarkActive =
     theme === "dark" ||

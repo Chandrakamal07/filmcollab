@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
+import {
   Users, Activity, TrendingUp, FolderOpen, Briefcase, UserCheck, Image as ImageIcon,
   Download, BarChart3, LineChart as LineChartIcon, Eye, Target, Zap, PieChart,
   UserPlus, Loader2, TicketCheck, UserCog, MapPin
@@ -16,7 +16,6 @@ import {
 } from 'recharts';
 
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 
 const CHART_COLORS = {
   yellow: {
@@ -61,7 +60,6 @@ const deterministicDirectoryBenchmarks = [
 ];
 
 export default function AdminAnalytics() {
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("30");
 
@@ -82,13 +80,13 @@ export default function AdminAnalytics() {
     setIsLoading(true);
     try {
       // 1. Fetch Users Data
-      const { data: profiles } = await supabase.from('profiles').select('created_at, category, updated_at, avatar_url');
-      
+      const { data: profiles } = await supabase.from('profiles').select('created_at, category, updated_at, avatar_url, is_verified');
+
       const totalUsers = profiles?.length || 0;
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - parseInt(timeRange));
       const newUsers = profiles?.filter(p => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
-      
+
       // Calculate roles distribution
       const rolesCount: Record<string, number> = {};
       profiles?.forEach(p => {
@@ -107,7 +105,7 @@ export default function AdminAnalytics() {
         const month = new Date(p.created_at).toISOString().slice(0, 7);
         userMonths[month] = (userMonths[month] || 0) + 1;
       });
-      
+
       let runningTotalUsers = 0;
       const userChartData = Object.keys(userMonths).sort().map(month => {
         runningTotalUsers += userMonths[month];
@@ -186,12 +184,20 @@ export default function AdminAnalytics() {
       const teamMembers = userRoles?.filter(ur => ur.role === 'admin') || [];
       const totalTeam = teamMembers.length;
 
+      let activeAdminsCount = 0;
+      try {
+        const { data: activeTeam } = await supabase.from('admin_team_members').select('id, status').eq('status', 'Active');
+        if (activeTeam) activeAdminsCount = activeTeam.length;
+      } catch (e) {
+        console.warn("Could not query admin_team_members status:", e);
+      }
+
       const teamMonths: Record<string, number> = {};
       teamMembers.forEach(ur => {
         const month = new Date(ur.created_at).toISOString().slice(0, 7);
         teamMonths[month] = (teamMonths[month] || 0) + 1;
       });
-      
+
       let runningTotalTeam = 0;
       const teamChartData = Object.keys(teamMonths).sort().map(month => {
         runningTotalTeam += teamMonths[month];
@@ -209,7 +215,7 @@ export default function AdminAnalytics() {
 
       const locationMonths: Record<string, { total: number }> = {};
       const typeDistribution: Record<string, number> = {};
-      
+
       locations?.forEach(l => {
         // Timeline data
         const month = new Date(l.created_at).toISOString().slice(0, 7);
@@ -243,9 +249,9 @@ export default function AdminAnalytics() {
       const activeUsers = profiles?.filter(p => {
         if (!p.updated_at) return false;
         return new Date(p.updated_at).getTime() >= thirtyDaysAgo.getTime();
-      }).length || newUsers;
+      }).length || 0;
 
-      const verifiedUsers = profiles?.filter(p => (p as any).verified || p.avatar_url).length || 0;
+      const verifiedUsers = profiles?.filter(p => p.is_verified === true).length || 0;
 
       // Set states
       setUsersData({
@@ -292,7 +298,7 @@ export default function AdminAnalytics() {
       setTeamData({
         metrics: [
           { title: "Total Admins", value: totalTeam.toLocaleString(), change: "—", icon: UserCog, color: "text-primary" },
-          { title: "Active Admins", value: totalTeam.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
+          { title: "Active Admins", value: activeAdminsCount.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
           { title: "Avg Resolution Time", value: "—", change: "Not instrumented", icon: Activity, color: "text-primary" },
           { title: "Customer Satisfaction", value: "—", change: "Not instrumented", icon: Target, color: "text-primary" }
         ],
@@ -364,12 +370,12 @@ export default function AdminAnalytics() {
 
   const handleExportCSV = () => {
     const allMetrics = [
-      ...usersData.metrics.map((m: any) => ({ category: "Users", ...m })),
-      ...projectsData.metrics.map((m: any) => ({ category: "Projects", ...m })),
-      ...jobsData.metrics.map((m: any) => ({ category: "Jobs", ...m })),
-      ...ticketsData.metrics.map((m: any) => ({ category: "Tickets", ...m })),
-      ...teamData.metrics.map((m: any) => ({ category: "Team", ...m })),
-      ...locationsData.metrics.map((m: any) => ({ category: "Locations", ...m })),
+      ...userData.metrics.map(m => ({ category: "Users", ...m })),
+      ...projectsData.metrics.map(m => ({ category: "Projects", ...m })),
+      ...jobsData.metrics.map(m => ({ category: "Jobs", ...m })),
+      ...ticketsData.metrics.map(m => ({ category: "Tickets", ...m })),
+      ...teamData.metrics.map(m => ({ category: "Team", ...m })),
+      ...locationsData.metrics.map(m => ({ category: "Locations", ...m })),
     ];
     const rows = [
       ["Category", "Metric", "Value", "Change"],
@@ -406,7 +412,7 @@ export default function AdminAnalytics() {
             <h1 className="text-3xl font-display font-bold text-foreground tracking-tight">Analytics</h1>
             <p className="text-muted-foreground mt-1 text-sm">Platform analytics and performance metrics</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Select value={timeRange} onValueChange={setTimeRange}>
               <SelectTrigger className="w-36 bg-surface-elevated border-border/80">
@@ -419,10 +425,10 @@ export default function AdminAnalytics() {
                 <SelectItem value="365">Last year</SelectItem>
               </SelectContent>
             </Select>
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleExportCSV}
               className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground"
             >

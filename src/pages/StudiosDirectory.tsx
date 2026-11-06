@@ -378,7 +378,7 @@ export default function StudiosDirectory() {
   };
 
   // Helper to update viewing company and general list, with DB persistence for persisted studios
-  const updateViewingCompany = async (updated: Company) => {
+  const updateViewingCompany = async (updated: Company): Promise<{ ok: boolean; error?: any }> => {
     if (isUuid(updated.id)) {
       try {
         const { data, error } = await supabase.from("companies").update({
@@ -416,7 +416,7 @@ export default function StudiosDirectory() {
             title: "Update Failed",
             description: error.message || "Failed to persist studio updates to server."
           });
-          return;
+          return { ok: false, error };
         }
 
         if (!data || data.length === 0) {
@@ -425,7 +425,7 @@ export default function StudiosDirectory() {
             title: "Update Failed",
             description: "Studio not found or you lack permission to edit this studio."
           });
-          return;
+          return { ok: false, error: new Error("Zero rows updated") };
         }
       } catch (e: any) {
         console.error("Could not sync company update to DB:", e);
@@ -434,15 +434,12 @@ export default function StudiosDirectory() {
           title: "Update Failed",
           description: e?.message || "Failed to persist studio updates."
         });
-        return;
+        return { ok: false, error: e };
       }
     }
     setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
     setViewingCompany(updated);
-    toast({
-      title: "Studio Updated",
-      description: "Company workspace updated successfully."
-    });
+    return { ok: true };
   };
 
   // Quick stat counters
@@ -586,10 +583,18 @@ export default function StudiosDirectory() {
       });
       return;
     }
-    toast({
-      title: "Message Sent",
-      description: `Your message has been dispatched to ${contactCompany?.name}. They will respond to you shortly!`,
-    });
+    if (contactCompany?.email) {
+      window.location.href = `mailto:${contactCompany.email}?subject=${encodeURIComponent(`FilmCollab Inquiry from ${contactForm.name}`)}&body=${encodeURIComponent(contactForm.message)}`;
+      toast({
+        title: "Inquiry Prepared",
+        description: `Your default mail client has opened to dispatch your inquiry directly to ${contactCompany.name} (${contactCompany.email}).`,
+      });
+    } else {
+      toast({
+        title: "Studio Inquiries",
+        description: `${contactCompany?.name || "This studio"} receives inquiries directly via their listed office contact. Check Studio Details for phone and address.`,
+      });
+    }
     setIsContactOpen(false);
     setContactForm({ name: "", email: "", message: "" });
   };
@@ -947,7 +952,7 @@ export default function StudiosDirectory() {
     setIsEditAboutOpen(true);
   };
 
-  const handleSaveAbout = (e: React.FormEvent) => {
+  const handleSaveAbout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     const updated = {
@@ -969,12 +974,13 @@ export default function StudiosDirectory() {
       gstNumber: editAboutForm.gstNumber,
       services: editAboutForm.services
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     setIsEditAboutOpen(false);
     toast({ title: "Studio Details updated!", description: "Studio details have been updated successfully." });
   };
 
-  const handleAddCrewMember = () => {
+  const handleAddCrewMember = async () => {
     if (!viewingCompany) return;
     if (!newCrewMember.name || !newCrewMember.role) {
       toast({ title: "Fields required", description: "Crew name and role are required.", variant: "destructive" });
@@ -990,23 +996,25 @@ export default function StudiosDirectory() {
       team: [...viewingCompany.team, newMember],
       employeeCount: viewingCompany.employeeCount + 1
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     setNewCrewMember({ name: "", role: "" });
     toast({ title: "Crew member added!", description: `${newMember.name} is now added to the core crew.` });
   };
 
-  const handleDeleteCrewMember = (memberId: string) => {
+  const handleDeleteCrewMember = async (memberId: string) => {
     if (!viewingCompany) return;
     const updated = {
       ...viewingCompany,
       team: viewingCompany.team.filter(m => m.id !== memberId),
       employeeCount: Math.max(1, viewingCompany.employeeCount - 1)
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Crew member removed!", description: "The crew member has been removed." });
   };
 
-  const handleAddProjectDirect = (e: React.FormEvent) => {
+  const handleAddProjectDirect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     if (!newProjForm.title || !newProjForm.year || !newProjForm.role) {
@@ -1031,7 +1039,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         projects: updatedProjects
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setNewProjForm({ title: "", year: "", role: "", description: "" });
       setEditingProjectId(null);
       setIsEditProjectsOpen(false);
@@ -1049,7 +1058,8 @@ export default function StudiosDirectory() {
         projects: [projItem, ...viewingCompany.projects],
         projectsCompleted: viewingCompany.projectsCompleted + 1
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setNewProjForm({ title: "", year: "", role: "", description: "" });
       toast({ title: "Project added!", description: `"${projItem.title}" has been added to your catalog.` });
     }
@@ -1071,18 +1081,19 @@ export default function StudiosDirectory() {
     setIsViewProjectDetailsOpen(true);
   };
 
-  const handleDeleteProjectDirect = (projId: string) => {
+  const handleDeleteProjectDirect = async (projId: string) => {
     if (!viewingCompany) return;
     const updated = {
       ...viewingCompany,
       projects: viewingCompany.projects.filter(p => p.id !== projId),
       projectsCompleted: Math.max(0, viewingCompany.projectsCompleted - 1)
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Project removed!", description: "The project has been deleted from your catalog." });
   };
 
-  const handleDeleteOppDirect = (type: "job" | "audition" | "internship", itemId: string) => {
+  const handleDeleteOppDirect = async (type: "job" | "audition" | "internship", itemId: string) => {
     if (!viewingCompany) return;
     const updated = { ...viewingCompany };
     if (type === "job") {
@@ -1095,11 +1106,12 @@ export default function StudiosDirectory() {
       updated.internships = updated.internships.filter(i => i.id !== itemId);
       updated.internshipsAvailable = updated.internships.length > 0;
     }
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Opportunity removed!", description: "The listing has been successfully deleted." });
   };
 
-  const handleAddMediaUrl = (e: React.FormEvent) => {
+  const handleAddMediaUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     if (!mediaUrlInput.trim()) {
@@ -1110,23 +1122,25 @@ export default function StudiosDirectory() {
       ...viewingCompany,
       gallery: [...viewingCompany.gallery, mediaUrlInput.trim()]
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     setMediaUrlInput("");
     setIsUploadMediaOpen(false);
     toast({ title: "Media uploaded!", description: "New image added to your media gallery." });
   };
 
-  const handleDeleteMediaDirect = (indexToDelete: number) => {
+  const handleDeleteMediaDirect = async (indexToDelete: number) => {
     if (!viewingCompany) return;
     const updated = {
       ...viewingCompany,
       gallery: viewingCompany.gallery.filter((_, idx) => idx !== indexToDelete)
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Media removed!", description: "Image deleted from gallery." });
   };
 
-  const handlePostJob = (e: React.FormEvent) => {
+  const handlePostJob = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     if (!jobForm.position || !jobForm.experience || !jobForm.description) {
@@ -1152,7 +1166,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         jobs: updatedJobs
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setJobForm({ position: "", experience: "", location: "", salary: "", description: "" });
       setEditingJobId(null);
       setIsPostJobDialogOpen(false);
@@ -1173,7 +1188,8 @@ export default function StudiosDirectory() {
         jobs: [item, ...(viewingCompany.jobs || [])],
         hiringNow: true
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setJobForm({ position: "", experience: "", location: "", salary: "", description: "" });
       setIsPostJobDialogOpen(false);
       toast({ title: "Job Posted!", description: `"${item.position}" added successfully.` });
@@ -1192,7 +1208,7 @@ export default function StudiosDirectory() {
     setIsPostJobDialogOpen(true);
   };
 
-  const handleCreateEvent = (e: React.FormEvent) => {
+  const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     if (!eventForm.title || !eventForm.description || !eventForm.date || !eventForm.location) {
@@ -1219,7 +1235,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         events: updatedEvents
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setEventForm({ title: "", description: "", date: "", location: "", isOnline: false, price: "" });
       setEditingEventId(null);
       setIsCreateEventDialogOpen(false);
@@ -1241,7 +1258,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         events: [item, ...(viewingCompany.events || [])]
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setEventForm({ title: "", description: "", date: "", location: "", isOnline: false, price: "" });
       setIsCreateEventDialogOpen(false);
       toast({ title: "Event Created!", description: `"${item.title}" added successfully.` });
@@ -1261,17 +1279,18 @@ export default function StudiosDirectory() {
     setIsCreateEventDialogOpen(true);
   };
 
-  const handleDeleteEventDirect = (eventId: string) => {
+  const handleDeleteEventDirect = async (eventId: string) => {
     if (!viewingCompany) return;
     const updated = {
       ...viewingCompany,
       events: (viewingCompany.events || []).filter(e => e.id !== eventId)
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Event removed!", description: "The event has been successfully deleted." });
   };
 
-  const handleCreateCourse = (e: React.FormEvent) => {
+  const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany) return;
     if (!courseForm.title || !courseForm.description || !courseForm.duration || !courseForm.instructor) {
@@ -1299,7 +1318,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         courses: updatedCourses
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setCourseForm({ title: "", description: "", duration: "", instructor: "", price: "", level: "Beginner", category: "Cinematography" });
       setEditingCourseId(null);
       setIsCreateCourseDialogOpen(false);
@@ -1322,7 +1342,8 @@ export default function StudiosDirectory() {
         ...viewingCompany,
         courses: [item, ...(viewingCompany.courses || [])]
       };
-      updateViewingCompany(updated);
+      const res = await updateViewingCompany(updated);
+      if (!res.ok) return;
       setCourseForm({ title: "", description: "", duration: "", instructor: "", price: "", level: "Beginner", category: "Cinematography" });
       setIsCreateCourseDialogOpen(false);
       toast({ title: "Course Created!", description: `"${item.title}" added successfully.` });
@@ -1343,24 +1364,26 @@ export default function StudiosDirectory() {
     setIsCreateCourseDialogOpen(true);
   };
 
-  const handleDeleteCourseDirect = (courseId: string) => {
+  const handleDeleteCourseDirect = async (courseId: string) => {
     if (!viewingCompany) return;
     const updated = {
       ...viewingCompany,
       courses: (viewingCompany.courses || []).filter(c => c.id !== courseId)
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     toast({ title: "Course removed!", description: "The course has been successfully deleted." });
   };
 
-  const handleUpdateLogo = (e: React.FormEvent) => {
+  const handleUpdateLogo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!viewingCompany || !logoInput.trim()) return;
     const updated = {
       ...viewingCompany,
       logo: logoInput.trim()
     };
-    updateViewingCompany(updated);
+    const res = await updateViewingCompany(updated);
+    if (!res.ok) return;
     setIsEditLogoOpen(false);
     toast({ title: "Logo Updated", description: "Your studio logo/emoji has been updated." });
   };
@@ -1369,8 +1392,11 @@ export default function StudiosDirectory() {
   const handleUpdateAppStatus = async (appId: string, nextStatus: "Reviewed" | "Shortlisted" | "Rejected") => {
     if (isUuid(appId)) {
       try {
-        const { error } = await supabase.from("company_applications").update({ status: nextStatus }).eq("id", appId);
+        const { data, error } = await supabase.from("company_applications").update({ status: nextStatus }).eq("id", appId).select("id");
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error("Application not found or permission denied.");
+        }
       } catch (err: any) {
         toast({
           variant: "destructive",
@@ -1390,10 +1416,9 @@ export default function StudiosDirectory() {
   // Action: Workspace Verify Company
   const handleVerifyCompanyWorkspace = () => {
     if (!userCompany) return;
-    setCompanies(prev => prev.map(c => c.id === userCompany.id ? { ...c, verified: true } : c));
     toast({
-      title: "Studio Verified!",
-      description: "Congratulations! Your upload documents have been verified. Standard verification badge applied.",
+      title: "Verification Request Submitted",
+      description: "Studio documentation has been queued for administrative audit. Badges are applied upon business registration check.",
     });
   };
 

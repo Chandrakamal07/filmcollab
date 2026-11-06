@@ -232,8 +232,7 @@ export default function Dashboard() {
           } else {
             setAttentionItems([]);
           }
-        })
-        .catch(() => setAttentionItems([]));
+        }, () => setAttentionItems([]));
     }
   }, [profile, user]);
 

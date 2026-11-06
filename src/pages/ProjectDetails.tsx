@@ -798,8 +798,12 @@ export default function ProjectDetails() {
       if (error) throw error;
 
       if (project && project.created_by && project.created_by !== currentUser.id) {
+        let creatorProfileId = project.created_by;
+        const { data: cProf } = await supabase.from('profiles').select('id').or(`id.eq.${project.created_by},user_id.eq.${project.created_by}`).limit(1).maybeSingle();
+        if (cProf?.id) creatorProfileId = cProf.id;
+
         supabase.from("notifications").insert({
-          user_id: project.created_by,
+          user_id: creatorProfileId,
           title: "New Project Application",
           description: `Someone applied to join your project: ${project.title}`,
           type: "project",
@@ -1342,8 +1346,12 @@ export default function ProjectDetails() {
         }]);
 
         // Send notification to the user
+        let targetProfileId = memberData.user_id;
+        const { data: tProf } = await supabase.from('profiles').select('id').or(`id.eq.${memberData.user_id},user_id.eq.${memberData.user_id}`).limit(1).maybeSingle();
+        if (tProf?.id) targetProfileId = tProf.id;
+
         await supabase.from("notifications").insert({
-          user_id: memberData.user_id,
+          user_id: targetProfileId,
           title: "Application Accepted",
           description: `Your application to join ${project?.title || 'the project'} has been accepted!`,
           type: "application_update",
@@ -1385,9 +1393,13 @@ export default function ProjectDetails() {
       setApplicants(prev => prev.filter(applicant => applicant.id !== applicantId));
       
       if (memberData?.user_id) {
+        let targetProfileId = memberData.user_id;
+        const { data: tProf } = await supabase.from('profiles').select('id').or(`id.eq.${memberData.user_id},user_id.eq.${memberData.user_id}`).limit(1).maybeSingle();
+        if (tProf?.id) targetProfileId = tProf.id;
+
         // Send notification to the user
         await supabase.from("notifications").insert({
-          user_id: memberData.user_id,
+          user_id: targetProfileId,
           title: "Application Status Update",
           description: `Your application to join ${project?.title || 'the project'} was not accepted at this time.`,
           type: "application_update",

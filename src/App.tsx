@@ -190,6 +190,7 @@ function AppRoutes() {
       <Route path="/privacy" element={<Privacy />} />
       {/* Compatibility alias routes */}
       <Route path="/signin" element={<RedirectToSignIn />} />
+      <Route path="/login" element={<RedirectToSignIn />} />
       <Route path="/signup" element={<RedirectToSignUp />} />
       <Route
         path="/auth/signin"

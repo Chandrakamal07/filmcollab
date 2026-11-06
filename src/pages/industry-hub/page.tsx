@@ -66,6 +66,8 @@ interface Course {
   level: string;
   category: string;
   user_id?: string | null;
+  link?: string | null;
+  website_link?: string | null;
 }
 
 export default function IndustryHubPage() {
@@ -334,7 +336,9 @@ export default function IndustryHubPage() {
           enrolled: item.enrolled || 0,
           level: item.level,
           category: item.category,
-          user_id: item.user_id
+          user_id: item.user_id,
+          website_link: item.website_link || item.link || null,
+          link: item.link || item.website_link || null
         }));
         setCoursesList(mappedCourses);
       }
@@ -1119,8 +1123,9 @@ export default function IndustryHubPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
                     onClick={() => {
-                      if (selectedCourse.link && selectedCourse.link.startsWith('http')) {
-                        window.open(selectedCourse.link, '_blank', 'noopener,noreferrer');
+                      const targetLink = selectedCourse.website_link || selectedCourse.link;
+                      if (targetLink && targetLink.startsWith('http')) {
+                        window.open(targetLink, '_blank', 'noopener,noreferrer');
                       } else {
                         toast({
                           title: "External Provider Registration",
@@ -1446,10 +1451,18 @@ export default function IndustryHubPage() {
                                 className="w-full mt-2 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toast({ title: "Registration successful!", description: `You have enrolled in: ${course.title}` });
+                                  const targetLink = course.website_link || course.link;
+                                  if (targetLink && targetLink.startsWith('http')) {
+                                    window.open(targetLink, '_blank', 'noopener,noreferrer');
+                                  } else {
+                                    toast({
+                                      title: "External Provider Registration",
+                                      description: `Registration for "${course.title}" is hosted externally by the curriculum provider. Link will be made active upon class schedule confirmation.`
+                                    });
+                                  }
                                 }}
                               >
-                                Register Now
+                                Register via Provider
                               </Button>
                             </div>
                           </CardContent>

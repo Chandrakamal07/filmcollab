@@ -290,7 +290,7 @@ export default function AdminUsers() {
         setSelectedProfile(data as any);
 
         // Fetch user projects
-        const authUserId = profileData.user_id || selectedUserId;
+        const authUserId = data?.user_id || selectedUserId;
         const { data: projData, error: projError } = await supabase
           .from("projects")
           .select("*")
@@ -301,12 +301,21 @@ export default function AdminUsers() {
         }
 
         // Fetch user directory files from database
+        const profileId = data?.id || selectedUserId;
         const { data: dbFiles } = await supabase
           .from("directory_files")
           .select("*")
-          .or(`user_id.eq.${selectedUserId},user_id.eq.${profileData.id}`)
+          .or(`user_id.eq.${selectedUserId},user_id.eq.${profileId}${authUserId !== profileId ? `,user_id.eq.${authUserId}` : ''}`)
           .order("created_at", { ascending: false });
-        setSelectedUserDirectoryFiles(dbFiles || []);
+
+        const mappedFiles: DirectoryFile[] = (dbFiles || []).map((f: any) => ({
+          id: f.id,
+          name: f.title || "Untitled File",
+          type: f.file_type || "file",
+          url: f.file_url || "",
+          uploadDate: f.created_at || new Date().toISOString()
+        }));
+        setSelectedUserDirectoryFiles(mappedFiles);
 
       } catch (err) {
         console.error("Error fetching single profile:", err);

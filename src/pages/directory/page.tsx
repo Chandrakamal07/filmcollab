@@ -601,7 +601,7 @@ export default function DirectoryPage() {
 
   // React Query for caching directory files so it loads instantly when navigating back
   const { data: fetchedItems, isLoading: isQueryLoading } = useQuery({
-    queryKey: ['directory_files', projectId],
+    queryKey: ['directory_files', projectId, currentUserId],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       let activeProfileId = user?.id;
@@ -633,7 +633,9 @@ export default function DirectoryPage() {
       if (!data) return [];
 
       const visibleData = data.filter((item: any) =>
-        (item.status !== 'blocked' && (!item.tags || !item.tags.includes('Blocked'))) || item.user_id === userId
+        (item.status !== 'blocked' && (!item.tags || !item.tags.includes('Blocked'))) ||
+        item.user_id === activeProfileId ||
+        (user?.id && item.user_id === user.id)
       );
 
       return visibleData.map((item: any) => {

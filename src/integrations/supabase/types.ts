@@ -2318,6 +2318,8 @@ export type Database = {
 
           user_id: string | null
 
+          profile_id: string | null
+
           name: string | null
 
           email: string | null
@@ -2350,6 +2352,8 @@ export type Database = {
 
           user_id?: string | null
 
+          profile_id?: string | null
+
           name?: string | null
 
           email?: string | null
@@ -2381,6 +2385,8 @@ export type Database = {
           job_id?: string
 
           user_id?: string | null
+
+          profile_id?: string | null
 
           name?: string | null
 
@@ -2841,6 +2847,8 @@ export type Database = {
 
           created_at: string | null
 
+          client_message_id: string | null
+
         }
 
         Insert: {
@@ -2859,6 +2867,8 @@ export type Database = {
 
           created_at?: string | null
 
+          client_message_id?: string | null
+
         }
 
         Update: {
@@ -2876,6 +2886,8 @@ export type Database = {
           is_read?: boolean | null
 
           created_at?: string | null
+
+          client_message_id?: string | null
 
         }
 

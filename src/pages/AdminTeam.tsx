@@ -100,10 +100,11 @@ export default function AdminTeam() {
       }
 
       // Provision corresponding database role in user_roles so server RLS permits administrative operations
-      await supabase.from('user_roles').upsert({
+      const { error: roleErr } = await supabase.from('user_roles').upsert({
         user_id: targetAuthUserId,
         role: 'admin'
-      }, { onConflict: 'user_id' });
+      }, { onConflict: 'user_id,role' });
+      if (roleErr) throw roleErr;
       
       toast({ title: "Team member added successfully!" });
       setIsAddDialogOpen(false);
@@ -125,7 +126,8 @@ export default function AdminTeam() {
         throw new Error("Member not found or permission denied.");
       }
       if (member?.user_id) {
-        await supabase.from('user_roles').delete().eq('user_id', member.user_id);
+        const { error: roleDelErr } = await supabase.from('user_roles').delete().eq('user_id', member.user_id).eq('role', 'admin');
+        if (roleDelErr) console.warn("Could not revoke user_roles admin row:", roleDelErr);
       }
       setTeamMembers(prev => prev.filter(m => m.id !== id));
       toast({ title: "Member removed" });

@@ -55,6 +55,7 @@ interface Post {
   author?: {
     id: string;
     full_name?: string;
+    avatar_url?: string | null;
   };
   is_liked?: boolean;
   is_saved?: boolean;
@@ -71,6 +72,7 @@ interface PostComment {
   author?: {
     id: string;
     full_name?: string;
+    avatar_url?: string | null;
   };
   replies?: PostComment[];
 }
@@ -390,7 +392,7 @@ const PostsPage = () => {
           is_saved: userSavedIds.has(p.id)
         }));
       } else {
-        loadedPosts = [...hardcodedPosts];
+        loadedPosts = [];
       }
 
       let filteredPosts = loadedPosts;
@@ -550,7 +552,10 @@ const PostsPage = () => {
           .from('post-media')
           .upload(filePath, file);
 
-        if (!uploadErr && uploadData) {
+        if (uploadErr) {
+          throw new Error(`Media upload failed: ${uploadErr.message || 'Storage error'}`);
+        }
+        if (uploadData) {
           const { data: { publicUrl } } = supabase.storage.from('post-media').getPublicUrl(uploadData.path);
           uploadedUrls.push(publicUrl);
           uploadedTypes.push(file.type.startsWith('video/') ? 'video' : 'image');
@@ -670,11 +675,15 @@ const PostsPage = () => {
           });
           if (likeErr && likeErr.code !== '23505') throw likeErr;
         } else {
-          const { error: unlikeErr } = await supabase
+          const { data: delData, error: unlikeErr } = await supabase
             .from('post_likes')
             .delete()
-            .match({ post_id: postId, user_id: authorProfileId });
+            .match({ post_id: postId, user_id: authorProfileId })
+            .select("id");
           if (unlikeErr) throw unlikeErr;
+          if (!delData || delData.length === 0) {
+            throw new Error("Like record not found or permission denied.");
+          }
         }
       }
 
@@ -731,11 +740,15 @@ const PostsPage = () => {
           });
           if (saveErr && saveErr.code !== '23505') throw saveErr;
         } else {
-          const { error: unsaveErr } = await supabase
+          const { data: delData, error: unsaveErr } = await supabase
             .from('post_saves')
             .delete()
-            .match({ post_id: postId, user_id: authorProfileId });
+            .match({ post_id: postId, user_id: authorProfileId })
+            .select("id");
           if (unsaveErr) throw unsaveErr;
+          if (!delData || delData.length === 0) {
+            throw new Error("Saved post record not found or permission denied.");
+          }
         }
       }
 

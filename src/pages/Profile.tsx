@@ -1496,12 +1496,15 @@ export default function ProfilePage() {
   // Initialize directory files from database
   const fetchDirectoryFiles = async () => {
     if (!profile?.id) return;
-    const profileDbId = profile.user_id || profile.id;
     try {
+      const orFilter = profile.user_id && profile.user_id !== profile.id
+        ? `user_id.eq.${profile.id},user_id.eq.${profile.user_id}`
+        : `user_id.eq.${profile.id}`;
+
       const { data, error } = await supabase
         .from("directory_files")
         .select("*")
-        .eq("user_id", profileDbId)
+        .or(orFilter)
         .order("created_at", { ascending: false });
 
       if (error && error.code !== '42P01') {
@@ -1578,17 +1581,23 @@ export default function ProfilePage() {
             .eq('profile_id', profile.id)
             .maybeSingle();
 
+          const existingPrivacy = (curSettings?.privacy_settings && typeof curSettings.privacy_settings === 'object' && !Array.isArray(curSettings.privacy_settings))
+            ? (curSettings.privacy_settings as Record<string, any>)
+            : {};
+
           const updatedPrivacy = {
-            ...(curSettings?.privacy_settings || {}),
+            ...existingPrivacy,
             [settingsKey]: value
           };
 
-          await supabase
+          const { error: settingsErr } = await supabase
             .from('settings')
             .upsert({
               profile_id: profile.id,
               privacy_settings: updatedPrivacy
             }, { onConflict: 'profile_id' });
+
+          if (settingsErr) throw settingsErr;
         }
 
         toast({
@@ -2798,12 +2807,16 @@ export default function ProfilePage() {
                                     desc: "Are you sure you want to delete this file? This action cannot be undone.",
                                     onConfirm: async () => {
                                       try {
-                                        await supabase.from('directory_files').delete().eq('id', file.id);
+                                        const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', file.id).select('id');
+                                        if (delErr) throw delErr;
+                                        if (!delData || delData.length === 0) {
+                                          throw new Error("File could not be deleted or access was denied.");
+                                        }
                                         setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
                                         toast({ title: "File deleted successfully" });
-                                      } catch (err) {
+                                      } catch (err: any) {
                                         console.error(err);
-                                        toast({ title: "Failed to delete file", variant: "destructive" });
+                                        toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
                                       }
                                     }
                                   });

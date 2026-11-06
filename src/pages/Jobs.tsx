@@ -67,6 +67,7 @@ interface Job {
   status: string;
   created_at?: string;
   updated_at?: string;
+  applications_count?: number | string | null;
 }
 
 const jobSchema = z.object({
@@ -847,9 +848,17 @@ export default function Jobs() {
     }
 
     try {
+      let applicantProfileId = profile?.id;
+      if (!applicantProfileId && user.id) {
+        const { data: aProf } = await supabase.from('profiles').select('id').or(`id.eq.${user.id},user_id.eq.${user.id}`).limit(1).maybeSingle();
+        if (aProf?.id) applicantProfileId = aProf.id;
+      }
+      applicantProfileId = applicantProfileId || user.id;
+
       const { error } = await supabase.from('job_applications').insert({
         job_id: job.id,
-        user_id: user.id
+        user_id: user.id,
+        profile_id: applicantProfileId
       });
 
       if (error) throw error;
@@ -863,8 +872,12 @@ export default function Jobs() {
       
       // Notify the job poster
       if (job.user_id && job.user_id !== user.id) {
+        let recipientProfileId = job.user_id;
+        const { data: rProf } = await supabase.from('profiles').select('id').or(`id.eq.${job.user_id},user_id.eq.${job.user_id}`).limit(1).maybeSingle();
+        if (rProf?.id) recipientProfileId = rProf.id;
+
         supabase.from("notifications").insert({
-          user_id: job.user_id,
+          user_id: recipientProfileId,
           title: "New Job Application",
           description: `Someone applied for your job: ${job.job_title}`,
           type: "job",
@@ -2241,7 +2254,7 @@ export default function Jobs() {
                             <div className="space-y-2">
                               <div className="flex justify-between items-center py-2 border-b border-muted/50">
                                 <span className="text-sm text-muted-foreground">Total Applications</span>
-                                <span className="font-semibold">{Math.floor(Math.random() * 50) + 10}</span>
+                                <span className="font-semibold">{(selectedJob as any).applications_count ?? ((selectedJob as any).user_id === user?.id ? "0" : "Confidential")}</span>
                               </div>
                             </div>
                           </div>
@@ -2484,7 +2497,7 @@ export default function Jobs() {
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-2 border-b border-muted/50">
                               <span className="text-sm text-muted-foreground">Total Applications</span>
-                              <span className="font-semibold">{Math.floor(Math.random() * 50) + 10}</span>
+                              <span className="font-semibold">{selectedJob.applications_count ?? "0"}</span>
                             </div>
                           </div>
                         </div>

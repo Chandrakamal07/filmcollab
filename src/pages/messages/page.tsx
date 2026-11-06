@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage } from "@/lib/e2ee";
+import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow } from "@/lib/e2ee";
 
 type MessageType = "text" | "image" | "video" | "document" | "audio";
 
@@ -795,83 +795,34 @@ export default function MessagesPage() {
 
     if (user && !isGuestSession && isValidSender && isValidReceiver) {
       try {
-        let payload = content;
-        
-        // E2EE: Attempt to encrypt the message before sending
-        if (privateKey) {
-          try {
-            const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
-            if (rxData && rxData.public_key) {
-              const otherPubKey = await importPublicKey(JSON.parse(rxData.public_key));
-              const sharedKey = await deriveAESKey(privateKey, otherPubKey);
-              const encrypted = await encryptMessage(sharedKey, content);
-              payload = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
-            } else {
-              throw new Error("Recipient has not published an E2EE public key. Message held in outbox to prevent unencrypted transmission.");
-            }
-          } catch(e: any) {
-            console.warn("E2EE encryption halted send:", e);
-            toast({
-              variant: "destructive",
-              title: "Encryption Required",
-              description: e.message || "Message transmission halted to prevent unencrypted plaintext leak."
-            });
-            setConversations((prev) => {
-              const updated = prev.map((c) =>
-                c.id === activeId
-                  ? {
-                      ...c,
-                      messages: c.messages.map((m) =>
-                        m.id === newMsg.id ? { ...m, failed: true } : m
-                      )
-                    }
-                  : c
-              );
-              saveLocalData(updated);
-              return updated;
-            });
-            return;
-          }
-        }
+        const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
+
+        // Mandatory fail-closed encryption: throws if sender privateKey is null, recipient key missing, or encryption fails
+        const { envelope } = await encryptForRecipientOrThrow({
+          senderPrivateKey: privateKey,
+          recipientPublicKeyJwkOrStr: rxData?.public_key,
+          plaintext: content
+        });
 
         const { error } = await supabase.from("messages").insert({
           sender_id: currentUserId,
           receiver_id: activeId,
-          content: payload,
+          content: envelope,
           type,
-          is_read: false
+          is_read: false,
+          client_message_id: newMsg.id
         });
 
-        if (error) {
-          console.error("Database insert message failed:", error);
-          toast({
-            variant: "destructive",
-            title: "Message Delivery Failed",
-            description: error.message || "Message could not be saved to the server."
-          });
-          setConversations((prev) => {
-            const updated = prev.map((c) =>
-              c.id === activeId
-                ? {
-                    ...c,
-                    messages: c.messages.map((m) =>
-                      m.id === newMsg.id ? { ...m, failed: true } : m
-                    )
-                  }
-                : c
-            );
-            saveLocalData(updated);
-            return updated;
-          });
-        } else {
-          loadChatData(); // Reload from db to overwrite temp message with db version
+        if (error && error.code !== '23505') {
+          throw error;
         }
+        loadChatData();
       } catch (err: any) {
-        console.error("Error inserting message to database:", err);
+        console.warn("Message delivery halted / failed:", err);
         toast({
           variant: "destructive",
           title: "Message Delivery Failed",
-          description: err?.message || "Failed to communicate with message server."
+          description: err.message || "Message could not be encrypted or saved to the server."
         });
         setConversations((prev) => {
           const updated = prev.map((c) =>
@@ -887,6 +838,7 @@ export default function MessagesPage() {
           saveLocalData(updated);
           return updated;
         });
+        return;
       }
     }
   };
@@ -913,30 +865,25 @@ export default function MessagesPage() {
     });
 
     try {
-      let payload = msgToRetry.content;
-      if (privateKey) {
-        try {
-          const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
-          if (rxData && rxData.public_key) {
-            const otherPubKey = await importPublicKey(JSON.parse(rxData.public_key));
-            const sharedKey = await deriveAESKey(privateKey, otherPubKey);
-            const encrypted = await encryptMessage(sharedKey, msgToRetry.content);
-            payload = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
-          }
-        } catch(e) {
-          console.warn("E2EE encryption failed during retry:", e);
-        }
-      }
+      const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
+
+      // Mandatory fail-closed encryption: throws if sender privateKey is null, recipient key missing, or encryption fails
+      const { envelope } = await encryptForRecipientOrThrow({
+        senderPrivateKey: privateKey,
+        recipientPublicKeyJwkOrStr: rxData?.public_key,
+        plaintext: msgToRetry.content
+      });
 
       const { error } = await supabase.from("messages").insert({
         sender_id: currentUserId,
         receiver_id: activeId,
-        content: payload,
+        content: envelope,
         type: msgToRetry.type,
-        is_read: false
+        is_read: false,
+        client_message_id: msgToRetry.id
       });
 
-      if (error) {
+      if (error && error.code !== '23505') {
         throw error;
       }
 
@@ -949,7 +896,7 @@ export default function MessagesPage() {
       toast({
         variant: "destructive",
         title: "Retry failed",
-        description: err?.message || "Could not deliver message."
+        description: err?.message || "Could not deliver encrypted message."
       });
       setConversations((prev) => {
         const updated = prev.map((c) =>

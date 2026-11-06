@@ -35,7 +35,7 @@ import {
 export default function LocationDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   
   const [location, setLocation] = useState<any>(null);
   const [creatorName, setCreatorName] = useState<string>('');
@@ -93,9 +93,16 @@ export default function LocationDetails() {
         receiverProfileId = recProfile.id;
       }
 
+      let senderProfileId = profile?.id;
+      if (!senderProfileId && user?.id) {
+        const { data: sProf } = await supabase.from('profiles').select('id').or(`id.eq.${user.id},user_id.eq.${user.id}`).limit(1).maybeSingle();
+        if (sProf?.id) senderProfileId = sProf.id;
+      }
+      senderProfileId = senderProfileId || user.id;
+
       // 1. Insert message
       const { error: msgErr } = await supabase.from('messages').insert({
-        sender_id: user.id,
+        sender_id: senderProfileId,
         receiver_id: receiverProfileId,
         content: enquiryMessage.trim(),
         type: 'property_enquiry'
