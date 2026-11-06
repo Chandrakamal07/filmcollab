@@ -19,12 +19,14 @@ import {
   Settings
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function AdminCommunities() {
+  const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
 
@@ -113,8 +115,15 @@ export default function AdminCommunities() {
     }
     const newTags = editingTags.tags;
     try {
-      const { error } = await supabase.from("community_groups").update({ tags: newTags }).eq("id", strId);
+      const { data, error } = await supabase
+        .from("community_groups")
+        .update({ tags: newTags })
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Community not found or permission denied.");
+      }
       setCommunities(prev => prev.map(c => c.id === communityId ? { ...c, tags: newTags } : c));
       setEditingTags(null);
       toast({
@@ -149,8 +158,15 @@ export default function AdminCommunities() {
       return;
     }
     try {
-      const { error } = await supabase.from("community_groups").delete().eq("id", strId);
+      const { data, error } = await supabase
+        .from("community_groups")
+        .delete()
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Community not found or permission denied.");
+      }
       setCommunities(prev => prev.filter(c => c.id !== communityId));
       toast({
         title: "Community deleted",
@@ -211,7 +227,7 @@ export default function AdminCommunities() {
   });
 
   return (
-    <AdminLayout pageTitle="Communities Management">
+    <AdminLayout pageTitle="Communities Management" pageName="Communities">
       <div className="space-y-6">
         {/* Page Header */}
         <div className="border-b border-border/60 pb-5">
@@ -413,6 +429,8 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Open Community Messages"
+                            onClick={() => navigate(`/community/group/${community.id}`)}
                             className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -421,6 +439,8 @@ export default function AdminCommunities() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            title="Manage Settings"
+                            onClick={() => navigate(`/community/group/${community.id}`)}
                             className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                           >
                             <Settings className="h-4 w-4" />

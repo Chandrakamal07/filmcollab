@@ -54,7 +54,7 @@ export default function CastingCallDetails() {
             <h3 className="font-bold text-primary">You are the creator</h3>
             <p className="text-xs text-muted-foreground">Manage your applicants below.</p>
           </div>
-          <Button variant="outline" size="sm">Edit Call</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/casting-calls/new?edit=${call.id}`)}>Edit Call</Button>
         </div>
       );
     }

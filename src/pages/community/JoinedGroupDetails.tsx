@@ -180,6 +180,7 @@ export default function JoinedGroupDetails() {
 
   useEffect(() => {
     if (!groupId) return;
+    let interval: NodeJS.Timeout | null = null;
     if (isUuid(groupId)) {
       const fetchGroupMessages = async () => {
         try {
@@ -208,9 +209,14 @@ export default function JoinedGroupDetails() {
         }
       };
       fetchGroupMessages();
+      interval = setInterval(fetchGroupMessages, 4000);
     } else {
       setChatMessages([]);
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [groupId, user?.id, profile?.full_name]);
 
   const handleSendMessage = async () => {
@@ -302,6 +308,36 @@ export default function JoinedGroupDetails() {
     }
   };
 
+  if (loadingGroup) {
+    return (
+      <AppLayout>
+        <div className="h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-4" />
+          <p className="text-sm font-mono text-muted-foreground">Loading collective details...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!group) {
+    return (
+      <AppLayout>
+        <div className="h-screen bg-background flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+          <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center justify-center mb-4">
+            <Users className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-display font-bold text-foreground mb-2">Group Not Found</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            The community collective you are looking for does not exist or you do not have permission to view it.
+          </p>
+          <Button onClick={() => navigate('/community')} className="bg-primary text-primary-foreground hover:bg-primary-hover">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Communities
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="h-screen bg-background flex flex-col">
@@ -327,7 +363,15 @@ export default function JoinedGroupDetails() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast({ title: "Link copied to clipboard" });
+                }}
+              >
                 <Share2 className="w-4 h-4 mr-1.5" />
                 Share
               </Button>

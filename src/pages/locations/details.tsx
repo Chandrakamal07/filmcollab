@@ -81,20 +81,35 @@ export default function LocationDetails() {
     if (!enquiryMessage.trim()) return toast.error("Message is required");
     setIsSubmitting(true);
     try {
+      // Resolve receiver profile ID (messages FK points to profiles.id)
+      let receiverProfileId = location.created_by;
+      const { data: recProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`id.eq.${location.created_by},user_id.eq.${location.created_by}`)
+        .limit(1)
+        .maybeSingle();
+      if (recProfile?.id) {
+        receiverProfileId = recProfile.id;
+      }
+
       // 1. Insert message
-      await supabase.from('messages').insert({
+      const { error: msgErr } = await supabase.from('messages').insert({
         sender_id: user.id,
-        receiver_id: location.created_by,
-        content: enquiryMessage,
+        receiver_id: receiverProfileId,
+        content: enquiryMessage.trim(),
         type: 'property_enquiry'
       });
-      // 2. Insert notification
+      if (msgErr) throw msgErr;
+
+      // 2. Insert notification (secondary, best-effort)
       await supabase.from('notifications').insert({
-        user_id: location.created_by,
+        user_id: receiverProfileId,
         title: 'New Property Enquiry',
         description: `Someone sent an enquiry for ${location.name}`,
         type: 'message'
       });
+
       toast.success("Enquiry sent successfully!");
       setIsEnquireOpen(false);
       setEnquiryMessage('');
@@ -112,21 +127,37 @@ export default function LocationDetails() {
     }
     setIsSubmitting(true);
     try {
-      await supabase.from('property_site_visits').insert({
+      let ownerProfileId = location.created_by;
+      const { data: oProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`id.eq.${location.created_by},user_id.eq.${location.created_by}`)
+        .limit(1)
+        .maybeSingle();
+      if (oProfile?.id) {
+        ownerProfileId = oProfile.id;
+      }
+
+      const { error: visitErr } = await supabase.from('property_site_visits').insert({
         location_id: id || '',
         user_id: user.id,
         owner_id: location.created_by || null,
         selected_day: selectedDays.join(', '),
         selected_time: `${visitStartTime} to ${visitEndTime}`,
-        message: visitMessage,
+        message: visitMessage.trim(),
         status: 'pending'
       } as any);
+
+      if (visitErr) throw visitErr;
+
+      // Notify owner
       await supabase.from('notifications').insert({
-        user_id: location.created_by,
+        user_id: ownerProfileId,
         title: 'New Site Visit Request',
         description: `Someone requested a site visit for ${location.name}`,
         type: 'booking'
       });
+
       toast.success("Site visit requested successfully!");
       setIsBookVisitOpen(false);
       setSelectedDays([]);
@@ -208,19 +239,24 @@ export default function LocationDetails() {
 
     try {
       if (currentlyWishlisted) {
-        await supabase
+        const { error } = await supabase
           .from('shooting_location_likes')
           .delete()
           .eq('location_id', id)
           .eq('user_id', user.id);
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('shooting_location_likes')
           .insert({ location_id: id, user_id: user.id });
+        if (error) throw error;
       }
     } catch (error) {
       console.error("Error toggling like:", error);
-      fetchLocationDetails(); // revert on error
+      // Revert optimistic update
+      setIsWishlisted(currentlyWishlisted);
+      setLikesCount(prev => prev + (currentlyWishlisted ? 1 : -1));
+      toast.error("Could not update wishlist");
     }
   };
 
@@ -307,7 +343,15 @@ export default function LocationDetails() {
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Locations
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast.success("Location link copied to clipboard!");
+              }}
+            >
               <Share2 className="mr-2 h-4 w-4" /> Share
             </Button>
             {(user?.id === location.created_by || user?.id === location.profile_id || user?.id === location.user_id) && (
@@ -487,8 +531,8 @@ export default function LocationDetails() {
                 <CardContent className="p-6 space-y-6">
                   <div>
                     <div className="flex items-end gap-1.5 mb-1">
-                      <span className="font-mono text-3xl font-bold text-foreground">₹{Number(location.price).toLocaleString()}</span>
-                      <span className="text-muted-foreground pb-1">/ {location.price_type.replace('Per ', '')}</span>
+                      <span className="font-mono text-3xl font-bold text-foreground">₹{location.price ? Number(location.price).toLocaleString() : '0'}</span>
+                      <span className="text-muted-foreground pb-1">/ {(location.price_type || 'per_day').replace(/^per[_\s]*/i, '').replace('Per ', '')}</span>
                     </div>
                     {location.price_hour && (
                       <div className="text-sm font-mono text-muted-foreground mt-1">

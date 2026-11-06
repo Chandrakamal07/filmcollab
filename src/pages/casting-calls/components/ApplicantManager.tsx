@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCastingCalls } from "@/hooks/use-casting-calls";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ interface ApplicantManagerProps {
 }
 
 export function ApplicantManager({ castingCallId }: ApplicantManagerProps) {
+  const navigate = useNavigate();
   const { getCastingCallApplicants, changeApplicantStatus } = useCastingCalls();
   const applicants = getCastingCallApplicants(castingCallId);
   const [searchQuery, setSearchQuery] = useState("");
@@ -191,10 +193,34 @@ export function ApplicantManager({ castingCallId }: ApplicantManagerProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" title="View Portfolio" className="h-8 w-8">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        title="View Portfolio" 
+                        className="h-8 w-8"
+                        onClick={() => {
+                          if (app.portfolioUrl) {
+                            window.open(app.portfolioUrl, "_blank", "noopener,noreferrer");
+                          } else {
+                            toast.info("No external portfolio link provided by applicant.");
+                          }
+                        }}
+                      >
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" title="Message" className="h-8 w-8">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        title="Message" 
+                        className="h-8 w-8"
+                        onClick={() => {
+                          if (app.userId) {
+                            navigate(`/messages?recipient=${app.userId}`);
+                          } else {
+                            toast.error("Applicant user account unavailable.");
+                          }
+                        }}
+                      >
                         <MessageCircle className="w-4 h-4 text-muted-foreground" />
                       </Button>
                       {app.status === "Interested" && (

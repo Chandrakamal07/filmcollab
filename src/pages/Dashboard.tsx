@@ -16,6 +16,8 @@ import {
   CheckSquare,
   MapPin,
   Sparkles,
+  Bell,
+  CheckCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +78,8 @@ export default function Dashboard() {
   const [featuredProject, setFeaturedProject] = React.useState<any | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [liveJobs, setLiveJobs] = React.useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [attentionItems, setAttentionItems] = React.useState<any[]>([]);
   const [projectQuickTab, setProjectQuickTab] = React.useState<"Overview" | "Tasks" | "Team" | "Files">("Overview");
 
   React.useEffect(() => {
@@ -199,6 +203,37 @@ export default function Dashboard() {
             setDashboardEvents(data);
           }
         });
+
+      // Attention Items (real unread notifications)
+      const targetNotifyId = profileDbId || currentUserId;
+      supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", targetNotifyId)
+        .order("created_at", { ascending: false })
+        .limit(4)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const mapped = data.map((n: any) => {
+              let Icon = Bell;
+              if (n.type === 'message') Icon = MessageSquare;
+              else if (n.type === 'job') Icon = Users;
+              else if (n.type === 'booking') Icon = MapPin;
+              else if (n.type === 'project') Icon = CheckSquare;
+              return {
+                icon: Icon,
+                title: n.title || "Notification",
+                subtitle: n.description || "",
+                time: formatRelativeTime(n.created_at),
+                href: n.action_url || "/notifications"
+              };
+            });
+            setAttentionItems(mapped);
+          } else {
+            setAttentionItems([]);
+          }
+        })
+        .catch(() => setAttentionItems([]));
     }
   }, [profile, user]);
 
@@ -237,37 +272,6 @@ export default function Dashboard() {
           FALLBACK_OPPORTUNITIES[idx % FALLBACK_OPPORTUNITIES.length].image,
       }))
       : FALLBACK_OPPORTUNITIES;
-
-  const attentionItems = [
-    {
-      icon: Users,
-      title: "12 new project applications",
-      subtitle: activeProjectTitle,
-      time: "2h ago",
-      href: activeProjectRoute,
-    },
-    {
-      icon: MessageSquare,
-      title: "New message in studio inbox",
-      subtitle: "“I'd love to discuss the role further...”",
-      time: "4h ago",
-      href: "/messages",
-    },
-    {
-      icon: CheckSquare,
-      title: "Task due tomorrow",
-      subtitle: "Finalize shooting script & shot list",
-      time: "1d ago",
-      href: activeProjectRoute,
-    },
-    {
-      icon: MapPin,
-      title: "Location suggestion received",
-      subtitle: dashboardEvents[0]?.location || "Lonavala, Maharashtra",
-      time: "1d ago",
-      href: "/locations",
-    },
-  ];
 
   const stats = [
     {
@@ -394,8 +398,8 @@ export default function Dashboard() {
                         type="button"
                         onClick={() => setProjectQuickTab(tab)}
                         className={`relative pb-2.5 text-xs sm:text-sm font-medium transition-colors ${active
-                            ? "text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
                           }`}
                       >
                         {tab}
@@ -590,34 +594,42 @@ export default function Dashboard() {
                 </div>
 
                 <div className="space-y-2.5">
-                  {attentionItems.map((item, idx) => (
-                    <StaggerItem key={idx} index={idx}>
-                      <div
-                        onClick={() => navigate(item.href)}
-                        className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#1A1C21] hover:border-primary/40 hover:bg-[#202329] p-3.5 flex items-center justify-between gap-3 transition-all group"
-                      >
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary flex-shrink-0">
-                            <item.icon className="h-4 w-4" />
+                  {attentionItems.length > 0 ? (
+                    attentionItems.map((item, idx) => (
+                      <StaggerItem key={idx} index={idx}>
+                        <div
+                          onClick={() => navigate(item.href)}
+                          className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#1A1C21] hover:border-primary/40 hover:bg-[#202329] p-3.5 flex items-center justify-between gap-3 transition-all group"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary flex-shrink-0">
+                              <item.icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                                {item.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                {item.subtitle}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                              {item.title}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {item.subtitle}
-                            </p>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="font-mono text-[11px] text-muted-foreground">
+                              {item.time}
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="font-mono text-[11px] text-muted-foreground">
-                            {item.time}
-                          </span>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                        </div>
-                      </div>
-                    </StaggerItem>
-                  ))}
+                      </StaggerItem>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-white/[0.07] bg-[#1A1C21]/60 p-6 text-center">
+                      <CheckCircle2 className="h-8 w-8 text-muted-foreground/60 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-foreground">All caught up</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">No pending alerts or notifications requiring attention.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

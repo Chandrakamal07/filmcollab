@@ -98,7 +98,7 @@ export default function StudiosDirectory() {
             id: c.id,
             name: c.name,
             logo: c.logo || c.name.slice(0, 2).toUpperCase(),
-            coverImage: c.cover_image || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+            coverImage: c.cover_image || c.banner || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
             category: c.category || "Production House",
             description: c.description || "",
             establishedYear: c.established_year || 2020,
@@ -381,7 +381,7 @@ export default function StudiosDirectory() {
   const updateViewingCompany = async (updated: Company) => {
     if (isUuid(updated.id)) {
       try {
-        await supabase.from("companies").update({
+        const { data, error } = await supabase.from("companies").update({
           name: updated.name,
           category: updated.category,
           description: updated.description,
@@ -400,19 +400,49 @@ export default function StudiosDirectory() {
           services: updated.services,
           logo: updated.logo,
           banner: updated.coverImage,
+          cover_image: updated.coverImage,
           jobs: updated.jobs as any,
           auditions: updated.auditions as any,
           internships: updated.internships as any,
           projects: updated.projects as any,
           team: updated.team as any,
           gallery: updated.gallery
-        }).eq("id", updated.id);
-      } catch (e) {
-        console.warn("Could not sync company update to DB:", e);
+        }).eq("id", updated.id).select("id");
+
+        if (error) {
+          console.error("Could not sync company update to DB:", error);
+          toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: error.message || "Failed to persist studio updates to server."
+          });
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: "Studio not found or you lack permission to edit this studio."
+          });
+          return;
+        }
+      } catch (e: any) {
+        console.error("Could not sync company update to DB:", e);
+        toast({
+          variant: "destructive",
+          title: "Update Failed",
+          description: e?.message || "Failed to persist studio updates."
+        });
+        return;
       }
     }
     setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
     setViewingCompany(updated);
+    toast({
+      title: "Studio Updated",
+      description: "Company workspace updated successfully."
+    });
   };
 
   // Quick stat counters
@@ -636,30 +666,37 @@ export default function StudiosDirectory() {
     if (!applicationTarget) return;
 
     try {
-      let savedAppId = "app_" + Date.now();
-      if (isUuid(applicationTarget.companyId)) {
-        const { data, error } = await supabase.from("company_applications").insert({
-          company_id: applicationTarget.companyId,
-          user_id: user?.id || null,
-          role: applicationTarget.title,
-          name: appForm.name,
-          email: appForm.email,
-          portfolio: appForm.demoReelUrl || appForm.resumeUrl,
-          notes: `Phone: ${appForm.phone} | Experience: ${appForm.experience} | Cover Letter: ${appForm.coverLetter}`,
-          status: "Pending"
-        }).select().single();
-
-        if (error) {
-          console.error("Failed persisting company application:", error);
-          toast({
-            variant: "destructive",
-            title: "Submission Failed",
-            description: error.message || "Failed to deliver application to studio server. Your draft has been preserved."
-          });
-          return;
-        }
-        if (data?.id) savedAppId = data.id;
+      if (!isUuid(applicationTarget.companyId)) {
+        toast({
+          title: "Demo Studio Listing",
+          description: "This is a sample listing for platform preview. Live applications are only accepted by verified registered production studios."
+        });
+        setIsApplicationOpen(false);
+        return;
       }
+
+      let savedAppId = "app_" + Date.now();
+      const { data, error } = await supabase.from("company_applications").insert({
+        company_id: applicationTarget.companyId,
+        user_id: user?.id || null,
+        role: applicationTarget.title,
+        name: appForm.name,
+        email: appForm.email,
+        portfolio: appForm.demoReelUrl || appForm.resumeUrl,
+        notes: `Phone: ${appForm.phone} | Experience: ${appForm.experience} | Cover Letter: ${appForm.coverLetter}`,
+        status: "Pending"
+      }).select().single();
+
+      if (error) {
+        console.error("Failed persisting company application:", error);
+        toast({
+          variant: "destructive",
+          title: "Submission Failed",
+          description: error.message || "Failed to deliver application to studio server. Your draft has been preserved."
+        });
+        return;
+      }
+      if (data?.id) savedAppId = data.id;
 
       const newApp: Application = {
         id: savedAppId,

@@ -234,19 +234,28 @@ export default function CommunityPage() {
 
       if (groupErr) throw groupErr;
 
-      // Add creator as Owner in community_group_members
-      const { error: memberErr } = await supabase
+      // Verify creator Owner membership (created automatically by DB trigger, or fallback upsert)
+      const { data: existingMember } = await supabase
         .from("community_group_members")
-        .insert({
-          group_id: newGroup.id,
-          user_id: user.id,
-          role: "Owner",
-        });
+        .select("id")
+        .eq("group_id", newGroup.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      if (memberErr) {
-        // Atomic compensation: clean up orphaned group record so no unusable setup remains
-        await supabase.from("community_groups").delete().eq("id", newGroup.id);
-        throw new Error(`Failed to establish owner membership: ${memberErr.message}. Group creation rolled back.`);
+      if (!existingMember) {
+        const { error: memberErr } = await supabase
+          .from("community_group_members")
+          .upsert({
+            group_id: newGroup.id,
+            user_id: user.id,
+            role: "Owner",
+          }, { onConflict: "group_id,user_id" });
+
+        if (memberErr && memberErr.code !== '23505') {
+          // Atomic compensation: clean up orphaned group record only on genuine unrecoverable error
+          await supabase.from("community_groups").delete().eq("id", newGroup.id);
+          throw new Error(`Failed to establish owner membership: ${memberErr.message}. Group creation rolled back.`);
+        }
       }
 
       toast({

@@ -124,7 +124,7 @@ export default function AdminNotifications() {
   });
 
   return (
-    <AdminLayout pageTitle="Notifications">
+    <AdminLayout pageTitle="Notifications" pageName="Notifications">
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex items-center justify-between">

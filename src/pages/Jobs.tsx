@@ -802,43 +802,26 @@ export default function Jobs() {
 
   const fetchApplicants = async (jobId: string) => {
     try {
-      // Mock applicants data - in a real app, you'd fetch from your database
-      const mockApplicants = [
-        {
-          id: "1",
-          name: "John Smith",
-          email: "john.smith@email.com",
-          avatar: "JS",
-          appliedDate: "2025-01-08",
-          status: "pending",
-          experience: "5 years",
-          skills: ["React", "Node.js", "TypeScript"],
-          resume: "john_smith_resume.pdf"
-        },
-        {
-          id: "2", 
-          name: "Sarah Johnson",
-          email: "sarah.j@email.com",
-          avatar: "SJ",
-          appliedDate: "2025-01-07",
-          status: "reviewed",
-          experience: "3 years",
-          skills: ["Vue.js", "Python", "Django"],
-          resume: "sarah_johnson_resume.pdf"
-        },
-        {
-          id: "3",
-          name: "Mike Chen",
-          email: "mike.chen@email.com", 
-          avatar: "MC",
-          appliedDate: "2025-01-06",
-          status: "shortlisted",
-          experience: "7 years",
-          skills: ["Angular", "Java", "Spring Boot"],
-          resume: "mike_chen_resume.pdf"
-        }
-      ];
-      setApplicants(mockApplicants);
+      const { data, error } = await supabase
+        .from('job_applications')
+        .select('id, name, email, phone, experience, skills, resume_url, portfolio_url, status, created_at, user_id')
+        .eq('job_id', jobId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setApplicants((data || []).map((app: any) => ({
+        id: app.id,
+        name: app.name || "Applicant",
+        email: app.email || "",
+        avatar: (app.name || "A").slice(0, 2).toUpperCase(),
+        appliedDate: app.created_at ? new Date(app.created_at).toISOString().split("T")[0] : "Recent",
+        status: (app.status || "pending").toLowerCase(),
+        experience: app.experience || "Not specified",
+        skills: app.skills || [],
+        resume: app.resume_url || "",
+        portfolio: app.portfolio_url || "",
+        user_id: app.user_id
+      })));
     } catch (error) {
       console.error('Error fetching applicants:', error);
       setApplicants([]);
@@ -2387,12 +2370,36 @@ export default function Jobs() {
                                       {applicant.status}
                                     </Badge>
                                     <div className="flex gap-2">
-                                      <Button size="sm" variant="outline" className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover">
-                                        View Resume
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover">
-                                        Contact
-                                      </Button>
+                                      <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
+                                          onClick={() => {
+                                            if (applicant.resume) {
+                                              window.open(applicant.resume, '_blank');
+                                            } else {
+                                              toast({ title: "No Resume Attached", description: "This applicant did not provide a resume file." });
+                                            }
+                                          }}
+                                        >
+                                          View Resume
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
+                                          onClick={() => {
+                                            if (applicant.user_id) {
+                                              navigate(`/messages?recipient=${applicant.user_id}`);
+                                            } else if (applicant.email) {
+                                              window.location.href = `mailto:${applicant.email}`;
+                                            } else {
+                                              toast({ title: "No Contact Info", description: "Applicant contact details are unavailable." });
+                                            }
+                                          }}
+                                        >
+                                          Contact
+                                        </Button>
                                     </div>
                                   </div>
                                 </div>

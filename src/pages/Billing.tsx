@@ -398,7 +398,12 @@ const Billing = () => {
                 <Users className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h4 className="font-medium text-foreground mb-1">Contact Support</h4>
                 <p className="text-sm text-muted-foreground mb-3">Get help from our support team</p>
-                <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors"
+                  onClick={() => navigate('/tickets')}
+                >
                   Contact Us
                 </Button>
               </div>
@@ -406,7 +411,12 @@ const Billing = () => {
                 <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                 <h4 className="font-medium text-foreground mb-1">FAQ</h4>
                 <p className="text-sm text-muted-foreground mb-3">Find answers to common questions</p>
-                <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors"
+                  onClick={() => navigate('/terms')}
+                >
                   View FAQ
                 </Button>
               </div>
@@ -414,7 +424,12 @@ const Billing = () => {
                 <Star className="w-8 h-8 text-primary mx-auto mb-2" />
                 <h4 className="font-medium text-foreground mb-1">Feature Request</h4>
                 <p className="text-sm text-muted-foreground mb-3">Suggest new features</p>
-                <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground transition-colors"
+                  onClick={() => navigate('/tickets?type=feature')}
+                >
                   Submit Request
                 </Button>
               </div>

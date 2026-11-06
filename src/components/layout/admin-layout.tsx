@@ -21,7 +21,8 @@ export function AdminLayout({ children, pageTitle, pageName, contentClassName }:
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
 
-  const isAuthorized = !pageName || hasPermission(pageName);
+  const effectivePageName = pageName || (pageTitle ? pageTitle.replace(/\s*(Management|Details|Not Found)\s*/gi, '').trim() : '');
+  const isAuthorized = effectivePageName ? hasPermission(effectivePageName) : hasPermission("Dashboard");
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">

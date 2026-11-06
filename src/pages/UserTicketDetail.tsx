@@ -107,11 +107,12 @@ export default function UserTicketDetail() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !profile) return;
     
+    const draftText = newMessage.trim();
     const tempMessage = {
       id: Date.now(),
       ticket_id: ticketId,
       author_id: profile.id,
-      message: newMessage.trim(),
+      message: draftText,
       created_at: new Date().toISOString(),
       author: profile
     };
@@ -126,7 +127,7 @@ export default function UserTicketDetail() {
         .insert({
           ticket_id: ticketId,
           author_id: profile.id,
-          message: newMessage.trim()
+          message: draftText
         })
         .select(`*, author:profiles(id, full_name, role)`).single();
 
@@ -135,6 +136,7 @@ export default function UserTicketDetail() {
     } catch (error: any) {
       console.error("Send message error:", error);
       setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+      setNewMessage(draftText);
       toast({ title: `Failed to send message: ${error.message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsSending(false);

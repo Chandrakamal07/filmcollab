@@ -487,6 +487,32 @@ export default function MessagesPage() {
         return lastB - lastA;
       });
 
+      // Merge account-scoped outbox of unsent/failed messages so polling never drops retry actions
+      try {
+        const cachedRaw = localStorage.getItem(`chat_conversations${storagePrefix}`);
+        if (cachedRaw) {
+          const cachedConvs: Conversation[] = JSON.parse(cachedRaw);
+          for (const cConv of cachedConvs) {
+            const failedMessages = (cConv.messages || []).filter(m => m.failed);
+            if (failedMessages.length > 0) {
+              const matchedDbConv = dbConversations.find(c => c.id === cConv.id);
+              if (matchedDbConv) {
+                for (const fMsg of failedMessages) {
+                  if (!matchedDbConv.messages.some(m => m.id === fMsg.id)) {
+                    matchedDbConv.messages.push(fMsg);
+                  }
+                }
+                matchedDbConv.messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              } else {
+                dbConversations.push(cConv);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not merge outbox failed messages:", err);
+      }
+
       setConversations(dbConversations);
 
       if (!nextActiveId && dbConversations.length > 0) {
@@ -650,10 +676,10 @@ export default function MessagesPage() {
     setActiveId(id);
     setIsMobileChatOpen(true);
 
-    // Clear unread count locally
-    const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+    // Clear unread count locally (scoped by account)
+    const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
     readConvs[id] = Date.now();
-    localStorage.setItem("read_conversations", JSON.stringify(readConvs));
+    localStorage.setItem(`read_conversations${storagePrefix}`, JSON.stringify(readConvs));
 
     const updated = conversations.map((c) =>
       c.id === id ? { ...c, unread: 0, messages: c.messages.map(m => ({ ...m, read: true })) } : c
@@ -780,9 +806,31 @@ export default function MessagesPage() {
               const sharedKey = await deriveAESKey(privateKey, otherPubKey);
               const encrypted = await encryptMessage(sharedKey, content);
               payload = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
+            } else {
+              throw new Error("Recipient has not published an E2EE public key. Message held in outbox to prevent unencrypted transmission.");
             }
-          } catch(e) {
-            console.warn("E2EE encryption failed during send:", e);
+          } catch(e: any) {
+            console.warn("E2EE encryption halted send:", e);
+            toast({
+              variant: "destructive",
+              title: "Encryption Required",
+              description: e.message || "Message transmission halted to prevent unencrypted plaintext leak."
+            });
+            setConversations((prev) => {
+              const updated = prev.map((c) =>
+                c.id === activeId
+                  ? {
+                      ...c,
+                      messages: c.messages.map((m) =>
+                        m.id === newMsg.id ? { ...m, failed: true } : m
+                      )
+                    }
+                  : c
+              );
+              saveLocalData(updated);
+              return updated;
+            });
+            return;
           }
         }
 

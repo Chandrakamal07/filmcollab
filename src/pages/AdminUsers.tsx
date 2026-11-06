@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Search, 
+import {
+  Search,
   Trash2,
   Check,
   Tags,
@@ -175,16 +175,16 @@ export default function AdminUsers() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
-  const [globalTags, setGlobalTags] = useState<{label: string, color: string}[]>([]);
+  const [globalTags, setGlobalTags] = useState<{ label: string, color: string }[]>([]);
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
-  
+
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Tag editing popover state
   const [editingTags, setEditingTags] = useState<{ id: string; tags: string[] } | null>(null);
-  
+
   // Direct details view in place of table
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<UserProfileDetails | null>(null);
@@ -199,7 +199,7 @@ export default function AdminUsers() {
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [isSendingNotification, setIsSendingNotification] = useState(false);
-  
+
   const { toast } = useToast();
 
   const availableTags = globalTags.map(t => ({ value: t.label.toLowerCase(), label: t.label }));
@@ -274,10 +274,10 @@ export default function AdminUsers() {
       setSelectedUserDirectoryFiles([]);
       return;
     }
-    
+
     // Reset to overview tab when changing users
     setActiveProfileTab("overview");
-    
+
     const fetchSingleProfile = async () => {
       try {
         setLoadingProfile(true);
@@ -290,27 +290,23 @@ export default function AdminUsers() {
         setSelectedProfile(data as any);
 
         // Fetch user projects
+        const authUserId = profileData.user_id || selectedUserId;
         const { data: projData, error: projError } = await supabase
           .from("projects")
           .select("*")
-          .eq("created_by", selectedUserId)
+          .eq("created_by", authUserId)
           .order("created_at", { ascending: false });
         if (!projError && projData) {
           setSelectedUserProjects(projData);
         }
 
-        // Fetch user directory files from localStorage
-        const savedFiles = localStorage.getItem(`directory_${selectedUserId}`);
-        if (savedFiles) {
-          try {
-            setSelectedUserDirectoryFiles(JSON.parse(savedFiles));
-          } catch (e) {
-            console.error("Failed to parse directory files in admin panel", e);
-            setSelectedUserDirectoryFiles([]);
-          }
-        } else {
-          setSelectedUserDirectoryFiles([]);
-        }
+        // Fetch user directory files from database
+        const { data: dbFiles } = await supabase
+          .from("directory_files")
+          .select("*")
+          .or(`user_id.eq.${selectedUserId},user_id.eq.${profileData.id}`)
+          .order("created_at", { ascending: false });
+        setSelectedUserDirectoryFiles(dbFiles || []);
 
       } catch (err) {
         console.error("Error fetching single profile:", err);
@@ -323,7 +319,7 @@ export default function AdminUsers() {
         setLoadingProfile(false);
       }
     };
-    
+
     fetchSingleProfile();
   }, [selectedUserId, toast]);
 
@@ -337,11 +333,11 @@ export default function AdminUsers() {
 
     // Search query matches
     const matchesSearch = username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      email.toLowerCase().includes(searchTerm.toLowerCase());
+
     // Category match
     const matchesCategory = categoryFilter === "all" || category.toLowerCase() === categoryFilter.toLowerCase();
-    
+
     // Status match (Verified, Unverified, Blocked)
     let matchesStatus = true;
     if (statusFilter === "verified") {
@@ -376,7 +372,7 @@ export default function AdminUsers() {
       const userTags = Array.isArray(user.tags) ? user.tags : [];
       matchesTags = selectedFilterTags.every(tag => userTags.includes(tag));
     }
-    
+
     return matchesSearch && matchesCategory && matchesStatus && matchesDate && matchesTags;
   });
 
@@ -406,9 +402,9 @@ export default function AdminUsers() {
         .from("profiles")
         .update({ is_verified: !currentStatus })
         .eq("id", user.id);
-      
+
       if (error) throw error;
-      
+
       setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, is_verified: !currentStatus } : u));
       toast({
         title: !currentStatus ? "User Account Verified" : "User Account Unverified",
@@ -436,9 +432,9 @@ export default function AdminUsers() {
         .from("profiles")
         .update({ role: targetRole })
         .eq("id", user.id);
-      
+
       if (error) throw error;
-      
+
       setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole } : u));
       toast({
         title: isCurrentlyBlocked ? "User Unblocked" : "User Blocked",
@@ -463,9 +459,9 @@ export default function AdminUsers() {
         .from("profiles")
         .delete()
         .eq("id", userId);
-      
+
       if (error) throw error;
-      
+
       setProfiles(prev => prev.filter(u => u.id !== userId));
       toast({
         title: "User deleted",
@@ -492,9 +488,9 @@ export default function AdminUsers() {
         .from("profiles")
         .update({ tags: editingTags.tags })
         .eq("id", userId);
-      
+
       if (error) throw error;
-      
+
       setProfiles(prev => prev.map(u => u.id === userId ? { ...u, tags: editingTags.tags } : u));
       setEditingTags(null);
       toast({
@@ -552,9 +548,9 @@ export default function AdminUsers() {
           priority: "high",
           status: "unread"
         });
-        
+
       if (error) throw error;
-      
+
       toast({
         title: "Notification Sent",
         description: `Successfully sent notification to ${notifyUser.username || notifyUser.full_name || 'the user'}.`
@@ -584,7 +580,7 @@ export default function AdminUsers() {
         </AdminLayout>
       );
     }
-    
+
     if (!selectedProfile) {
       return (
         <AdminLayout pageTitle="User Profile">
@@ -629,14 +625,14 @@ export default function AdminUsers() {
         if (username.startsWith("@")) {
           username = username.substring(1);
         }
-        
+
         let hash = 0;
         const str = `${username}-${platform}`;
         for (let i = 0; i < str.length; i++) {
           hash = str.charCodeAt(i) + ((hash << 5) - hash);
         }
         hash = Math.abs(hash);
-        
+
         if (hash % 4 === 0) {
           return `${((hash % 900) / 10 + 10).toFixed(1)}K`;
         } else if (hash % 4 === 1) {
@@ -671,7 +667,7 @@ export default function AdminUsers() {
                       {(selectedProfile.full_name || selectedProfile.username || "CR").slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-1.5">
@@ -704,7 +700,7 @@ export default function AdminUsers() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Social Media Follower Counts */}
                 <div className="flex flex-col items-center md:items-end gap-3 flex-shrink-0">
                   <div className="flex items-center gap-3">
@@ -750,7 +746,7 @@ export default function AdminUsers() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Statistics & Admin Actions Row */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border/60">
                 <div className="flex items-center gap-6 font-mono">
@@ -773,20 +769,20 @@ export default function AdminUsers() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="bg-surface-elevated hover:bg-primary/10 border-primary/30 text-primary"
                     onClick={() => handleOpenNotify(selectedProfile)}
                   >
                     <Bell className="w-4 h-4 mr-1" />
                     Notify
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className={cn(
-                      "border-border/80 bg-surface-elevated", 
+                      "border-border/80 bg-surface-elevated",
                       selectedProfile.is_verified ? "text-amber-500 hover:bg-amber-500/10" : "text-emerald-500 hover:bg-emerald-500/10"
                     )}
                     onClick={onToggleVerification}
@@ -794,11 +790,11 @@ export default function AdminUsers() {
                     <ShieldCheck className="w-4 h-4 mr-1" />
                     {selectedProfile.is_verified ? "Unverify" : "Verify"}
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className={cn(
-                      "border-border/80 bg-surface-elevated", 
+                      "border-border/80 bg-surface-elevated",
                       selectedProfile.role === 'blocked' ? "text-emerald-500 hover:bg-emerald-500/10" : "text-destructive hover:bg-destructive/10"
                     )}
                     onClick={onBlockUser}
@@ -806,8 +802,8 @@ export default function AdminUsers() {
                     <AlertTriangle className="w-4 h-4 mr-1" />
                     {selectedProfile.role === 'blocked' ? "Unblock" : "Block"}
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="destructive"
                     onClick={() => handleDeleteUser(selectedProfile.id)}
                   >
@@ -823,38 +819,38 @@ export default function AdminUsers() {
           <div className="w-full space-y-4">
             <Tabs value={activeProfileTab} onValueChange={setActiveProfileTab} className="w-full">
               <TabsList className="grid w-full grid-cols-6 bg-surface-elevated border border-border/80 rounded-xl p-1">
-                <TabsTrigger 
-                  value="overview" 
+                <TabsTrigger
+                  value="overview"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Overview
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="experience" 
+                <TabsTrigger
+                  value="experience"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Experience
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="projects" 
+                <TabsTrigger
+                  value="projects"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Projects
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="achievements" 
+                <TabsTrigger
+                  value="achievements"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Achievements
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="education" 
+                <TabsTrigger
+                  value="education"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Education
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="directory" 
+                <TabsTrigger
+                  value="directory"
                   className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Directory
@@ -897,10 +893,10 @@ export default function AdminUsers() {
                     {selectedProfile.website && (
                       <div className="flex items-center gap-2 text-sm text-foreground">
                         <Globe className="w-4 h-4 text-primary shrink-0" />
-                        <a 
-                          href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`} 
-                          target="_blank" 
-                          rel="noreferrer" 
+                        <a
+                          href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="text-primary hover:underline text-sm truncate"
                         >
                           {selectedProfile.website}
@@ -941,9 +937,9 @@ export default function AdminUsers() {
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {selectedUserTags.map((tag: string, index: number) => (
-                          <Badge 
-                            key={index} 
-                            variant="secondary" 
+                          <Badge
+                            key={index}
+                            variant="secondary"
                             className={cn("text-xs font-semibold", getTagBadgeStyle(tag) || "")}
                           >
                             {tag}
@@ -1017,10 +1013,9 @@ export default function AdminUsers() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  project.status === 'completed' ? 'bg-emerald-500' :
-                                  project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
-                                }`}></div>
+                                <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'completed' ? 'bg-emerald-500' :
+                                    project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
+                                  }`}></div>
                                 <span className="capitalize">{project.status}</span>
                                 {project.location && (
                                   <>
@@ -1177,7 +1172,7 @@ export default function AdminUsers() {
             <h1 className="text-3xl font-display font-bold text-foreground">Users Management</h1>
             <p className="text-muted-foreground mt-1 text-sm">Manage registered user accounts, manage tags, and configure access.</p>
           </div>
-          
+
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -1188,8 +1183,8 @@ export default function AdminUsers() {
                 className="pl-10 h-10 w-full bg-surface-elevated border-border/80"
               />
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsFilterSidebarOpen(true)}
               className="flex items-center gap-2 border-primary/30 hover:bg-primary/10 text-primary h-10 px-4 shrink-0 font-semibold"
             >
@@ -1235,14 +1230,14 @@ export default function AdminUsers() {
                       const userTags = Array.isArray(user.tags) ? user.tags : [];
                       const displayUsername = user.username || user.full_name || user.email?.split("@")[0] || "creative_user";
                       const displayId = getUserDisplayId(user.id);
-                      
+
                       return (
                         <TableRow key={user.id} className="border-border/60 hover:bg-surface-hover/50">
                           <TableCell className="font-mono text-xs text-muted-foreground font-medium">
                             {displayId}
                           </TableCell>
                           <TableCell className="font-semibold">
-                            <button 
+                            <button
                               onClick={() => setSelectedUserId(user.id)}
                               className="text-primary hover:underline text-left font-semibold"
                             >
@@ -1268,9 +1263,9 @@ export default function AdminUsers() {
                                   <span className="text-xs text-muted-foreground italic">No tags</span>
                                 ) : (
                                   userTags.map((tag: string, index: number) => (
-                                    <Badge 
+                                    <Badge
                                       key={index}
-                                      variant="secondary" 
+                                      variant="secondary"
                                       className={cn("text-[10px] px-2 py-0.5 font-semibold", getTagBadgeStyle(tag) || "")}
                                     >
                                       {tag}
@@ -1278,7 +1273,7 @@ export default function AdminUsers() {
                                   ))
                                 )}
                               </div>
-                              <Popover 
+                              <Popover
                                 open={editingTags?.id === user.id}
                                 onOpenChange={(open) => {
                                   if (open) {
@@ -1317,7 +1312,7 @@ export default function AdminUsers() {
                                             )}>
                                               {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                                             </div>
-                                            <Badge 
+                                            <Badge
                                               variant="secondary"
                                               className={cn("text-xs font-semibold", getTagBadgeStyle(tag.label) || "")}
                                             >
@@ -1349,28 +1344,28 @@ export default function AdminUsers() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44 bg-card border-border/80 shadow-noir">
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleToggleVerification(user)}
                                   className="cursor-pointer flex items-center gap-2 text-sm"
                                 >
                                   <ShieldCheck className="h-4 w-4 text-emerald-500" />
                                   {user.is_verified ? "Unverify User" : "Verify User"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleOpenNotify(user)}
                                   className="cursor-pointer flex items-center gap-2 text-sm"
                                 >
                                   <Bell className="h-4 w-4 text-primary" />
                                   Notify User
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleBlockUser(user)}
                                   className="cursor-pointer flex items-center gap-2 text-sm text-amber-500"
                                 >
                                   <AlertTriangle className="h-4 w-4 text-amber-500" />
                                   {user.role === 'blocked' ? "Unblock User" : "Block User"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleDeleteUser(user.id)}
                                   className="cursor-pointer flex items-center gap-2 text-sm text-destructive"
                                 >
@@ -1402,11 +1397,11 @@ export default function AdminUsers() {
       {isFilterSidebarOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop overlay */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsFilterSidebarOpen(false)}
           />
-          
+
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
             <div className="w-screen max-w-md bg-card border-l border-border/80 p-6 shadow-2xl flex flex-col h-full">
               {/* Header */}
@@ -1415,16 +1410,16 @@ export default function AdminUsers() {
                   <Filter className="h-5 w-5 text-primary" />
                   Filter Users
                 </h2>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setIsFilterSidebarOpen(false)}
                   className="rounded-full hover:bg-surface-hover h-8 w-8"
                 >
                   <X className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </div>
-              
+
               {/* Scrollable Filters Content */}
               <div className="flex-1 overflow-y-auto space-y-6 pr-1">
                 {/* Category Filter */}
@@ -1444,7 +1439,7 @@ export default function AdminUsers() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Status Filter */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Verification / Status</label>
@@ -1460,32 +1455,32 @@ export default function AdminUsers() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Date Joined Filter Range */}
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-foreground block">Date Joined Range</label>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <span className="text-xs text-muted-foreground">From</span>
-                      <Input 
-                        type="date" 
-                        value={dateFrom} 
+                      <Input
+                        type="date"
+                        value={dateFrom}
                         onChange={(e) => setDateFrom(e.target.value)}
                         className="w-full bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="space-y-1">
                       <span className="text-xs text-muted-foreground">To</span>
-                      <Input 
-                        type="date" 
-                        value={dateTo} 
+                      <Input
+                        type="date"
+                        value={dateTo}
                         onChange={(e) => setDateTo(e.target.value)}
                         className="w-full bg-surface-elevated border-border/80"
                       />
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Tags Multiselect Grid */}
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-foreground block">Filter by Tags (Matches All)</label>
@@ -1496,7 +1491,7 @@ export default function AdminUsers() {
                         <button
                           key={tag.value}
                           onClick={() => {
-                            setSelectedFilterTags(prev => 
+                            setSelectedFilterTags(prev =>
                               prev.includes(tag.label)
                                 ? prev.filter(t => t !== tag.label)
                                 : [...prev, tag.label]
@@ -1504,8 +1499,8 @@ export default function AdminUsers() {
                           }}
                           className={cn(
                             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                            isSelected 
-                              ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold" 
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold"
                               : "bg-surface-elevated hover:bg-surface-hover text-muted-foreground border-border/80"
                           )}
                         >
@@ -1525,11 +1520,11 @@ export default function AdminUsers() {
                   )}
                 </div>
               </div>
-              
+
               {/* Footer actions */}
               <div className="border-t border-border/60 pt-4 mt-6 flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1 font-semibold"
                   onClick={() => {
                     setCategoryFilter("all");
@@ -1541,7 +1536,7 @@ export default function AdminUsers() {
                 >
                   Reset All
                 </Button>
-                <Button 
+                <Button
                   className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                   onClick={() => setIsFilterSidebarOpen(false)}
                 >
@@ -1590,8 +1585,8 @@ export default function AdminUsers() {
             <Button variant="outline" onClick={() => setIsNotifyDialogOpen(false)} className="font-semibold">
               Cancel
             </Button>
-            <Button 
-              onClick={handleSendNotification} 
+            <Button
+              onClick={handleSendNotification}
               disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >

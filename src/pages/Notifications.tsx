@@ -317,9 +317,18 @@ const Notifications = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" className="h-10 border-primary/30 hover:border-primary hover:bg-primary/10">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-10 border-primary/30 hover:border-primary hover:bg-primary/10"
+                  onClick={() => {
+                    setFilterType('all');
+                    setFilterStatus('all');
+                  }}
+                  title="Reset filters"
+                >
                   <Filter className="w-4 h-4 mr-1" />
-                  Filter
+                  Reset
                 </Button>
               </div>
             </div>

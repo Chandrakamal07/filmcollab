@@ -76,9 +76,9 @@ interface PostComment {
 }
 
 const PostsPage = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
-  
+
   // Hardcoded posts data
   const hardcodedPosts: Post[] = [
     {
@@ -255,7 +255,7 @@ const PostsPage = () => {
       is_saved: true
     }
   ];
-  
+
   // State management
   const [posts, setPosts] = useState<Post[]>(hardcodedPosts);
   const [loading, setLoading] = useState(false);
@@ -267,7 +267,7 @@ const PostsPage = () => {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
   const [newComment, setNewComment] = useState("");
-  
+
   // Create post form state
   const [newPost, setNewPost] = useState({
     title: "",
@@ -277,9 +277,9 @@ const PostsPage = () => {
     mediaUrls: [] as string[],
   });
   const [isUploading, setIsUploading] = useState(false);
-  
+
   // Loading states for actions
-  const [loadingActions, setLoadingActions] = useState<{[key: string]: boolean}>({});
+  const [loadingActions, setLoadingActions] = useState<{ [key: string]: boolean }>({});
 
   // Helper function to get or create user profile
   const getOrCreateProfile = async () => {
@@ -324,12 +324,76 @@ const PostsPage = () => {
     }
   };
 
-  // Fetch posts from hardcoded data
+  // Fetch posts from database (falling back gracefully to sample feed if empty)
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      
-      let filteredPosts = [...hardcodedPosts];
+
+      const { data: dbPosts, error: dbError } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          content,
+          author_id,
+          media_urls,
+          media_types,
+          hashtags,
+          is_published,
+          is_featured,
+          likes_count,
+          comments_count,
+          shares_count,
+          created_at,
+          updated_at,
+          profiles:author_id (id, full_name, avatar_url, username)
+        `)
+        .order('created_at', { ascending: false });
+
+      const activeProfileId = profile?.id;
+      const userLikedIds = new Set<string>();
+      const userSavedIds = new Set<string>();
+
+      if (activeProfileId) {
+        const [likesRes, savesRes] = await Promise.all([
+          supabase.from('post_likes').select('post_id').eq('user_id', activeProfileId),
+          supabase.from('post_saves').select('post_id').eq('user_id', activeProfileId)
+        ]);
+        if (likesRes.data) (likesRes.data as any[]).forEach((r: any) => userLikedIds.add(r.post_id));
+        if (savesRes.data) (savesRes.data as any[]).forEach((r: any) => userSavedIds.add(r.post_id));
+      }
+
+      let loadedPosts: Post[] = [];
+
+      if (!dbError && dbPosts && dbPosts.length > 0) {
+        loadedPosts = dbPosts.map((p: any) => ({
+          id: p.id,
+          title: p.title || undefined,
+          content: p.content,
+          author_id: p.author_id,
+          media_urls: p.media_urls || undefined,
+          media_types: p.media_types || undefined,
+          hashtags: p.hashtags || undefined,
+          is_published: p.is_published ?? true,
+          is_featured: p.is_featured ?? false,
+          likes_count: p.likes_count || 0,
+          comments_count: p.comments_count || 0,
+          shares_count: p.shares_count || 0,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          author: {
+            id: p.profiles?.id || p.author_id,
+            full_name: p.profiles?.full_name || p.profiles?.username || 'Creator',
+            avatar_url: p.profiles?.avatar_url
+          },
+          is_liked: userLikedIds.has(p.id),
+          is_saved: userSavedIds.has(p.id)
+        }));
+      } else {
+        loadedPosts = [...hardcodedPosts];
+      }
+
+      let filteredPosts = loadedPosts;
 
       // Apply filters based on active tab
       if (activeTab === "trending") {
@@ -337,7 +401,6 @@ const PostsPage = () => {
       } else if (activeTab === "published") {
         filteredPosts = filteredPosts.filter(post => post.is_published);
       } else if (activeTab === "saved") {
-        // Filter for saved posts (posts where is_saved is true)
         filteredPosts = filteredPosts.filter(post => post.is_saved);
       }
 
@@ -347,7 +410,6 @@ const PostsPage = () => {
       } else if (sortBy === "trending") {
         filteredPosts = filteredPosts.sort((a, b) => (b.likes_count + b.comments_count + b.shares_count) - (a.likes_count + a.comments_count + a.shares_count));
       } else {
-        // Most recent (default)
         filteredPosts = filteredPosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       }
 
@@ -463,41 +525,97 @@ const PostsPage = () => {
     try {
       setIsUploading(true);
 
+      // Resolve author profile ID (M04 / M10: bind author_id to profile.id)
+      let authorProfileId = profile?.id;
+      if (!authorProfileId) {
+        const p = await getOrCreateProfile();
+        authorProfileId = p?.id;
+      }
+      if (!authorProfileId) {
+        throw new Error("User profile not found. Please set up your profile first.");
+      }
+
       // Extract hashtags from content
       const hashtagMatches = newPost.content.match(/#\w+/g);
       const hashtags = hashtagMatches ? hashtagMatches.map(tag => tag.substring(1)) : [];
 
-      // Create new post object
-      const newPostData: Post = {
-        id: Date.now().toString(),
-        title: newPost.title || undefined,
-        content: newPost.content,
-        author_id: user.id,
-        media_urls: newPost.mediaUrls.length > 0 ? newPost.mediaUrls : undefined,
-        media_types: newPost.mediaFiles.length > 0 ? newPost.mediaFiles.map(file => 
-          file.type.startsWith('video/') ? 'video' : 'image'
-        ) : undefined,
-        hashtags: hashtags.length > 0 ? hashtags : undefined,
-        is_published: true,
-        is_featured: false,
-        likes_count: 0,
-        comments_count: 0,
-        shares_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      // Upload media files if any
+      let uploadedUrls: string[] = [...newPost.mediaUrls];
+      let uploadedTypes: string[] = [];
+
+      for (const file of newPost.mediaFiles) {
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${authorProfileId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('post-media')
+          .upload(filePath, file);
+
+        if (!uploadErr && uploadData) {
+          const { data: { publicUrl } } = supabase.storage.from('post-media').getPublicUrl(uploadData.path);
+          uploadedUrls.push(publicUrl);
+          uploadedTypes.push(file.type.startsWith('video/') ? 'video' : 'image');
+        }
+      }
+
+      // Real database insert
+      const { data: createdPost, error: insertError } = await supabase
+        .from('posts')
+        .insert({
+          title: newPost.title || null,
+          content: newPost.content.trim(),
+          author_id: authorProfileId,
+          media_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+          media_types: uploadedTypes.length > 0 ? uploadedTypes : null,
+          hashtags: hashtags.length > 0 ? hashtags : null,
+          is_published: true,
+          is_featured: false
+        })
+        .select(`
+          id,
+          title,
+          content,
+          author_id,
+          media_urls,
+          media_types,
+          hashtags,
+          is_published,
+          is_featured,
+          likes_count,
+          comments_count,
+          shares_count,
+          created_at,
+          updated_at,
+          profiles:author_id (id, full_name, avatar_url, username)
+        `)
+        .single();
+
+      if (insertError) throw insertError;
+
+      const formattedPost: Post = {
+        id: createdPost.id,
+        title: createdPost.title || undefined,
+        content: createdPost.content,
+        author_id: createdPost.author_id,
+        media_urls: createdPost.media_urls || undefined,
+        media_types: createdPost.media_types || undefined,
+        hashtags: createdPost.hashtags || undefined,
+        is_published: createdPost.is_published ?? true,
+        is_featured: createdPost.is_featured ?? false,
+        likes_count: createdPost.likes_count || 0,
+        comments_count: createdPost.comments_count || 0,
+        shares_count: createdPost.shares_count || 0,
+        created_at: createdPost.created_at,
+        updated_at: createdPost.updated_at,
         author: {
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+          id: (createdPost as any).profiles?.id || authorProfileId,
+          full_name: (createdPost as any).profiles?.full_name || profile?.full_name || user.user_metadata?.full_name || 'Creator',
+          avatar_url: (createdPost as any).profiles?.avatar_url || profile?.avatar_url
         },
         is_liked: false,
         is_saved: false
       };
 
-      // Add to hardcoded posts array
-      hardcodedPosts.unshift(newPostData);
-      
-      // Update state
-      setPosts(prev => [newPostData, ...prev]);
+      setPosts(prev => [formattedPost, ...prev]);
 
       toast({
         title: "Success",
@@ -513,13 +631,13 @@ const PostsPage = () => {
         mediaUrls: [],
       });
       setIsCreateDialogOpen(false);
-      
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Error creating post:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create post"
+        description: error.message || "Failed to create post"
       });
     } finally {
       setIsUploading(false);
@@ -541,33 +659,41 @@ const PostsPage = () => {
     setLoadingActions(prev => ({ ...prev, [actionKey]: true }));
 
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId);
+      const authorProfileId = profile?.id;
+
+      if (isUuid && authorProfileId) {
+        if (!isLiked) {
+          const { error: likeErr } = await supabase.from('post_likes').insert({
+            post_id: postId,
+            user_id: authorProfileId
+          });
+          if (likeErr && likeErr.code !== '23505') throw likeErr;
+        } else {
+          const { error: unlikeErr } = await supabase
+            .from('post_likes')
+            .delete()
+            .match({ post_id: postId, user_id: authorProfileId });
+          if (unlikeErr) throw unlikeErr;
+        }
+      }
+
       // Update local state
-      setPosts(prev => prev.map(post => 
-        post.id === postId 
-          ? { 
-              ...post, 
-              is_liked: !isLiked,
-              likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1
-            }
+      setPosts(prev => prev.map(post =>
+        post.id === postId
+          ? {
+            ...post,
+            is_liked: !isLiked,
+            likes_count: isLiked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1
+          }
           : post
       ));
 
-      // Update hardcoded posts array
-      const postIndex = hardcodedPosts.findIndex(post => post.id === postId);
-      if (postIndex !== -1) {
-        hardcodedPosts[postIndex] = {
-          ...hardcodedPosts[postIndex],
-          is_liked: !isLiked,
-          likes_count: isLiked ? hardcodedPosts[postIndex].likes_count - 1 : hardcodedPosts[postIndex].likes_count + 1
-        };
-      }
-
-      // Show success feedback
       toast({
         title: isLiked ? "Post unliked" : "Post liked",
         description: isLiked ? "You've unliked this post" : "You've liked this post"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling like:', error);
       toast({
         variant: "destructive",
@@ -594,28 +720,37 @@ const PostsPage = () => {
     setLoadingActions(prev => ({ ...prev, [actionKey]: true }));
 
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId);
+      const authorProfileId = profile?.id;
+
+      if (isUuid && authorProfileId) {
+        if (!isSaved) {
+          const { error: saveErr } = await supabase.from('post_saves').insert({
+            post_id: postId,
+            user_id: authorProfileId
+          });
+          if (saveErr && saveErr.code !== '23505') throw saveErr;
+        } else {
+          const { error: unsaveErr } = await supabase
+            .from('post_saves')
+            .delete()
+            .match({ post_id: postId, user_id: authorProfileId });
+          if (unsaveErr) throw unsaveErr;
+        }
+      }
+
       // Update local state
-      setPosts(prev => prev.map(post => 
-        post.id === postId 
+      setPosts(prev => prev.map(post =>
+        post.id === postId
           ? { ...post, is_saved: !isSaved }
           : post
       ));
 
-      // Update hardcoded posts array
-      const postIndex = hardcodedPosts.findIndex(post => post.id === postId);
-      if (postIndex !== -1) {
-        hardcodedPosts[postIndex] = {
-          ...hardcodedPosts[postIndex],
-          is_saved: !isSaved
-        };
-      }
-
-      // Show success feedback
       toast({
         title: isSaved ? "Post unsaved" : "Post saved",
         description: isSaved ? "Post removed from your saved posts" : "Post saved to your collection"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling save:', error);
       toast({
         variant: "destructive",
@@ -685,10 +820,10 @@ const PostsPage = () => {
 
       setNewComment("");
       fetchComments(selectedPost.id);
-      
+
       // Update comments count
-      setPosts(prev => prev.map(post => 
-        post.id === selectedPost.id 
+      setPosts(prev => prev.map(post =>
+        post.id === selectedPost.id
           ? { ...post, comments_count: post.comments_count + 1 }
           : post
       ));
@@ -741,7 +876,7 @@ const PostsPage = () => {
   const filteredPosts = useMemo(() => {
     if (!searchTerm.trim()) return posts;
 
-    return posts.filter(post => 
+    return posts.filter(post =>
       post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.hashtags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -757,7 +892,7 @@ const PostsPage = () => {
 
     try {
       console.log('Testing post creation with user ID:', user.id);
-      
+
       // First, get the profile ID for the current user
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -776,7 +911,7 @@ const PostsPage = () => {
       }
 
       console.log('Found profile ID:', profile.id);
-      
+
       const testData = {
         content: 'Test post from debug function',
         author_id: profile.id, // Use profile ID, not user ID
@@ -817,7 +952,7 @@ const PostsPage = () => {
   // Load posts on component mount and when dependencies change
   useEffect(() => {
     fetchPosts();
-  }, [activeTab, sortBy]);
+  }, [activeTab, sortBy, profile?.id]);
 
   return (
     <AppLayout pageTitle="Posts">
@@ -855,8 +990,8 @@ const PostsPage = () => {
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={testPostCreation}
                   className="text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover"
                 >
@@ -893,7 +1028,7 @@ const PostsPage = () => {
                           className="min-h-32 bg-surface-elevated border-border/80"
                         />
                       </div>
-                      
+
                       {/* Media Upload */}
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-2">Add Media (Optional)</label>
@@ -916,7 +1051,7 @@ const PostsPage = () => {
                             </p>
                           </label>
                         </div>
-                        
+
                         {/* Selected Media Preview */}
                         {newPost.mediaFiles.length > 0 && (
                           <div className="mt-4 space-y-2">
@@ -1016,7 +1151,7 @@ const PostsPage = () => {
                     )}
                   </div>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-4">
                   {/* Post Content */}
                   <div>
@@ -1024,7 +1159,7 @@ const PostsPage = () => {
                       <h4 className="font-display font-semibold text-lg text-foreground mb-2">{post.title}</h4>
                     )}
                     <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{post.content}</p>
-                    
+
                     {/* Hashtags */}
                     {post.hashtags && post.hashtags.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-3">
@@ -1105,7 +1240,7 @@ const PostsPage = () => {
                         <Bookmark className={`h-4 w-4 transition-all ${post.is_saved ? 'fill-current scale-110' : 'hover:scale-110'}`} />
                       </Button>
                     </div>
-                    
+
                     {post.comments_count > 0 && (
                       <Button
                         variant="ghost"
@@ -1137,7 +1272,7 @@ const PostsPage = () => {
                 Join the conversation and share your thoughts on this post.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               {/* Add Comment */}
               <div className="flex gap-2">
@@ -1174,7 +1309,7 @@ const PostsPage = () => {
                         <p className="text-sm text-foreground/90 mt-1">{comment.content}</p>
                       </div>
                     </div>
-                    
+
                     {/* Replies */}
                     {comment.replies && comment.replies.length > 0 && (
                       <div className="ml-11 space-y-2 pt-2 border-t border-border/50">

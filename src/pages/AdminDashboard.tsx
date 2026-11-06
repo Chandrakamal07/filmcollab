@@ -39,9 +39,9 @@ export default function AdminDashboard() {
     totalUsers: 0,
     totalJobs: 0,
     totalProjects: 0,
-    totalTickets: 3,
-    totalTeamMembers: 1,
-    totalCategories: 8,
+    totalTickets: 0,
+    totalTeamMembers: 0,
+    totalCategories: 0,
     userTrendData: [] as UserTrendPoint[],
     categoryData: [] as CategoryPoint[],
   });
@@ -67,19 +67,25 @@ export default function AdminDashboard() {
           .from("projects")
           .select("id", { count: "exact", head: true });
 
+        // 4. Fetch tickets count
+        const { count: ticketsCount } = await supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true });
+
         const profilesList = profiles || [];
         const totalUsers = profilesList.length;
         const totalJobs = jobsCount || 0;
         const totalProjects = projectsCount || 0;
+        const totalTickets = ticketsCount || 0;
 
         // Total team members (Admins)
-        const totalTeamMembers = profilesList.filter(p => p.role?.toLowerCase() === "admin").length || 1;
+        const totalTeamMembers = profilesList.filter(p => p.role?.toLowerCase() === "admin").length;
 
         // Calculate unique categories from profiles
         const uniqueCategoriesSet = new Set(
           profilesList.map(p => p.category).filter(Boolean)
         );
-        const totalCategories = uniqueCategoriesSet.size || 8;
+        const totalCategories = uniqueCategoriesSet.size;
 
         // Group users by category for distribution
         const categoryCounts: Record<string, number> = {};
@@ -88,21 +94,10 @@ export default function AdminDashboard() {
           categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
         });
 
-        let categoryData = Object.entries(categoryCounts).map(([name, value]) => ({
+        const categoryData = Object.entries(categoryCounts).map(([name, value]) => ({
           name: name.length > 18 ? name.substring(0, 18) + "..." : name,
           value
         })).sort((a, b) => b.value - a.value);
-
-        // Fallback/enrichment if category distribution is extremely sparse
-        if (categoryData.length === 0 || (categoryData.length === 1 && categoryData[0].name === "Unassigned")) {
-          categoryData = [
-            { name: "Direction", value: Math.max(1, Math.floor(totalUsers * 0.3)) },
-            { name: "Camera", value: Math.max(1, Math.floor(totalUsers * 0.2)) },
-            { name: "Actors", value: Math.max(1, Math.floor(totalUsers * 0.25)) },
-            { name: "Writing", value: Math.max(1, Math.floor(totalUsers * 0.15)) },
-            { name: "Music & Sound", value: Math.max(1, Math.floor(totalUsers * 0.1)) }
-          ];
-        }
 
         // Group users by registration date for user trend
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -116,29 +111,18 @@ export default function AdminDashboard() {
           }
         });
 
-        let userTrendData = Object.entries(registrationTrend).map(([name, value]) => ({
+        const userTrendData = Object.entries(registrationTrend).map(([name, value]) => ({
           name,
           users: value
         })).sort((a, b) => {
           return new Date(a.name) > new Date(b.name) ? 1 : -1;
         });
 
-        // Ensure we always have a gorgeous curve with at least 5 data points
-        if (userTrendData.length < 5) {
-          userTrendData = [
-            { name: "Jan 26", users: Math.max(1, Math.floor(totalUsers * 0.2)) },
-            { name: "Feb 26", users: Math.max(2, Math.floor(totalUsers * 0.4)) },
-            { name: "Mar 26", users: Math.max(3, Math.floor(totalUsers * 0.6)) },
-            { name: "Apr 26", users: Math.max(4, Math.floor(totalUsers * 0.8)) },
-            { name: "May 26", users: totalUsers }
-          ];
-        }
-
         setStats({
           totalUsers,
           totalJobs,
           totalProjects,
-          totalTickets: 3,
+          totalTickets,
           totalTeamMembers,
           totalCategories,
           userTrendData,

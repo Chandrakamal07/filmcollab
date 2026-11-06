@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const CHART_COLORS = {
   yellow: {
@@ -60,6 +61,7 @@ const deterministicDirectoryBenchmarks = [
 ];
 
 export default function AdminAnalytics() {
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("30");
 
@@ -289,20 +291,20 @@ export default function AdminAnalytics() {
 
       setTeamData({
         metrics: [
-          { title: "Total Admins", value: totalTeam.toLocaleString(), change: "+1.0%", icon: UserCog, color: "text-primary" },
-          { title: "Active Admins", value: totalTeam.toLocaleString(), change: "+0.0%", icon: Zap, color: "text-primary" },
-          { title: "Avg Resolution Time", value: "2.4 hrs", change: "-0.5 hrs", icon: Activity, color: "text-primary" },
-          { title: "Customer Satisfaction", value: "98%", change: "+2%", icon: Target, color: "text-primary" }
+          { title: "Total Admins", value: totalTeam.toLocaleString(), change: "—", icon: UserCog, color: "text-primary" },
+          { title: "Active Admins", value: totalTeam.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
+          { title: "Avg Resolution Time", value: "—", change: "Not instrumented", icon: Activity, color: "text-primary" },
+          { title: "Customer Satisfaction", value: "—", change: "Not instrumented", icon: Target, color: "text-primary" }
         ],
         chartData: teamChartData.length ? teamChartData : [{ date: 'No Data', members: 0 }]
       });
 
       setLocationsData({
         metrics: [
-          { title: "Total Locations", value: totalLocations.toLocaleString(), change: "+8.4%", icon: MapPin, color: "text-primary" },
-          { title: "Active Locations", value: activeLocations.toLocaleString(), change: "+5.2%", icon: Zap, color: "text-primary" },
-          { title: "Featured", value: featuredLocations.toLocaleString(), change: "+2.1%", icon: Target, color: "text-primary" },
-          { title: "Total Views", value: "124.5k", change: "+15.3%", icon: Eye, color: "text-primary" }
+          { title: "Total Locations", value: totalLocations.toLocaleString(), change: "—", icon: MapPin, color: "text-primary" },
+          { title: "Active Locations", value: activeLocations.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
+          { title: "Featured", value: featuredLocations.toLocaleString(), change: "—", icon: Target, color: "text-primary" },
+          { title: "Total Views", value: "—", change: "Not instrumented", icon: Eye, color: "text-primary" }
         ],
         chartData: locationChartData.length ? locationChartData : [{ date: 'No Data', locations: 0 }],
         typeData: locationTypeData.length ? locationTypeData : [{ name: 'No Data', value: 1 }]
@@ -360,9 +362,33 @@ export default function AdminAnalytics() {
     }
   };
 
+  const handleExportCSV = () => {
+    const allMetrics = [
+      ...usersData.metrics.map((m: any) => ({ category: "Users", ...m })),
+      ...projectsData.metrics.map((m: any) => ({ category: "Projects", ...m })),
+      ...jobsData.metrics.map((m: any) => ({ category: "Jobs", ...m })),
+      ...ticketsData.metrics.map((m: any) => ({ category: "Tickets", ...m })),
+      ...teamData.metrics.map((m: any) => ({ category: "Team", ...m })),
+      ...locationsData.metrics.map((m: any) => ({ category: "Locations", ...m })),
+    ];
+    const rows = [
+      ["Category", "Metric", "Value", "Change"],
+      ...allMetrics.map(m => [`"${m.category}"`, `"${m.title}"`, `"${m.value}"`, `"${m.change}"`])
+    ];
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(r => r.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `filmcollab_analytics_${timeRange}days.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast({ title: "CSV Exported", description: "Platform analytics report downloaded." });
+  };
+
   if (isLoading) {
     return (
-      <AdminLayout pageTitle="Analytics">
+      <AdminLayout pageTitle="Analytics" pageName="Analytics">
         <div className="flex items-center justify-center h-[60vh]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -371,7 +397,7 @@ export default function AdminAnalytics() {
   }
 
   return (
-    <AdminLayout pageTitle="Analytics">
+    <AdminLayout pageTitle="Analytics" pageName="Analytics">
       <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/60 pb-5">
@@ -394,7 +420,12 @@ export default function AdminAnalytics() {
               </SelectContent>
             </Select>
             
-            <Button variant="outline" size="sm" className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExportCSV}
+              className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground"
+            >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>

@@ -207,6 +207,7 @@ export default function GroupDetails() {
 
   useEffect(() => {
     if (!groupId) return;
+    let interval: NodeJS.Timeout | null = null;
     if (isUuid(groupId)) {
       const fetchGroupMessages = async () => {
         try {
@@ -235,9 +236,14 @@ export default function GroupDetails() {
         }
       };
       fetchGroupMessages();
+      interval = setInterval(fetchGroupMessages, 4000);
     } else {
       setChatMessages([]);
     }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [groupId, user?.id, profile?.full_name]);
 
   const handleSendMessage = async () => {
@@ -355,7 +361,18 @@ export default function GroupDetails() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast({
+                    title: "Link copied",
+                    description: "Group link copied to clipboard."
+                  });
+                }}
+              >
                 <Share2 className="w-4 h-4 mr-1.5" />
                 Share
               </Button>
@@ -458,7 +475,18 @@ export default function GroupDetails() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-display font-semibold text-foreground">Members (<span className="font-mono">{members.length}</span>)</h3>
-                  <Button variant="outline" size="sm" className="h-7 text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/community/joined/${groupId}`);
+                      toast({
+                        title: "Invite link copied",
+                        description: "Share this link with collaborators to invite them."
+                      });
+                    }}
+                  >
                     <UserPlus className="w-3 h-3 mr-1" />
                     Invite
                   </Button>
@@ -728,7 +756,43 @@ export default function GroupDetails() {
                           <p className="text-sm font-medium text-destructive">Delete Group</p>
                           <p className="text-xs text-muted-foreground">Permanently delete this group and all its data</p>
                         </div>
-                        <Button variant="destructive" size="sm">
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          disabled={savingSettings}
+                          onClick={async () => {
+                            if (!window.confirm("Are you sure you want to delete this community group? This action cannot be undone.")) return;
+                            if (!isUuid(groupId)) {
+                              toast({ variant: "destructive", title: "Error", description: "Invalid group ID." });
+                              return;
+                            }
+                            setSavingSettings(true);
+                            try {
+                              const { data, error } = await supabase
+                                .from("community_groups")
+                                .delete()
+                                .eq("id", groupId)
+                                .select("id");
+                              if (error) throw error;
+                              if (!data || data.length === 0) {
+                                throw new Error("Could not delete group. You might not have owner permissions.");
+                              }
+                              toast({
+                                title: "Group Deleted",
+                                description: "The community group has been permanently removed."
+                              });
+                              navigate("/community");
+                            } catch (err: any) {
+                              toast({
+                                variant: "destructive",
+                                title: "Delete Failed",
+                                description: err.message || "Could not delete group."
+                              });
+                            } finally {
+                              setSavingSettings(false);
+                            }
+                          }}
+                        >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Delete
                         </Button>

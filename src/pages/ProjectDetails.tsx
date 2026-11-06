@@ -156,7 +156,7 @@ interface Applicant {
 }
 
 export default function ProjectDetails() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -344,7 +344,7 @@ export default function ProjectDetails() {
     (currentUser && project?.created_by === currentUser.id) || 
     project?.is_creator
   );
-  const isProjectAdmin = profile?.role === 'admin' || profile?.role === 'ADMIN';
+  const isProjectAdmin = isAdmin();
   const currentUserRole = (
     dbMembers.find(m => m.user_id === currentUser?.id)?.role || ''
   ).toLowerCase();
@@ -1156,27 +1156,40 @@ export default function ProjectDetails() {
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: Task['status']) => {
+    const previousStatus = tasks.find(t => t.id === taskId)?.status;
     // Optimistic UI update
     setTasks(prev => prev.map(task => 
       task.id === taskId ? { ...task, status } : task
     ));
     
     try {
-      const { error } = await supabase.from("project_tasks").update({ status }).eq("id", taskId);
+      const { data, error } = await supabase
+        .from("project_tasks")
+        .update({ status })
+        .eq("id", taskId)
+        .select("id");
       
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Task not found or access denied.");
+      }
       
       toast({
         title: "Task updated",
         description: `Task status updated to ${status}.`
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating task status:", err);
-      // Revert on error could be implemented here
+      // Revert optimistic update
+      if (previousStatus) {
+        setTasks(prev => prev.map(task => 
+          task.id === taskId ? { ...task, status: previousStatus } : task
+        ));
+      }
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to update task status."
+        description: err?.message || "Failed to update task status."
       });
     }
   };
@@ -1203,7 +1216,7 @@ export default function ProjectDetails() {
     try {
       const { data, error } = await supabase.from("project_messages").insert({
         project_id: project.id,
-        sender_id: currentUser.id,
+        sender_id: profile?.id || currentUser.id,
         content: content
       }).select().single();
 

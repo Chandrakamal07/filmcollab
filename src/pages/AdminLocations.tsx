@@ -154,9 +154,10 @@ export default function AdminLocations() {
         ? currentTags.filter((t: string) => t !== "Blocked")
         : [...currentTags, "Blocked"];
 
+      const targetStatus = isBlocked ? "active" : "blocked";
       const { data, error } = await supabase
         .from("shooting_locations")
-        .update({ tags: updatedTags })
+        .update({ tags: updatedTags, status: targetStatus })
         .eq("id", id)
         .select();
 
@@ -166,7 +167,7 @@ export default function AdminLocations() {
       }
 
       setLocations(prev =>
-        prev.map(l => (l.id === id ? { ...l, tags: updatedTags } : l))
+        prev.map(l => (l.id === id ? { ...l, tags: updatedTags, status: targetStatus } : l))
       );
 
       toast({

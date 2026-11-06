@@ -147,10 +147,21 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
 
       const finalTitle = addFileTitle.trim() || finalName.replace(/\.[^/.]+$/, "");
 
+      let fileUserId = userId;
+      if (userId) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`id.eq.${userId},user_id.eq.${userId}`)
+          .limit(1)
+          .maybeSingle();
+        if (prof?.id) fileUserId = prof.id;
+      }
+
       const { error: insertError } = await supabase
         .from('directory_files')
         .insert({
-          user_id: userId,
+          user_id: fileUserId,
           project_id: projectId || null,
           title: finalTitle,
           file_url: publicUrl,

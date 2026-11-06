@@ -6,22 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Search, 
-  Plus, 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Clock, 
-  UserPlus, 
-  Share2, 
-  Bookmark, 
-  Edit, 
+import {
+  Search,
+  Plus,
+  Calendar,
+  MapPin,
+  Users,
+  Clock,
+  UserPlus,
+  Share2,
+  Bookmark,
+  Edit,
   X,
   FileText,
   ChevronLeft,
   MoveLeft,
-  MoveRight
+  MoveRight,
+  ExternalLink
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -421,7 +422,7 @@ export default function IndustryHubPage() {
   // Apply created tab filter
   const filteredMyItems = allMyItems.filter(item => {
     if (createdFilter !== "all" && item.type !== createdFilter) return false;
-    
+
     // Apply date range
     if (dateRange.from && item.createdDate !== "N/A" && item.createdDate < dateRange.from) return false;
     if (dateRange.to && item.createdDate !== "N/A" && item.createdDate > dateRange.to) return false;
@@ -594,13 +595,13 @@ export default function IndustryHubPage() {
             delete fallbackPayload.google_maps_link;
             delete fallbackPayload.meeting_link;
             delete fallbackPayload.registration_link;
-            
+
             const result = await supabase
               .from("industry_events")
               .update(fallbackPayload as any)
               .eq("id", String(editingItem.id));
             error = result.error;
-            
+
             toast({
               title: "Event updated with limits",
               description: "Event saved successfully. Please run the updated SQL in setup_industry_hub.sql in your Supabase dashboard to support Google Maps, Meeting, and Registration links.",
@@ -623,12 +624,12 @@ export default function IndustryHubPage() {
             delete fallbackPayload.google_maps_link;
             delete fallbackPayload.meeting_link;
             delete fallbackPayload.registration_link;
-            
+
             const result = await supabase
               .from("industry_events")
               .insert([fallbackPayload as any]);
             error = result.error;
-            
+
             toast({
               title: "Event created with limits",
               description: "Event saved successfully. Please run the updated SQL in setup_industry_hub.sql in your Supabase dashboard to support Google Maps, Meeting, and Registration links.",
@@ -754,33 +755,33 @@ export default function IndustryHubPage() {
           <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* News Detail Header */}
             <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setShowNewsDetail(false);
                   setSelectedNews(null);
-                }} 
+                }}
                 className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
                 <span className="hidden sm:inline">Back to Industry Hub</span>
               </Button>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handlePrevNews} 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevNews}
                   disabled={!hasPrevNews}
                   className="flex items-center gap-1 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground transition-colors disabled:opacity-50"
                 >
                   <MoveLeft className="w-4 h-4 sm:mr-1" />
                   <span className="hidden sm:inline">Previous News</span>
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleNextNews} 
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextNews}
                   disabled={!hasNextNews}
                   className="flex items-center gap-1 border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground transition-colors disabled:opacity-50"
                 >
@@ -798,13 +799,13 @@ export default function IndustryHubPage() {
                 </Badge>
                 <span className="text-xs font-mono text-muted-foreground">{selectedNews.createdDate}</span>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground leading-tight tracking-tight flex-1">
                   {selectedNews.title}
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button 
+                  <Button
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
                       toast({ title: "Link copied!", description: "Industry Hub link copied to clipboard." });
@@ -814,8 +815,8 @@ export default function IndustryHubPage() {
                     <Share2 className="w-4 h-4 mr-2" />
                     Share News
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => toast({ title: "Saved to bookmarks!", description: "You can find saved insights in your profile." })}
                     className="border-border/80 bg-surface-elevated hover:border-primary/50 hover:text-primary text-foreground shadow-sm transition-colors"
                   >
@@ -824,7 +825,7 @@ export default function IndustryHubPage() {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2 text-sm text-muted-foreground bg-surface-elevated p-3.5 rounded-lg border border-border/80">
                 <UserPlus className="w-4 h-4 text-primary" />
                 <span>Written by <span className="font-semibold text-foreground">{selectedNews.createdBy}</span></span>
@@ -837,12 +838,12 @@ export default function IndustryHubPage() {
                 {selectedNews.description}
               </div>
             </div>
-            
+
             {/* News Actions */}
             {user && selectedNews.user_id === user.id && (
               <div className="flex justify-end gap-2 border-t border-border/60 pt-6">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => {
                     handleEditClick(selectedNews, "news");
                     setShowNewsDetail(false);
@@ -852,8 +853,8 @@ export default function IndustryHubPage() {
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => {
                     handleDelete(selectedNews.id, "news");
                     setShowNewsDetail(false);
@@ -870,13 +871,13 @@ export default function IndustryHubPage() {
           <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* Event Detail Header */}
             <div className="flex items-center justify-between border-b border-border/60 pb-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setShowEventDetail(false);
                   setSelectedEvent(null);
-                }} 
+                }}
                 className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
@@ -884,8 +885,8 @@ export default function IndustryHubPage() {
               </Button>
               {user && selectedEvent.user_id === user.id && (
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       handleEditClick(selectedEvent, "events");
@@ -896,8 +897,8 @@ export default function IndustryHubPage() {
                     <Edit className="w-4 h-4 mr-1" />
                     Edit
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       handleDelete(selectedEvent.id, "events");
@@ -929,7 +930,7 @@ export default function IndustryHubPage() {
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
                   {selectedEvent.registrationLink ? (
-                    <a 
+                    <a
                       href={selectedEvent.registrationLink}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -939,7 +940,7 @@ export default function IndustryHubPage() {
                       Register Now
                     </a>
                   ) : (
-                    <Button 
+                    <Button
                       onClick={() => toast({ title: "Booking successful!", description: `You have successfully booked a spot for: ${selectedEvent.title}` })}
                       className="bg-primary text-primary-foreground hover:bg-primary-hover h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
                     >
@@ -947,8 +948,8 @@ export default function IndustryHubPage() {
                       Book Now
                     </Button>
                   )}
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
@@ -1009,10 +1010,10 @@ export default function IndustryHubPage() {
                     {!selectedEvent.isOnline && selectedEvent.googleMapsLink && (
                       <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">Google Maps Directions:</span>
-                        <a 
-                          href={selectedEvent.googleMapsLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href={selectedEvent.googleMapsLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-primary hover:underline flex items-center gap-1 font-semibold text-sm mt-0.5"
                         >
                           View Map Venue
@@ -1023,10 +1024,10 @@ export default function IndustryHubPage() {
                     {selectedEvent.isOnline && selectedEvent.meetingLink && (
                       <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">Virtual Meeting Room:</span>
-                        <a 
-                          href={selectedEvent.meetingLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href={selectedEvent.meetingLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-primary hover:underline flex items-center gap-1 font-semibold text-sm mt-0.5"
                         >
                           Join Online Link
@@ -1037,10 +1038,10 @@ export default function IndustryHubPage() {
                     {selectedEvent.registrationLink && (
                       <div className="flex flex-col gap-1 p-3 bg-card text-card-foreground border border-border/80 rounded-lg">
                         <span className="text-xs text-muted-foreground font-medium">External Registration Form:</span>
-                        <a 
-                          href={selectedEvent.registrationLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href={selectedEvent.registrationLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="text-primary hover:underline flex items-center gap-1 font-semibold text-sm mt-0.5"
                         >
                           Registration Portal
@@ -1061,13 +1062,13 @@ export default function IndustryHubPage() {
           <div className="bg-card text-card-foreground rounded-xl shadow-noir p-6 border border-border/80 space-y-6">
             {/* Course Detail Header */}
             <div className="flex items-center justify-between border-b border-border/60 pb-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setShowCourseDetail(false);
                   setSelectedCourse(null);
-                }} 
+                }}
                 className="w-fit flex items-center gap-1.5 text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 sm:mr-1.5" />
@@ -1075,8 +1076,8 @@ export default function IndustryHubPage() {
               </Button>
               {user && selectedCourse.user_id === user.id && (
                 <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       handleEditClick(selectedCourse, "courses");
@@ -1087,8 +1088,8 @@ export default function IndustryHubPage() {
                     <Edit className="w-4 h-4 mr-1" />
                     Edit
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       handleDelete(selectedCourse.id, "courses");
@@ -1116,15 +1117,24 @@ export default function IndustryHubPage() {
                   {selectedCourse.title}
                 </h1>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button 
-                    onClick={() => toast({ title: "Registration successful!", description: `You have successfully enrolled in: ${selectedCourse.title}` })}
+                  <Button
+                    onClick={() => {
+                      if (selectedCourse.link && selectedCourse.link.startsWith('http')) {
+                        window.open(selectedCourse.link, '_blank', 'noopener,noreferrer');
+                      } else {
+                        toast({
+                          title: "External Provider Registration",
+                          description: `Registration for "${selectedCourse.title}" is hosted externally by the curriculum provider. Link will be made active upon class schedule confirmation.`
+                        });
+                      }
+                    }}
                     className="bg-primary text-primary-foreground hover:bg-primary-hover h-9 px-4 rounded-lg font-semibold text-sm shadow-sm"
                   >
-                    <Bookmark className="w-4 h-4 mr-2" />
-                    Register Now
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Register via Provider
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
@@ -1196,18 +1206,16 @@ export default function IndustryHubPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-3.5 border-b-2 font-medium transition-colors relative flex items-center text-sm whitespace-nowrap shrink-0 ${
-                      activeTab === tab.id
+                    className={`px-4 py-3.5 border-b-2 font-medium transition-colors relative flex items-center text-sm whitespace-nowrap shrink-0 ${activeTab === tab.id
                         ? "border-primary text-primary"
                         : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
+                      }`}
                   >
                     {tab.label}
-                    <span className={`ml-2 text-xs font-mono px-1.5 py-0.5 rounded-full ${
-                      activeTab === tab.id
+                    <span className={`ml-2 text-xs font-mono px-1.5 py-0.5 rounded-full ${activeTab === tab.id
                         ? "bg-primary/15 text-primary"
                         : "bg-surface-elevated text-muted-foreground"
-                    }`}>
+                      }`}>
                       {tab.count}
                     </span>
                   </button>
@@ -1433,8 +1441,8 @@ export default function IndustryHubPage() {
                                 <UserPlus className="w-3 h-3 text-primary" />
                                 <span className="truncate max-w-[180px]">Instructor: {course.instructor}</span>
                               </div>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 className="w-full mt-2 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1506,9 +1514,9 @@ export default function IndustryHubPage() {
                         />
                       </div>
                     </div>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => { setDateRange({ from: "", to: "" }); setCreatedFilter("all"); }}
                       className="text-xs h-8 border-border/80 bg-surface-elevated hover:border-primary/40"
                     >
@@ -1555,18 +1563,18 @@ export default function IndustryHubPage() {
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                                   <div className="flex items-center gap-2">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
                                       onClick={() => handleEditClick(item, item.type)}
                                       className="border-border/80 bg-card hover:border-primary/50 hover:text-primary"
                                     >
                                       <Edit className="w-3 h-3 mr-1" />
                                       Edit
                                     </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
                                       onClick={() => handleDelete(item.id, item.type)}
                                       className="text-destructive hover:text-destructive border-destructive/30 hover:border-destructive hover:bg-destructive/10"
                                     >
@@ -1630,8 +1638,8 @@ export default function IndustryHubPage() {
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Title *</label>
-                      <Input 
-                        placeholder="Enter news title" 
+                      <Input
+                        placeholder="Enter news title"
                         value={formFields.newsTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, newsTitle: e.target.value }))}
                         className="bg-surface-elevated border-border/80"
@@ -1639,7 +1647,7 @@ export default function IndustryHubPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Category *</label>
-                      <select 
+                      <select
                         className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                         value={formFields.newsCategory}
                         onChange={(e) => setFormFields(prev => ({ ...prev, newsCategory: e.target.value }))}
@@ -1662,7 +1670,7 @@ export default function IndustryHubPage() {
                     </div>
 
                     <div className="flex gap-2 pt-3 border-t border-border/60">
-                      <Button 
+                      <Button
                         disabled={loading}
                         onClick={handleSave}
                         className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
@@ -1680,8 +1688,8 @@ export default function IndustryHubPage() {
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Event Title *</label>
-                      <Input 
-                        placeholder="Enter event title" 
+                      <Input
+                        placeholder="Enter event title"
                         value={formFields.eventTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, eventTitle: e.target.value }))}
                         className="bg-surface-elevated border-border/80"
@@ -1690,8 +1698,8 @@ export default function IndustryHubPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Date *</label>
-                        <Input 
-                          type="date" 
+                        <Input
+                          type="date"
                           value={formFields.eventDate}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventDate: e.target.value }))}
                           className="bg-surface-elevated border-border/80"
@@ -1699,8 +1707,8 @@ export default function IndustryHubPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Price *</label>
-                        <Input 
-                          placeholder="e.g., ₹500" 
+                        <Input
+                          placeholder="e.g., ₹500"
                           value={formFields.eventPrice}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventPrice: e.target.value }))}
                           className="bg-surface-elevated border-border/80"
@@ -1709,13 +1717,13 @@ export default function IndustryHubPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Event Type</label>
-                      <select 
+                      <select
                         className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                         value={formFields.eventType}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setFormFields(prev => ({ 
-                            ...prev, 
+                          setFormFields(prev => ({
+                            ...prev,
                             eventType: val,
                             eventLocation: val === "Online" ? "Online" : prev.eventLocation === "Online" ? "" : prev.eventLocation
                           }));
@@ -1730,8 +1738,8 @@ export default function IndustryHubPage() {
                       <>
                         <div className="space-y-1">
                           <label className="text-sm font-medium text-foreground">Location / Address *</label>
-                          <Input 
-                            placeholder="Enter physical address or venue" 
+                          <Input
+                            placeholder="Enter physical address or venue"
                             value={formFields.eventLocation}
                             onChange={(e) => setFormFields(prev => ({ ...prev, eventLocation: e.target.value }))}
                             className="bg-surface-elevated border-border/80"
@@ -1739,8 +1747,8 @@ export default function IndustryHubPage() {
                         </div>
                         <div className="space-y-1">
                           <label className="text-sm font-medium text-foreground">Google Maps Link</label>
-                          <Input 
-                            placeholder="https://maps.google.com/..." 
+                          <Input
+                            placeholder="https://maps.google.com/..."
                             value={formFields.eventGoogleMapsLink}
                             onChange={(e) => setFormFields(prev => ({ ...prev, eventGoogleMapsLink: e.target.value }))}
                             className="bg-surface-elevated border-border/80"
@@ -1750,8 +1758,8 @@ export default function IndustryHubPage() {
                     ) : (
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Meeting Link *</label>
-                        <Input 
-                          placeholder="https://zoom.us/j/... or Google Meet link" 
+                        <Input
+                          placeholder="https://zoom.us/j/... or Google Meet link"
                           value={formFields.eventMeetingLink}
                           onChange={(e) => setFormFields(prev => ({ ...prev, eventMeetingLink: e.target.value }))}
                           className="bg-surface-elevated border-border/80"
@@ -1761,8 +1769,8 @@ export default function IndustryHubPage() {
 
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Registration Link</label>
-                      <Input 
-                        placeholder="https://example.com/register-event" 
+                      <Input
+                        placeholder="https://example.com/register-event"
                         value={formFields.eventRegistrationLink}
                         onChange={(e) => setFormFields(prev => ({ ...prev, eventRegistrationLink: e.target.value }))}
                         className="bg-surface-elevated border-border/80"
@@ -1780,7 +1788,7 @@ export default function IndustryHubPage() {
                     </div>
 
                     <div className="flex gap-2 pt-3 border-t border-border/60">
-                      <Button 
+                      <Button
                         disabled={loading}
                         onClick={handleSave}
                         className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"
@@ -1798,8 +1806,8 @@ export default function IndustryHubPage() {
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Course Title *</label>
-                      <Input 
-                        placeholder="Enter course title" 
+                      <Input
+                        placeholder="Enter course title"
                         value={formFields.courseTitle}
                         onChange={(e) => setFormFields(prev => ({ ...prev, courseTitle: e.target.value }))}
                         className="bg-surface-elevated border-border/80"
@@ -1808,8 +1816,8 @@ export default function IndustryHubPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Duration *</label>
-                        <Input 
-                          placeholder="e.g., 8 weeks" 
+                        <Input
+                          placeholder="e.g., 8 weeks"
                           value={formFields.courseDuration}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseDuration: e.target.value }))}
                           className="bg-surface-elevated border-border/80"
@@ -1817,8 +1825,8 @@ export default function IndustryHubPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Price *</label>
-                        <Input 
-                          placeholder="e.g., ₹15,000" 
+                        <Input
+                          placeholder="e.g., ₹15,000"
                           value={formFields.coursePrice}
                           onChange={(e) => setFormFields(prev => ({ ...prev, coursePrice: e.target.value }))}
                           className="bg-surface-elevated border-border/80"
@@ -1828,7 +1836,7 @@ export default function IndustryHubPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Level *</label>
-                        <select 
+                        <select
                           className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                           value={formFields.courseLevel}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseLevel: e.target.value }))}
@@ -1840,7 +1848,7 @@ export default function IndustryHubPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-foreground">Category *</label>
-                        <select 
+                        <select
                           className="w-full px-3 py-2 border border-border/80 rounded-md text-sm bg-surface-elevated text-foreground h-10"
                           value={formFields.courseCategory}
                           onChange={(e) => setFormFields(prev => ({ ...prev, courseCategory: e.target.value }))}
@@ -1855,8 +1863,8 @@ export default function IndustryHubPage() {
                     </div>
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-foreground">Instructor *</label>
-                      <Input 
-                        placeholder="Enter instructor name" 
+                      <Input
+                        placeholder="Enter instructor name"
                         value={formFields.courseInstructor}
                         onChange={(e) => setFormFields(prev => ({ ...prev, courseInstructor: e.target.value }))}
                         className="bg-surface-elevated border-border/80"
@@ -1873,7 +1881,7 @@ export default function IndustryHubPage() {
                     </div>
 
                     <div className="flex gap-2 pt-3 border-t border-border/60">
-                      <Button 
+                      <Button
                         disabled={loading}
                         onClick={handleSave}
                         className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-semibold"

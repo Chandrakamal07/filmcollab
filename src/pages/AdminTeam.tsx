@@ -71,7 +71,7 @@ export default function AdminTeam() {
       // Find user by email
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, user_id, full_name, email')
         .eq('email', memberEmail)
         .maybeSingle();
         
@@ -81,23 +81,35 @@ export default function AdminTeam() {
         return;
       }
 
-      const { error } = await supabase
+      const targetAuthUserId = profileData.user_id || profileData.id;
+
+      const { data: memberInsertData, error } = await supabase
         .from('admin_team_members')
         .insert({
-          user_id: profileData.id,
+          user_id: targetAuthUserId,
           profile_id: profileData.id,
           role: newMember.role,
           status: newMember.status,
           permissions: newMember.permissions
-        });
+        })
+        .select("id");
 
       if (error) throw error;
+      if (!memberInsertData || memberInsertData.length === 0) {
+        throw new Error("Failed to insert team member. Permission denied.");
+      }
+
+      // Provision corresponding database role in user_roles so server RLS permits administrative operations
+      await supabase.from('user_roles').upsert({
+        user_id: targetAuthUserId,
+        role: 'admin'
+      }, { onConflict: 'user_id' });
       
       toast({ title: "Team member added successfully!" });
       setIsAddDialogOpen(false);
       fetchTeamMembers();
-    } catch (error) {
-      toast({ title: "Failed to add team member", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Failed to add team member", description: error?.message || "Operation failed", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -106,11 +118,19 @@ export default function AdminTeam() {
   const handleDeleteMember = async (id: string) => {
     if (!confirm("Remove this member from the team?")) return;
     try {
-      await supabase.from('admin_team_members').delete().eq('id', id);
+      const member = teamMembers.find(m => m.id === id);
+      const { data, error } = await supabase.from('admin_team_members').delete().eq('id', id).select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Member not found or permission denied.");
+      }
+      if (member?.user_id) {
+        await supabase.from('user_roles').delete().eq('user_id', member.user_id);
+      }
       setTeamMembers(prev => prev.filter(m => m.id !== id));
       toast({ title: "Member removed" });
-    } catch (e) {
-      toast({ title: "Failed to remove member", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Failed to remove member", description: e?.message || "Operation failed", variant: "destructive" });
     }
   };
 

@@ -116,7 +116,7 @@ interface ProfileData {
   portfolio: PortfolioItem[];
   directoryFiles: DirectoryFile[];
   systemRole?: "user" | "admin";
-  
+
   // New Personal Information
   dateOfBirth?: string;
   languages?: string[];
@@ -153,7 +153,7 @@ interface ProfileData {
   allowMessagesFrom?: string;
   allowConnectionsFrom?: string;
   allowProfileViews?: boolean;
-  
+
   // Short ID
   shortId?: string;
 }
@@ -303,7 +303,7 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     recentActivity: [],
     directoryFiles: [],
     systemRole: (row?.role === "admin" || row?.role === "ADMIN") ? "admin" : "user",
-    
+
     // Personal Information
     dateOfBirth: row?.date_of_birth ?? "",
     languages: Array.isArray(row?.languages) ? row.languages : [],
@@ -318,7 +318,7 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     pricePerDay: row?.price_per_day?.toString() ?? "",
     pricePerHour: row?.price_per_hour?.toString() ?? "",
     priceNegotiable: row?.price_negotiable ?? false,
-    
+
     // Physical Details
     height: row?.height ?? "",
     weight: row?.weight ?? "",
@@ -332,11 +332,11 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     currentCountry: row?.current_country ?? "",
 
     // Privacy Settings
-    privacyShowPhone: row?.settingsData?.privacy_settings?.showPhone ?? true,
-    privacyShowEmail: row?.settingsData?.privacy_settings?.showEmail ?? true,
-    privacyShowDob: row?.settingsData?.privacy_settings?.showBirthday ?? true,
-    privacyShowDirectory: row?.settingsData?.privacy_settings?.showDirectory ?? true,
-    privacyShowLocation: row?.settingsData?.privacy_settings?.showLocation ?? true,
+    privacyShowPhone: row?.settingsData?.privacy_settings?.showPhone ?? row?.privacy_show_phone ?? true,
+    privacyShowEmail: row?.settingsData?.privacy_settings?.showEmail ?? row?.privacy_show_email ?? true,
+    privacyShowDob: row?.settingsData?.privacy_settings?.showBirthday ?? row?.privacy_show_dob ?? true,
+    privacyShowDirectory: row?.settingsData?.privacy_settings?.showDirectory ?? row?.privacy_show_directory ?? true,
+    privacyShowLocation: row?.settingsData?.privacy_settings?.showLocation ?? row?.privacy_show_location ?? true,
     allowMessagesFrom: row?.settingsData?.privacy_settings?.allowMessages ?? 'everyone',
     allowConnectionsFrom: row?.settingsData?.privacy_settings?.allowConnectionRequests ?? 'everyone',
     allowProfileViews: row?.settingsData?.privacy_settings?.allowProfileViews ?? true,
@@ -373,7 +373,7 @@ function profileToRow(p: ProfileData, userId: string) {
     achievements: p.achievements ?? [],
     portfolio: p.portfolio ?? [],
     updated_at: new Date().toISOString(),
-    
+
     // Personal Information
     date_of_birth: p.dateOfBirth || null,
     languages: p.languages ?? [],
@@ -388,19 +388,19 @@ function profileToRow(p: ProfileData, userId: string) {
     price_per_day: p.pricePerDay ? parseFloat(p.pricePerDay) : null,
     price_per_hour: p.pricePerHour ? parseFloat(p.pricePerHour) : null,
     price_negotiable: p.priceNegotiable ?? false,
-    
+
     // Physical Details
     height: p.height || null,
     weight: p.weight || null,
     eye_color: p.eyeColor || null,
     hair_color: p.hairColor || null,
     skin_tone: p.skinTone || null,
-    
+
     // Current Location
     current_city: p.currentCity || null,
     current_state: p.currentState || null,
     current_country: p.currentCountry || null,
-    
+
     // Privacy Settings
     privacy_show_phone: p.privacyShowPhone ?? true,
     privacy_show_email: p.privacyShowEmail ?? true,
@@ -438,7 +438,7 @@ function getYouTubeUsername(url: string): string | null {
     if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return null;
-    
+
     if (parts[0] === "channel" || parts[0] === "c" || parts[0] === "user" || parts[0] === "show") {
       return parts[1] || null;
     }
@@ -481,7 +481,7 @@ function getFacebookUsername(url: string): string | null {
     if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return null;
-    
+
     if (parts[0] === "pages" || parts[0] === "people" || parts[0] === "groups" || parts[0] === "events") {
       return parts[1] || null;
     }
@@ -496,20 +496,20 @@ function getFacebookUsername(url: string): string | null {
 function isPublicUrl(url: string, platform: string): boolean {
   if (!url) return false;
   const val = url.trim().toLowerCase();
-  
+
   if (!val.startsWith("http://") && !val.startsWith("https://") && !val.includes(".")) {
     return false;
   }
-  
+
   const privateKeywords = [
-    "private", "settings", "edit", "admin", "dashboard", "studio", 
-    "only-friends", "draft", "config", "personal", "me", "login", 
+    "private", "settings", "edit", "admin", "dashboard", "studio",
+    "only-friends", "draft", "config", "personal", "me", "login",
     "signup", "accounts/login", "accounts/edit", "my-account"
   ];
   if (privateKeywords.some(keyword => val.includes(keyword))) {
     return false;
   }
-  
+
   if (platform === "instagram") {
     return getInstagramUsername(url) !== null;
   }
@@ -522,44 +522,14 @@ function isPublicUrl(url: string, platform: string): boolean {
   if (platform === "twitter") {
     return getTwitterUsername(url) !== null;
   }
-  
+
   return false;
 }
 
 function extractFollowersFromUrl(url: string, platform: string): string {
   if (!url) return "NA";
   if (!isPublicUrl(url, platform)) return "NA";
-  
-  try {
-    let clean = url.trim();
-    if (clean.includes("?")) {
-      clean = clean.split("?")[0];
-    }
-    const parts = clean.split("/");
-    let username = parts[parts.length - 1] || parts[parts.length - 2] || "user";
-    if (username.startsWith("@")) {
-      username = username.substring(1);
-    }
-    
-    let hash = 0;
-    const str = `${username}-${platform}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    hash = Math.abs(hash);
-    
-    if (hash % 4 === 0) {
-      return `${((hash % 900) / 10 + 10).toFixed(1)}K`;
-    } else if (hash % 4 === 1) {
-      return `${((hash % 90) / 10 + 1.5).toFixed(1)}M`;
-    } else if (hash % 4 === 2) {
-      return `${((hash % 800) / 10 + 5).toFixed(1)}K`;
-    } else {
-      return ((hash % 15000) + 1200).toLocaleString();
-    }
-  } catch (e) {
-    return "12.4K";
-  }
+  return "Unavailable";
 }
 
 function getMetaTagContent(html: string, nameOrProperty: string): string | null {
@@ -595,7 +565,7 @@ function parseFollowersFromHtml(html: string, platform: string): string {
     if (platform === "instagram") {
       // 1. Try to parse JSON-LD schema (most robust and exact on public crawlers)
       const schemaMatch = html.match(/"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"\s*,\s*"userInteractionCount"\s*:\s*["']?(\d+)["']?/i) ||
-                          html.match(/"userInteractionCount"\s*:\s*["']?(\d+)["']?[^}]*"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"/i);
+        html.match(/"userInteractionCount"\s*:\s*["']?(\d+)["']?[^}]*"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"/i);
       if (schemaMatch && schemaMatch[1]) {
         return formatNumber(parseInt(schemaMatch[1], 10));
       }
@@ -616,10 +586,10 @@ function parseFollowersFromHtml(html: string, platform: string): string {
       }
 
       // 4. Picuki HTML parsing fallback
-      const picukiMatch = html.match(/class=["']profile-followers["'][^>]*>\s*([\d,.\sKMkm]+)/i) || 
-                          html.match(/([\d,.\sKMkm]+)\s*<span>\s*followers/i) ||
-                          html.match(/followed-by["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/([\d,.\sKMkm]+)\s*followers/i);
+      const picukiMatch = html.match(/class=["']profile-followers["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/([\d,.\sKMkm]+)\s*<span>\s*followers/i) ||
+        html.match(/followed-by["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/([\d,.\sKMkm]+)\s*followers/i);
       if (picukiMatch && picukiMatch[1]) {
         const cleaned = picukiMatch[1].replace(/,/g, "").trim().toUpperCase();
         if (cleaned) return cleaned;
@@ -677,9 +647,9 @@ function parseFollowersFromHtml(html: string, platform: string): string {
 
       // Nitter profile-stat-num followers match
       const nitterMatch = html.match(/class=["']followers["'][^>]*>[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)[\s\S]*?Followers/i) ||
-                          html.match(/Followers[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i);
+        html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)[\s\S]*?Followers/i) ||
+        html.match(/Followers[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i);
       if (nitterMatch && nitterMatch[1]) {
         return nitterMatch[1].trim().toUpperCase();
       }
@@ -881,13 +851,13 @@ async function fetchFollowersCount(url: string, platform: string): Promise<strin
       const res = await fetch(`https://instagram-feed-api-gamma.vercel.app/api/${encodeURIComponent(cleanUser)}`);
       if (res.ok) {
         const data = await res.json();
-        const count = data?.followers || 
-                      data?.follower_count || 
-                      data?.followers_count || 
-                      data?.user?.followers || 
-                      data?.user?.follower_count || 
-                      data?.user?.followers_count ||
-                      data?.graphql?.user?.edge_followed_by?.count;
+        const count = data?.followers ||
+          data?.follower_count ||
+          data?.followers_count ||
+          data?.user?.followers ||
+          data?.user?.follower_count ||
+          data?.user?.followers_count ||
+          data?.graphql?.user?.edge_followed_by?.count;
         if (count) {
           const num = parseInt(count, 10);
           if (!isNaN(num)) return formatNumber(num);
@@ -970,7 +940,7 @@ async function fetchFollowersCount(url: string, platform: string): Promise<strin
         const id = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(id);
-        
+
         if (!response.ok) continue;
         const html = await response.text();
         if (!html) continue;
@@ -1022,7 +992,7 @@ export default function ProfilePage() {
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [userProjects, setUserProjects] = useState<any[]>([]);
   const [directoryPage, setDirectoryPage] = useState(1);
-  const [directoryFilter, setDirectoryFilter] = useState<"all"|"document"|"image"|"video"|"audio">("all");
+  const [directoryFilter, setDirectoryFilter] = useState<"all" | "document" | "image" | "video" | "audio">("all");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -1042,7 +1012,7 @@ export default function ProfilePage() {
   const addFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [isUploadingDirectoryFile, setIsUploadingDirectoryFile] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, onConfirm: () => void, title?: string, desc?: string }>({ isOpen: false, onConfirm: () => {} });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, onConfirm: () => void, title?: string, desc?: string }>({ isOpen: false, onConfirm: () => { } });
 
   const handleAddFileSubmit = async () => {
     if (selectedAddFiles.length === 0) {
@@ -1069,7 +1039,7 @@ export default function ProfilePage() {
 
     try {
       setIsUploadingDirectoryFile(true);
-      
+
       let publicUrl = "";
       let additionalUrls: string[] = [];
 
@@ -1110,7 +1080,7 @@ export default function ProfilePage() {
         }
       }
 
-      const profileDbId = profile.user_id || profile.id;
+      const profileDbId = profile.id;
       const newDbFile = {
         title: finalTitle,
         file_type: type,
@@ -1306,7 +1276,7 @@ export default function ProfilePage() {
       if (resolvedUserId && profileDataCache.has(resolvedUserId)) {
         setProfile(profileDataCache.get(resolvedUserId));
         setEditForm(profileDataCache.get(resolvedUserId));
-        
+
         if (profileStatsCache.has(resolvedUserId)) {
           const stats = profileStatsCache.get(resolvedUserId);
           setUserProjects(stats.projects);
@@ -1322,7 +1292,7 @@ export default function ProfilePage() {
       }
 
       if (!user) return;
-      
+
       let actualUserIdParamSanitized = actualUserIdParam;
       if (actualUserIdParamSanitized === "undefined" || actualUserIdParamSanitized === "null") {
         actualUserIdParamSanitized = undefined;
@@ -1358,29 +1328,33 @@ export default function ProfilePage() {
         setProfile(mapped);
         setEditForm(mapped);
         profileDataCache.set(data.id, mapped);
-        resolvedId = mapped.user_id || mapped.id;
-        
+        const targetAuthUserId = data.user_id || data.id;
+        const targetProfileId = data.id;
+        resolvedUserId = targetAuthUserId;
+        resolvedId = targetProfileId;
+
         // Update URL bar to show 6-digit short ID
         if (mapped.shortId && window.location.pathname.startsWith("/profile")) {
           window.history.replaceState(null, '', `/profile/${mapped.shortId}`);
         }
 
         // Check if current user is connected and log profile view
-        if (user && user.id && user.id !== resolvedUserId) {
+        const currentProfileId = authProfile?.id || user.id;
+        if (user && user.id && targetAuthUserId !== user.id) {
           const { data: connData } = await supabase
             .from("connections")
             .select("status")
             .eq("status", "accepted")
-            .or(`and(user_id.eq.${user.id},connected_user_id.eq.${resolvedUserId}),and(user_id.eq.${resolvedUserId},connected_user_id.eq.${user.id})`)
+            .or(`and(user_id.eq.${currentProfileId},connected_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},connected_user_id.eq.${currentProfileId})`)
             .maybeSingle();
-            
+
           if (connData) {
             setIsConnected(true);
           }
 
           if (mapped.allowProfileViews) {
             await supabase.from("notifications").insert({
-              user_id: resolvedUserId,
+              user_id: targetProfileId,
               title: "Profile View",
               description: `Someone viewed your profile.`,
               type: "profile",
@@ -1439,26 +1413,26 @@ export default function ProfilePage() {
           ]);
 
           let allUserProjects = projRes.data || [];
-          
+
           if (!joinedProjRes.error && joinedProjRes.data && joinedProjRes.data.length > 0) {
             const joinedIds = joinedProjRes.data
               .map((p: any) => p.project_id)
               .filter((id: string) => id && !allUserProjects.find((up: any) => up.id === id));
-              
+
             if (joinedIds.length > 0) {
               const { data: joinedProjects } = await supabase
                 .from("projects")
                 .select("*")
                 .in("id", joinedIds)
                 .order("created_at", { ascending: false });
-                
+
               if (joinedProjects) {
                 allUserProjects = [...allUserProjects, ...joinedProjects];
                 allUserProjects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
               }
             }
           }
-          
+
           setUserProjects(allUserProjects);
 
           if (!connRes.error) {
@@ -1497,7 +1471,7 @@ export default function ProfilePage() {
           console.error("Error reading jobs count:", e);
           updateJobsCount(0);
         }
-        
+
         // Cache the stats
         profileStatsCache.set(resolvedUserId, {
           projects: userProjects,
@@ -1529,7 +1503,7 @@ export default function ProfilePage() {
         .select("*")
         .eq("user_id", profileDbId)
         .order("created_at", { ascending: false });
-      
+
       if (error && error.code !== '42P01') {
         console.error("Error fetching directory files:", error);
       } else if (data) {
@@ -1579,17 +1553,44 @@ export default function ProfilePage() {
   const handlePrivacyToggle = async (field: 'privacyShowPhone' | 'privacyShowEmail' | 'privacyShowDob' | 'privacyShowDirectory', value: boolean) => {
     setProfile(prev => ({ ...prev, [field]: value }));
     setEditForm(prev => ({ ...prev, [field]: value }));
-    
+
     if (user && profile.id) {
+      const settingsKeyMap: Record<string, string> = {
+        privacyShowPhone: 'showPhone',
+        privacyShowEmail: 'showEmail',
+        privacyShowDob: 'showBirthday',
+        privacyShowDirectory: 'showDirectory'
+      };
+      const settingsKey = settingsKeyMap[field];
       const dbField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
       try {
-        const { error } = await supabase
+        const { error: profErr } = await supabase
           .from('profiles')
           .update({ [dbField]: value } as any)
           .eq('id', profile.id);
-        
-        if (error) throw error;
-        
+
+        if (profErr) throw profErr;
+
+        if (settingsKey) {
+          const { data: curSettings } = await supabase
+            .from('settings')
+            .select('privacy_settings')
+            .eq('profile_id', profile.id)
+            .maybeSingle();
+
+          const updatedPrivacy = {
+            ...(curSettings?.privacy_settings || {}),
+            [settingsKey]: value
+          };
+
+          await supabase
+            .from('settings')
+            .upsert({
+              profile_id: profile.id,
+              privacy_settings: updatedPrivacy
+            }, { onConflict: 'profile_id' });
+        }
+
         toast({
           title: "Privacy Updated",
           description: "Your privacy settings have been saved.",
@@ -1615,7 +1616,7 @@ export default function ProfilePage() {
     setAvatarToCrop(fileUrl);
     setIsCropDialogOpen(true);
     setSelectedAvatarFile(file);
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1625,7 +1626,7 @@ export default function ProfilePage() {
   const uploadCroppedImage = async () => {
     if (!avatarToCrop || !croppedAreaPixels || !user?.id) return;
     setIsUploadingAvatar(true);
-    
+
     try {
       const croppedBlob = await getCroppedImg(avatarToCrop, croppedAreaPixels);
       const fileExt = 'jpg';
@@ -1900,7 +1901,7 @@ export default function ProfilePage() {
   };
 
   const getRoleIcon = (role: string) => {
-    const roleKey = Object.keys(roleIcons).find(key => 
+    const roleKey = Object.keys(roleIcons).find(key =>
       role.toLowerCase().includes(key.toLowerCase())
     );
     return roleKey ? roleIcons[roleKey as keyof typeof roleIcons] : Camera;
@@ -1964,8 +1965,8 @@ export default function ProfilePage() {
                   </Avatar>
                   {isOwnProfile && (
                     <>
-                      <input 
-                        type="file" 
+                      <input
+                        type="file"
                         ref={fileInputRef}
                         className="hidden"
                         accept="image/*"
@@ -1982,7 +1983,7 @@ export default function ProfilePage() {
                     </>
                   )}
                 </div>
-                
+
                 <div className="flex-1 min-w-0 pt-2 sm:pt-0 sm:pb-1">
                   <div className="flex items-center justify-start gap-2 mb-1">
                     <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground flex flex-nowrap items-center justify-start gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full max-w-full sm:max-w-none whitespace-nowrap">
@@ -2027,7 +2028,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Action Buttons / Social Media Icons Area */}
               <div className="flex flex-col items-center md:items-end gap-3 flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -2035,7 +2036,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.instagram ? (
                       <>
-                        
+
                         <a
                           href={profile.instagram}
                           target="_blank"
@@ -2063,7 +2064,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.youtube ? (
                       <>
-                        
+
                         <a
                           href={profile.youtube}
                           target="_blank"
@@ -2091,7 +2092,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.facebook ? (
                       <>
-                        
+
                         <a
                           href={profile.facebook}
                           target="_blank"
@@ -2119,7 +2120,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.twitter ? (
                       <>
-                        
+
                         <a
                           href={profile.twitter}
                           target="_blank"
@@ -2146,7 +2147,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-            
+
             {/* Statistics Row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border/70">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 sm:gap-x-7 gap-y-3 w-full sm:w-auto">
@@ -2174,18 +2175,18 @@ export default function ProfilePage() {
 
               {isOwnProfile ? (
                 <div className="flex gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={handleEditProfile}
                   >
                     <Edit className="w-4 h-4 text-primary" />
                     Edit Profile
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={() => setShowShareModal(true)}
                   >
@@ -2195,9 +2196,9 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="flex-1 sm:flex-none border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground justify-center transition-colors"
                     onClick={handleSendMessage}
                     disabled={!canMessage}
@@ -2205,8 +2206,8 @@ export default function ProfilePage() {
                     <MessageSquare className="w-4 h-4 mr-1.5 text-primary" />
                     Message
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={handleConnect}
                     className="flex-1 sm:flex-none bg-primary hover:bg-primary-hover text-primary-foreground disabled:opacity-50 justify-center font-medium"
                     disabled={!canConnect}
@@ -2224,7 +2225,7 @@ export default function ProfilePage() {
         <div className="w-full space-y-4">
           <div className="w-full space-y-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              
+
               {/* Mobile Dropdown */}
               <div className="md:hidden w-full mb-4">
                 <Select value={activeTab} onValueChange={setActiveTab}>
@@ -2244,38 +2245,38 @@ export default function ProfilePage() {
 
               {/* Desktop Tabs */}
               <TabsList className="hidden md:grid w-full overflow-x-auto bg-card border border-border/80 p-1 rounded-xl justify-start grid-cols-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <TabsTrigger 
-                  value="overview" 
+                <TabsTrigger
+                  value="overview"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Overview
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="experience" 
+                <TabsTrigger
+                  value="experience"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Experience
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="projects" 
+                <TabsTrigger
+                  value="projects"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Projects
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="achievements" 
+                <TabsTrigger
+                  value="achievements"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Achievements
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="education" 
+                <TabsTrigger
+                  value="education"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Education
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="directory" 
+                <TabsTrigger
+                  value="directory"
                   className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Directory
@@ -2411,12 +2412,12 @@ export default function ProfilePage() {
                         {isOwnProfile || profile.privacyShowDob !== false ? (
                           profile.dateOfBirth ? (
                             <>
-                              {profile.dateOfBirth} 
+                              {profile.dateOfBirth}
                               {!isNaN(new Date(profile.dateOfBirth).getTime()) && ` (${Math.abs(new Date(Date.now() - new Date(profile.dateOfBirth).getTime()).getUTCFullYear() - 1970)} years old)`}
                             </>
                           ) : "-"
                         ) : (
-                          profile.dateOfBirth && !isNaN(new Date(profile.dateOfBirth).getTime()) 
+                          profile.dateOfBirth && !isNaN(new Date(profile.dateOfBirth).getTime())
                             ? `${Math.abs(new Date(Date.now() - new Date(profile.dateOfBirth).getTime()).getUTCFullYear() - 1970)} years old`
                             : "-"
                         )}
@@ -2574,8 +2575,8 @@ export default function ProfilePage() {
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="font-display text-lg text-foreground">Projects</CardTitle>
                     {isOwnProfile && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={() => navigate("/projects")}
                         className="bg-primary hover:bg-primary-hover text-primary-foreground"
                       >
@@ -2588,7 +2589,7 @@ export default function ProfilePage() {
                       <div className="text-center py-8">
                         <p className="text-sm text-muted-foreground mb-4">No projects created yet.</p>
                         {isOwnProfile && (
-                          <Button 
+                          <Button
                             variant="outline"
                             onClick={() => navigate("/projects")}
                             className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground transition-colors"
@@ -2620,10 +2621,9 @@ export default function ProfilePage() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  project.status === 'completed' ? 'bg-emerald-500' :
-                                  project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
-                                }`}></div>
+                                <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'completed' ? 'bg-emerald-500' :
+                                    project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
+                                  }`}></div>
                                 <span className="capitalize">{project.status}</span>
                                 {project.location && (
                                   <>
@@ -2654,9 +2654,9 @@ export default function ProfilePage() {
                                   {project.budget_max ? `${project.budget_currency || "₹"}${project.budget_max.toLocaleString()}` : ""}
                                   {!project.budget_min && !project.budget_max ? "TBD" : ""}
                                 </span>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
                                   className="h-7 text-xs text-primary hover:text-primary-hover hover:bg-primary/10"
                                   onClick={() => navigate(`/projects`)}
                                 >
@@ -2771,61 +2771,61 @@ export default function ProfilePage() {
                       <>
                         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                           {(() => {
-                        const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
-                        const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
-                        if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
-                        return paginated.map(file => (
-                          <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated hover:border-primary/40 transition-colors" onClick={() => setPreviewFile(file)}>
-                              {file.type === 'image' ? (
-                                <div className="relative h-40 w-full">
-                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
-                                  {file.additional_urls && file.additional_urls.length > 0 && (
-                                    <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                                      <ImageIcon className="w-3 h-3 text-primary" />
-                                      {file.additional_urls.length + 1}
-                                    </div>
-                                  )}
-                                </div>
-                              ) :
-                               file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
-                               file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                               <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
-                               <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
-                                 e.stopPropagation(); 
-                                 setDeleteConfirm({
-                                   isOpen: true,
-                                   title: "Delete File",
-                                   desc: "Are you sure you want to delete this file? This action cannot be undone.",
-                                   onConfirm: async () => {
-                                     try {
-                                       await supabase.from('directory_files').delete().eq('id', file.id);
-                                       setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                                       toast({ title: "File deleted successfully" });
-                                     } catch(err) {
-                                       console.error(err);
-                                       toast({ title: "Failed to delete file", variant: "destructive" });
-                                     }
-                                   }
-                                 });
-                               }}>
-                                 <Trash2 className="h-3 w-3" />
-                               </Button>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                    {(() => {
-                      const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
-                      const totalPages = Math.ceil(filtered.length / 10);
-                      if (totalPages <= 1) return null;
-                      return (
-                        <div className="flex justify-center items-center gap-2 mt-4">
-                          <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1} className="border-border text-foreground">Prev</Button>
-                          <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
-                          <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages} className="border-border text-foreground">Next</Button>
+                            const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+                            const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
+                            if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
+                            return paginated.map(file => (
+                              <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated hover:border-primary/40 transition-colors" onClick={() => setPreviewFile(file)}>
+                                {file.type === 'image' ? (
+                                  <div className="relative h-40 w-full">
+                                    <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                                    {file.additional_urls && file.additional_urls.length > 0 && (
+                                      <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                                        <ImageIcon className="w-3 h-3 text-primary" />
+                                        {file.additional_urls.length + 1}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) :
+                                  file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
+                                    file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
+                                      <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
+                                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirm({
+                                    isOpen: true,
+                                    title: "Delete File",
+                                    desc: "Are you sure you want to delete this file? This action cannot be undone.",
+                                    onConfirm: async () => {
+                                      try {
+                                        await supabase.from('directory_files').delete().eq('id', file.id);
+                                        setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
+                                        toast({ title: "File deleted successfully" });
+                                      } catch (err) {
+                                        console.error(err);
+                                        toast({ title: "Failed to delete file", variant: "destructive" });
+                                      }
+                                    }
+                                  });
+                                }}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ));
+                          })()}
                         </div>
-                      );
-                    })()}
+                        {(() => {
+                          const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
+                          const totalPages = Math.ceil(filtered.length / 10);
+                          if (totalPages <= 1) return null;
+                          return (
+                            <div className="flex justify-center items-center gap-2 mt-4">
+                              <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1} className="border-border text-foreground">Prev</Button>
+                              <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
+                              <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages} className="border-border text-foreground">Next</Button>
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
                   </CardContent>
@@ -2846,43 +2846,43 @@ export default function ProfilePage() {
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-foreground">Privacy Settings</h4>
               <p className="text-sm text-muted-foreground">Toggle what information is visible when others view your profile.</p>
-              
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-phone" className="text-sm font-medium">Show Phone Number</Label>
-                <Switch 
-                  id="privacy-phone" 
-                  checked={profile.privacyShowPhone} 
+                <Switch
+                  id="privacy-phone"
+                  checked={profile.privacyShowPhone}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowPhone', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-email" className="text-sm font-medium">Show Email Address</Label>
-                <Switch 
-                  id="privacy-email" 
-                  checked={profile.privacyShowEmail} 
+                <Switch
+                  id="privacy-email"
+                  checked={profile.privacyShowEmail}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowEmail', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-dob" className="text-sm font-medium">Show Date of Birth & Age</Label>
-                <Switch 
-                  id="privacy-dob" 
-                  checked={profile.privacyShowDob} 
+                <Switch
+                  id="privacy-dob"
+                  checked={profile.privacyShowDob}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowDob', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-dir" className="text-sm font-medium">Show Directory Files</Label>
-                <Switch 
-                  id="privacy-dir" 
-                  checked={profile.privacyShowDirectory} 
+                <Switch
+                  id="privacy-dir"
+                  checked={profile.privacyShowDirectory}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowDirectory', val)}
                 />
               </div>
             </div>
 
             <div className="pt-4 border-t border-border/70">
-              <Button 
+              <Button
                 className="w-full bg-primary hover:bg-primary-hover text-primary-foreground"
                 onClick={() => {
                   const url = `${window.location.origin}/profile/${profile.shortId || profile.id}`;
@@ -2908,49 +2908,49 @@ export default function ProfilePage() {
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="font-display text-2xl font-semibold">Edit Profile</DialogTitle>
           </DialogHeader>
-          
+
           <Tabs value={editProfileTab} onValueChange={setEditProfileTab} className="w-full flex-1 flex flex-col min-h-0">
-                          <div className="md:hidden w-full mb-4 mt-2 px-1 flex-shrink-0">
-                <Select value={editProfileTab} onValueChange={setEditProfileTab}>
-                  <SelectTrigger className="w-full h-10 bg-surface-elevated border border-border/80 font-medium text-foreground shadow-sm">
-                    <SelectValue placeholder="Select section" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start">
-                    <SelectItem value="profile">Profile</SelectItem>
-                    <SelectItem value="experience">Experience</SelectItem>
-                    <SelectItem value="achievements">Achievements</SelectItem>
-                    <SelectItem value="education">Education</SelectItem>
-                    <SelectItem value="directory">Directory</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <TabsList className="hidden md:grid w-full overflow-x-auto bg-surface-elevated border border-border/80 p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <TabsTrigger 
-                value="profile" 
+            <div className="md:hidden w-full mb-4 mt-2 px-1 flex-shrink-0">
+              <Select value={editProfileTab} onValueChange={setEditProfileTab}>
+                <SelectTrigger className="w-full h-10 bg-surface-elevated border border-border/80 font-medium text-foreground shadow-sm">
+                  <SelectValue placeholder="Select section" />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start">
+                  <SelectItem value="profile">Profile</SelectItem>
+                  <SelectItem value="experience">Experience</SelectItem>
+                  <SelectItem value="achievements">Achievements</SelectItem>
+                  <SelectItem value="education">Education</SelectItem>
+                  <SelectItem value="directory">Directory</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <TabsList className="hidden md:grid w-full overflow-x-auto bg-surface-elevated border border-border/80 p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <TabsTrigger
+                value="profile"
                 className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Profile
               </TabsTrigger>
-              <TabsTrigger 
-                value="experience" 
+              <TabsTrigger
+                value="experience"
                 className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Experience
               </TabsTrigger>
-              <TabsTrigger 
-                value="achievements" 
+              <TabsTrigger
+                value="achievements"
                 className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Achievements
               </TabsTrigger>
-              <TabsTrigger 
-                value="education" 
+              <TabsTrigger
+                value="education"
                 className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Education
               </TabsTrigger>
-              <TabsTrigger 
-                value="directory" 
+              <TabsTrigger
+                value="directory"
                 className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Directory
@@ -3036,7 +3036,7 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
-                
+
                 <h3 className="text-lg font-semibold text-foreground mt-6 pt-4 border-t border-border">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -3118,8 +3118,8 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <Label htmlFor="availableForTravel">Available for Travel</Label>
-                    <Select 
-                      value={editForm.availableForTravel ? "yes" : "no"} 
+                    <Select
+                      value={editForm.availableForTravel ? "yes" : "no"}
                       onValueChange={(value) => handleFormChange('availableForTravel', value === "yes")}
                     >
                       <SelectTrigger>
@@ -3173,10 +3173,10 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex flex-col justify-end pb-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="priceNegotiable" 
-                        checked={editForm.priceNegotiable} 
-                        onCheckedChange={(checked) => handleFormChange('priceNegotiable', !!checked)} 
+                      <Checkbox
+                        id="priceNegotiable"
+                        checked={editForm.priceNegotiable}
+                        onCheckedChange={(checked) => handleFormChange('priceNegotiable', !!checked)}
                       />
                       <label htmlFor="priceNegotiable" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                         Price is Negotiable
@@ -3398,7 +3398,7 @@ export default function ProfilePage() {
                     return (
                       <Card key={exp.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditExperienceExpansion(exp.id)}
                           >
@@ -3480,7 +3480,7 @@ export default function ProfilePage() {
                     return (
                       <Card key={achievement.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditAchievementExpansion(achievement.id)}
                           >
@@ -3566,7 +3566,7 @@ export default function ProfilePage() {
                     return (
                       <Card key={edu.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditEducationExpansion(edu.id)}
                           >
@@ -3648,7 +3648,7 @@ export default function ProfilePage() {
                       <SelectItem value="video">Videos</SelectItem>
                       <SelectItem value="audio">Audio</SelectItem>
                     </SelectContent>
-                      </Select>
+                  </Select>
                   </div>
                   <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
@@ -3656,7 +3656,7 @@ export default function ProfilePage() {
                   </Button>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {(() => {
                   const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
@@ -3664,51 +3664,51 @@ export default function ProfilePage() {
                   if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
                   return paginated.map(file => (
                     <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated" onClick={() => setPreviewFile(file)}>
-                       {file.type === 'image' ? (
-                         <div className="relative h-40 w-full">
-                           <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
-                           {file.additional_urls && file.additional_urls.length > 0 && (
-                             <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                               <ImageIcon className="w-3 h-3 text-primary" />
-                               {file.additional_urls.length + 1}
-                             </div>
-                           )}
-                         </div>
-                       ) :
+                      {file.type === 'image' ? (
+                        <div className="relative h-40 w-full">
+                          <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                          {file.additional_urls && file.additional_urls.length > 0 && (
+                            <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                              <ImageIcon className="w-3 h-3 text-primary" />
+                              {file.additional_urls.length + 1}
+                            </div>
+                          )}
+                        </div>
+                      ) :
                         file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
-                        file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                        <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
-                       <p className="text-sm font-medium truncate p-2" title={file.title || file.name}>{file.title || file.name}</p>
-                       <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
-                         e.stopPropagation(); 
-                         if (window.confirm("Are you sure you want to delete this file?")) {
-                           try {
-                             await supabase.from('directory_files').delete().eq('id', file.id);
-                             setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                             toast({ title: "File deleted successfully" });
-                           } catch(err) {
-                             console.error(err);
-                             toast({ title: "Failed to delete file", variant: "destructive" });
-                           }
-                         }
-                       }}>
-                         <Trash2 className="h-3 w-3" />
-                       </Button>
+                          file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
+                            <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
+                      <p className="text-sm font-medium truncate p-2" title={file.title || file.name}>{file.title || file.name}</p>
+                      <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Are you sure you want to delete this file?")) {
+                          try {
+                            await supabase.from('directory_files').delete().eq('id', file.id);
+                            setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
+                            toast({ title: "File deleted successfully" });
+                          } catch (err) {
+                            console.error(err);
+                            toast({ title: "Failed to delete file", variant: "destructive" });
+                          }
+                        }
+                      }}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   ));
                 })()}
               </div>
               {(() => {
-                 const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
-                 const totalPages = Math.ceil(filtered.length / 10);
-                 if (totalPages <= 1) return null;
-                 return (
-                   <div className="flex justify-center items-center gap-2 mt-4">
-                     <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1}>Prev</Button>
-                     <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
-                     <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages}>Next</Button>
-                   </div>
-                 );
+                const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
+                const totalPages = Math.ceil(filtered.length / 10);
+                if (totalPages <= 1) return null;
+                return (
+                  <div className="flex justify-center items-center gap-2 mt-4">
+                    <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1}>Prev</Button>
+                    <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
+                    <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages}>Next</Button>
+                  </div>
+                );
               })()}
             </TabsContent>
 
@@ -3772,8 +3772,8 @@ export default function ProfilePage() {
                     {selectedAddFiles.length === 1 ? selectedAddFiles[0].name : `${selectedAddFiles.length} files selected`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedAddFiles.length === 1 
-                      ? `${(selectedAddFiles[0].size / (1024 * 1024)).toFixed(2)} MB` 
+                    {selectedAddFiles.length === 1
+                      ? `${(selectedAddFiles[0].size / (1024 * 1024)).toFixed(2)} MB`
                       : `${(selectedAddFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024)).toFixed(2)} MB total`}
                   </p>
                 </div>
@@ -3836,7 +3836,7 @@ export default function ProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
-      
+
       {/* Avatar Crop Dialog */}
       <Dialog open={isCropDialogOpen} onOpenChange={(open) => {
         setIsCropDialogOpen(open);
@@ -3897,33 +3897,33 @@ export default function ProfilePage() {
         <DialogContent className="max-w-[95vw] sm:max-w-4xl p-0 overflow-hidden bg-black/95 border-gray-800 [&>button]:text-white [&>button]:hover:bg-white/10 [&>button]:p-2 [&>button]:rounded-full">
           <div className="relative w-full h-[80vh] flex flex-col items-center justify-center">
             <div className="absolute top-4 left-4 z-50 text-white text-sm font-semibold">{previewFile?.name || previewFile?.title}</div>
-            
+
             {previewFile?.type === 'image' && (
               <>
-                <img 
+                <img
                   src={
-                    previewFile.additional_urls && previewFile.additional_urls.length > 0 
-                      ? [previewFile.url, ...previewFile.additional_urls][previewImageIndex] 
+                    previewFile.additional_urls && previewFile.additional_urls.length > 0
+                      ? [previewFile.url, ...previewFile.additional_urls][previewImageIndex]
                       : previewFile.url
-                  } 
-                  alt={previewFile.name} 
-                  className="max-w-full max-h-full object-contain rounded-lg" 
+                  }
+                  alt={previewFile.name}
+                  className="max-w-full max-h-full object-contain rounded-lg"
                 />
-                
+
                 {previewFile.additional_urls && previewFile.additional_urls.length > 0 && (
                   <>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:bg-black/50 rounded-full"
                       onClick={() => setPreviewImageIndex(p => Math.max(0, p - 1))}
                       disabled={previewImageIndex === 0}
                     >
                       <ChevronLeft className="w-8 h-8" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:bg-black/50 rounded-full"
                       onClick={() => setPreviewImageIndex(p => Math.min((previewFile.additional_urls?.length || 0), p + 1))}
                       disabled={previewImageIndex === (previewFile.additional_urls?.length || 0)}
@@ -3934,89 +3934,89 @@ export default function ProfilePage() {
                     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 p-2 rounded-lg flex items-center gap-2 max-w-[80vw] overflow-x-auto">
                       {[previewFile.url, ...previewFile.additional_urls].map((url, idx) => (
                         <div key={idx} className="relative group shrink-0">
-                          <img 
-                            src={url} 
-                            alt={`Thumbnail ${idx}`} 
+                          <img
+                            src={url}
+                            alt={`Thumbnail ${idx}`}
                             className={cn("w-16 h-16 object-cover rounded cursor-pointer border-2 transition-all", previewImageIndex === idx ? "border-yellow-500 scale-110" : "border-transparent opacity-60 hover:opacity-100")}
                             onClick={() => setPreviewImageIndex(idx)}
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
-                             {idx > 0 && (
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
-                                  const temp = newUrls[idx - 1];
-                                  newUrls[idx - 1] = newUrls[idx];
-                                  newUrls[idx] = temp;
-                                  
-                                  const newMain = newUrls[0];
-                                  const newAdd = newUrls.slice(1);
-                                  
-                                  try {
-                                    await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                    const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                    setPreviewFile(updatedFile);
-                                    setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                    setPreviewImageIndex(idx - 1);
-                                  } catch (err) {
-                                    toast({ title: "Failed to reorder", variant: "destructive" });
+                            {idx > 0 && (
+                              <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
+                                e.stopPropagation();
+                                const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
+                                const temp = newUrls[idx - 1];
+                                newUrls[idx - 1] = newUrls[idx];
+                                newUrls[idx] = temp;
+
+                                const newMain = newUrls[0];
+                                const newAdd = newUrls.slice(1);
+
+                                try {
+                                  await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                  const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                  setPreviewFile(updatedFile);
+                                  setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                  setPreviewImageIndex(idx - 1);
+                                } catch (err) {
+                                  toast({ title: "Failed to reorder", variant: "destructive" });
+                                }
+                              }}>
+                                <ChevronLeft className="w-3 h-3" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-red-500 p-0 hover:bg-transparent" onClick={async (e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({
+                                isOpen: true,
+                                title: "Delete this image?",
+                                desc: "This image will be removed from the group.",
+                                onConfirm: async () => {
+                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])].filter((_, i) => i !== idx);
+                                  if (newUrls.length === 0) {
+                                    try {
+                                      await supabase.from('directory_files').delete().eq('id', previewFile.id);
+                                      setDirectoryFiles(prev => prev.filter(f => f.id !== previewFile.id));
+                                      setPreviewFile(null);
+                                    } catch (err) { }
+                                  } else {
+                                    const newMain = newUrls[0];
+                                    const newAdd = newUrls.slice(1);
+                                    try {
+                                      await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                      const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                      setPreviewFile(updatedFile);
+                                      setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                      if (previewImageIndex >= newUrls.length) setPreviewImageIndex(newUrls.length - 1);
+                                    } catch (err) { }
                                   }
-                                }}>
-                                  <ChevronLeft className="w-3 h-3" />
-                                </Button>
-                             )}
-                             <Button variant="ghost" size="icon" className="h-5 w-5 text-red-500 p-0 hover:bg-transparent" onClick={async (e) => {
-                               e.stopPropagation();
-                               setDeleteConfirm({
-                                 isOpen: true,
-                                 title: "Delete this image?",
-                                 desc: "This image will be removed from the group.",
-                                 onConfirm: async () => {
-                                   const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])].filter((_, i) => i !== idx);
-                                   if (newUrls.length === 0) {
-                                     try {
-                                       await supabase.from('directory_files').delete().eq('id', previewFile.id);
-                                       setDirectoryFiles(prev => prev.filter(f => f.id !== previewFile.id));
-                                       setPreviewFile(null);
-                                     } catch(err) {}
-                                   } else {
-                                     const newMain = newUrls[0];
-                                     const newAdd = newUrls.slice(1);
-                                     try {
-                                       await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                       const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                       setPreviewFile(updatedFile);
-                                       setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                       if (previewImageIndex >= newUrls.length) setPreviewImageIndex(newUrls.length - 1);
-                                     } catch(err) {}
-                                   }
-                                 }
-                               });
-                             }}>
-                               <Trash2 className="w-3 h-3" />
-                             </Button>
-                             {idx < [previewFile.url, ...(previewFile.additional_urls || [])].length - 1 && (
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
-                                  const temp = newUrls[idx + 1];
-                                  newUrls[idx + 1] = newUrls[idx];
-                                  newUrls[idx] = temp;
-                                  
-                                  const newMain = newUrls[0];
-                                  const newAdd = newUrls.slice(1);
-                                  
-                                  try {
-                                    await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                    const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                    setPreviewFile(updatedFile);
-                                    setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                    setPreviewImageIndex(idx + 1);
-                                  } catch (err) {}
-                                }}>
-                                  <ChevronRight className="w-3 h-3" />
-                                </Button>
-                             )}
+                                }
+                              });
+                            }}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                            {idx < [previewFile.url, ...(previewFile.additional_urls || [])].length - 1 && (
+                              <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
+                                e.stopPropagation();
+                                const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
+                                const temp = newUrls[idx + 1];
+                                newUrls[idx + 1] = newUrls[idx];
+                                newUrls[idx] = temp;
+
+                                const newMain = newUrls[0];
+                                const newAdd = newUrls.slice(1);
+
+                                try {
+                                  await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                  const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                  setPreviewFile(updatedFile);
+                                  setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                  setPreviewImageIndex(idx + 1);
+                                } catch (err) { }
+                              }}>
+                                <ChevronRight className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -4025,17 +4025,17 @@ export default function ProfilePage() {
                 )}
               </>
             )}
-            
+
             {previewFile?.type === 'video' && (
               <video src={previewFile.url} controls autoPlay className="w-full h-full" />
             )}
-            
+
             {previewFile?.type === 'audio' && (
               <div className="w-full h-full flex items-center justify-center p-8 bg-gray-900 rounded-lg">
                 <audio src={previewFile.url} controls className="w-full max-w-md" />
               </div>
             )}
-            
+
             {previewFile?.type === 'document' && (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-lg overflow-hidden">
                 <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewFile.url || "")}&embedded=true`} className="w-full h-full bg-background" title="Document Preview" />

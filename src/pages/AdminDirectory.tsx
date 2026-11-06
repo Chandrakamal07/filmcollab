@@ -206,7 +206,7 @@ export default function AdminDirectory() {
   });
 
   return (
-    <AdminLayout pageTitle="Directory Management">
+    <AdminLayout pageTitle="Directory Management" pageName="Directory">
       <div className="space-y-6">
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/60 pb-5">

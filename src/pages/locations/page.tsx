@@ -336,7 +336,7 @@ export default function ShootingLocations() {
                 <CardContent className="p-4 pt-2 flex-1">
                   <div className="flex justify-between items-end pt-2 border-t border-border/50">
                     <div className="font-mono font-semibold text-foreground text-lg">
-                      ₹{location.price.toLocaleString()} <span className="text-xs font-sans text-muted-foreground font-normal">/ {location.price_type.replace('Per ', '')}</span>
+                      ₹{location.price ? Number(location.price).toLocaleString() : '0'} <span className="text-xs font-sans text-muted-foreground font-normal">/ {(location.price_type || 'per_day').replace(/^per[_\s]*/i, '').replace('Per ', '')}</span>
                     </div>
                     <div className="text-xs font-mono text-muted-foreground flex items-center">
                       <Heart className="h-3 w-3 mr-1 fill-muted-foreground/40 text-muted-foreground/60" /> {location.likesCount}

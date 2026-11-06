@@ -218,6 +218,7 @@ export default function JobDetails() {
             id,
             job_id,
             user_id,
+            profile_id,
             name,
             email,
             phone,
@@ -228,13 +229,13 @@ export default function JobDetails() {
             cover_letter,
             status,
             created_at,
-            profiles:user_id (id, full_name, email, avatar_url)
+            profiles:profile_id (id, full_name, email, avatar_url)
           `)
           .eq("job_id", jobId)
           .order("created_at", { ascending: false });
 
         if (error && error.code !== "42P01") {
-          console.warn("Could not fetch applicants:", error);
+          console.error("Could not fetch applicants:", error);
         }
         setApplicants(data || []);
       } catch (err) {
@@ -445,6 +446,7 @@ export default function JobDetails() {
       const { error } = await supabase.from("job_applications").insert({
         job_id: job.id,
         user_id: user.id,
+        profile_id: profile?.id || null,
         name: profile?.full_name || user.email?.split("@")[0] || "Applicant",
         email: user.email || (profile as any)?.email || "",
         status: "Under Review"
@@ -462,13 +464,22 @@ export default function JobDetails() {
 
       // Send real notification to job poster
       if (job.user_id && job.user_id !== user.id) {
-        supabase.from("notifications").insert({
-          user_id: job.user_id,
+        let notifyUserId = job.user_id;
+        const { data: posterProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .or(`id.eq.${job.user_id},user_id.eq.${job.user_id}`)
+          .limit(1)
+          .maybeSingle();
+        if (posterProfile?.id) notifyUserId = posterProfile.id;
+
+        await supabase.from("notifications").insert({
+          user_id: notifyUserId,
           title: "New Job Application",
           description: `Someone applied for your job: ${job.title}`,
           type: "job",
           action_url: `/jobs/${job.id}`
-        }).then(() => {});
+        });
       }
     } catch (err: any) {
       toast({

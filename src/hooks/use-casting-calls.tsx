@@ -5,7 +5,7 @@ import { CastingCall, Applicant } from '../pages/casting-calls/data';
 import { useToast } from './use-toast';
 
 export function useCastingCalls() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [castingCalls, setCastingCalls] = useState<CastingCall[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
@@ -127,20 +127,22 @@ export function useCastingCalls() {
       toast({ variant: "destructive", title: "Authentication required", description: "Please log in to apply." });
       return;
     }
+
+    const applicantId = profile?.id || user.id;
     
     try {
       const newApp = {
         casting_call_id: castingCallId,
-        user_id: user.id,
-        name: user.user_metadata?.full_name || user.email || 'Applicant',
-        profile_photo: user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200&q=80',
-        profession: 'Actor', // default
-        experience: 'Fresher',
-        location: 'Hyderabad',
-        languages: ['English'],
-        skills: ['Acting'],
+        user_id: applicantId,
+        name: profile?.full_name || user.user_metadata?.full_name || user.email || 'Applicant',
+        profile_photo: profile?.avatar_url || user.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=200&q=80',
+        profession: profile?.category || profile?.industry || 'Actor',
+        experience: profile?.experience_level || 'Fresher',
+        location: profile?.location || 'India',
+        languages: profile?.skills || ['English'],
+        skills: profile?.skills || ['Acting'],
         status: 'Interested',
-        match_score: Math.floor(Math.random() * (100 - 60 + 1) + 60)
+        match_score: null
       };
 
       const { data, error } = await supabase
@@ -160,15 +162,16 @@ export function useCastingCalls() {
 
   const withdrawInterest = async (castingCallId: string) => {
     if (!user) return;
+    const applicantId = profile?.id || user.id;
     try {
       const { error } = await supabase
         .from('casting_applicants')
         .delete()
         .eq('casting_call_id', castingCallId)
-        .eq('user_id', user.id);
+        .or(`user_id.eq.${applicantId},user_id.eq.${user.id}`);
 
       if (error) throw error;
-      setApplicants(applicants.filter(a => !(a.castingCallId === castingCallId && a.userId === user.id)));
+      setApplicants(applicants.filter(a => !(a.castingCallId === castingCallId && (a.userId === applicantId || a.userId === user.id))));
       toast({ title: "Withdrawn", description: "Your application has been withdrawn." });
     } catch (error: any) {
       console.error('Error withdrawing:', error);
@@ -195,8 +198,9 @@ export function useCastingCalls() {
     if (!user) return;
     
     try {
+      const creatorId = profile?.id || user.id;
       const dbRow = {
-        creator_id: user.id,
+        creator_id: creatorId,
         title: newCall.title,
         project_name: newCall.projectName,
         production_house: newCall.productionHouse,
@@ -258,7 +262,8 @@ export function useCastingCalls() {
       return;
     }
     
-    const isSaved = castingCalls.find(c => c.id === castingCallId)?.savedBy.includes(user.id);
+    const activeUserId = profile?.id || user.id;
+    const isSaved = castingCalls.find(c => c.id === castingCallId)?.savedBy.some(id => id === activeUserId || id === user.id);
     
     try {
       if (isSaved) {
@@ -266,29 +271,28 @@ export function useCastingCalls() {
           .from('casting_call_saves')
           .delete()
           .eq('casting_call_id', castingCallId)
-          .eq('user_id', user.id);
+          .or(`user_id.eq.${activeUserId},user_id.eq.${user.id}`);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('casting_call_saves')
-          .insert({ casting_call_id: castingCallId, user_id: user.id });
+          .insert({ casting_call_id: castingCallId, user_id: activeUserId });
         if (error) throw error;
       }
 
       // Optimistic update
       setCastingCalls(castingCalls.map(c => {
         if (c.id === castingCallId) {
-          const newSavedBy = isSaved 
-            ? c.savedBy.filter(id => id !== user.id)
-            : [...c.savedBy, user.id];
-          return { ...c, savedBy: newSavedBy };
+          const newSaved = isSaved
+            ? c.savedBy.filter(id => id !== activeUserId && id !== user.id)
+            : [...c.savedBy, activeUserId];
+          return { ...c, savedBy: newSaved };
         }
         return c;
       }));
-      
     } catch (error: any) {
       console.error('Error toggling save:', error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to save/unsave." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update save status." });
     }
   };
 

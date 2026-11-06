@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { 
-  Eye, 
-  Flag, 
+import {
+  Eye,
+  Flag,
   Trash2,
   CheckCircle,
   Clock,
@@ -160,13 +160,13 @@ export default function AdminPosts() {
 
   // Filter posts based on search and filters
   const filteredPosts = posts.filter(post => {
-    const matchesSearch = 
+    const matchesSearch =
       post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.creator.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.creator.username.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = typeFilter === "all" || post.type.toLowerCase() === typeFilter.toLowerCase();
     const matchesStatus = statusFilter === "all" || post.status.toLowerCase() === statusFilter.toLowerCase();
-    
+
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -193,8 +193,7 @@ export default function AdminPosts() {
       });
       return;
     }
-    const strId = String(postId);
-    if (!isUuid(strId)) {
+    if (!isUuid(postId)) {
       toast({
         variant: "destructive",
         title: "Approve failed",
@@ -202,9 +201,17 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
     try {
-      const { error } = await supabase.from("posts").update({ is_published: true }).eq("id", strId);
+      const { data, error } = await supabase
+        .from("posts")
+        .update({ is_published: true })
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Post not found or permission denied.");
+      }
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Published" } : p));
       toast({
         title: "Post approved",
@@ -228,8 +235,7 @@ export default function AdminPosts() {
       });
       return;
     }
-    const strId = String(postId);
-    if (!isUuid(strId)) {
+    if (!isUuid(postId)) {
       toast({
         variant: "destructive",
         title: "Flag failed",
@@ -237,9 +243,17 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
     try {
-      const { error } = await supabase.from("posts").update({ is_published: false }).eq("id", strId);
+      const { data, error } = await supabase
+        .from("posts")
+        .update({ is_published: false })
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Post not found or permission denied.");
+      }
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: "Flagged" } : p));
       toast({
         title: "Post flagged",
@@ -263,8 +277,7 @@ export default function AdminPosts() {
       });
       return;
     }
-    const strId = String(postId);
-    if (!isUuid(strId)) {
+    if (!isUuid(postId)) {
       toast({
         variant: "destructive",
         title: "Delete failed",
@@ -272,9 +285,17 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
     try {
-      const { error } = await supabase.from("posts").delete().eq("id", strId);
+      const { data, error } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Post not found or permission denied.");
+      }
       setPosts(prev => prev.filter(p => p.id !== postId));
       toast({
         title: "Post deleted",
@@ -295,8 +316,7 @@ export default function AdminPosts() {
 
   const handleSavePostTags = async (postId: string | number) => {
     if (!editingTags) return;
-    const strId = String(postId);
-    if (!isUuid(strId)) {
+    if (!isUuid(postId)) {
       toast({
         variant: "destructive",
         title: "Update failed",
@@ -304,10 +324,18 @@ export default function AdminPosts() {
       });
       return;
     }
+    const strId = String(postId);
     const newTags = editingTags.tags;
     try {
-      const { error } = await supabase.from("posts").update({ hashtags: newTags }).eq("id", strId);
+      const { data, error } = await supabase
+        .from("posts")
+        .update({ hashtags: newTags })
+        .eq("id", strId)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Post not found or permission denied.");
+      }
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, tags: newTags } : p));
       setEditingTags(null);
       toast({
@@ -338,7 +366,7 @@ export default function AdminPosts() {
   };
 
   return (
-    <AdminLayout pageTitle="Posts Management">
+    <AdminLayout pageTitle="Posts Management" pageName="Posts">
       <div className="space-y-6">
         {/* Page Header */}
         <div className="border-b border-border/60 pb-5">
@@ -365,7 +393,7 @@ export default function AdminPosts() {
                   className="pl-10 bg-surface-elevated border-border/80"
                 />
               </div>
-              
+
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-medium text-muted-foreground">Type:</label>
@@ -381,7 +409,7 @@ export default function AdminPosts() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-medium text-muted-foreground">Status:</label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -432,155 +460,155 @@ export default function AdminPosts() {
                     </TableRow>
                   ) : (
                     filteredPosts.map((post) => {
-                    const StatusIcon = getStatusIcon(post.status);
-                    return (
-                      <TableRow key={post.id} className="border-border/60 hover:bg-surface-hover/50">
-                        <TableCell className="font-mono font-medium text-muted-foreground">#{post.id}</TableCell>
-                        <TableCell className="max-w-xs truncate text-foreground">{post.content}</TableCell>
-                        <TableCell>
-                          <Badge variant={getTypeBadgeVariant(post.type)} className="bg-surface-elevated border border-border/80 text-foreground">
-                            {post.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
-                              <User className="h-4 w-4 text-primary" />
+                      const StatusIcon = getStatusIcon(post.status);
+                      return (
+                        <TableRow key={post.id} className="border-border/60 hover:bg-surface-hover/50">
+                          <TableCell className="font-mono font-medium text-muted-foreground">#{post.id}</TableCell>
+                          <TableCell className="max-w-xs truncate text-foreground">{post.content}</TableCell>
+                          <TableCell>
+                            <Badge variant={getTypeBadgeVariant(post.type)} className="bg-surface-elevated border border-border/80 text-foreground">
+                              {post.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                                <User className="h-4 w-4 text-primary" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-foreground">{post.creator.name}</span>
+                                <span className="text-xs text-muted-foreground font-mono">@{post.creator.username}</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-foreground">{post.creator.name}</span>
-                              <span className="text-xs text-muted-foreground font-mono">@{post.creator.username}</span>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{post.date}</TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusBadgeVariant(post.status)} className="flex items-center gap-1 w-fit">
+                              <StatusIcon className="h-3 w-3" />
+                              {post.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap gap-2 flex-1">
+                                {post.tags.map((tag, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="secondary"
+                                    className={getTagBadgeStyle(tag) || ""}
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                              <Popover
+                                open={editingTags?.id === post.id}
+                                onOpenChange={(open) => {
+                                  if (open) {
+                                    handleEditTags(post.id, post.tags);
+                                  } else {
+                                    setEditingTags(null);
+                                  }
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 hover:bg-primary/10"
+                                  >
+                                    <Tags className="h-4 w-4 text-primary" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                                  <Command className="bg-card">
+                                    <CommandInput placeholder="Search tags..." />
+                                    <CommandEmpty>No tags found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {availableTags.map((tag) => {
+                                        const isSelected = editingTags?.tags.includes(tag.label);
+                                        return (
+                                          <CommandItem
+                                            key={tag.value}
+                                            onSelect={() => handleTagToggle(tag.label)}
+                                            className="flex items-center gap-2"
+                                          >
+                                            <div className={cn(
+                                              "flex h-4 w-4 items-center justify-center rounded border",
+                                              isSelected ? "bg-primary border-primary" : "border-border"
+                                            )}>
+                                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                            </div>
+                                            <Badge
+                                              variant="secondary"
+                                              className={getTagBadgeStyle(tag.label) || ""}
+                                            >
+                                              {tag.label}
+                                            </Badge>
+                                          </CommandItem>
+                                        );
+                                      })}
+                                    </CommandGroup>
+                                    <div className="border-t border-border/60 p-2">
+                                      <Button
+                                        size="sm"
+                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                                        onClick={() => handleSavePostTags(post.id)}
+                                      >
+                                        Save Changes
+                                      </Button>
+                                    </div>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{post.date}</TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusBadgeVariant(post.status)} className="flex items-center gap-1 w-fit">
-                            <StatusIcon className="h-3 w-3" />
-                            {post.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="flex flex-wrap gap-2 flex-1">
-                              {post.tags.map((tag, index) => (
-                                <Badge 
-                                  key={index}
-                                  variant="secondary" 
-                                  className={getTagBadgeStyle(tag) || ""}
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                            <Popover 
-                              open={editingTags?.id === post.id}
-                              onOpenChange={(open) => {
-                                if (open) {
-                                  handleEditTags(post.id, post.tags);
-                                } else {
-                                  setEditingTags(null);
-                                }
-                              }}
-                            >
-                              <PopoverTrigger asChild>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleViewPost(post.id)}
+                                className="h-8 w-8"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+
+                              {post.status === "Pending" && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 hover:bg-primary/10"
+                                  onClick={() => handleApprovePost(post.id)}
+                                  className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
                                 >
-                                  <Tags className="h-4 w-4 text-primary" />
+                                  <CheckCircle className="h-4 w-4" />
                                 </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
-                                <Command className="bg-card">
-                                  <CommandInput placeholder="Search tags..." />
-                                  <CommandEmpty>No tags found.</CommandEmpty>
-                                  <CommandGroup>
-                                    {availableTags.map((tag) => {
-                                      const isSelected = editingTags?.tags.includes(tag.label);
-                                      return (
-                                        <CommandItem
-                                          key={tag.value}
-                                          onSelect={() => handleTagToggle(tag.label)}
-                                          className="flex items-center gap-2"
-                                        >
-                                          <div className={cn(
-                                            "flex h-4 w-4 items-center justify-center rounded border",
-                                            isSelected ? "bg-primary border-primary" : "border-border"
-                                          )}>
-                                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                                          </div>
-                                          <Badge 
-                                            variant="secondary"
-                                            className={getTagBadgeStyle(tag.label) || ""}
-                                          >
-                                            {tag.label}
-                                          </Badge>
-                                        </CommandItem>
-                                      );
-                                    })}
-                                  </CommandGroup>
-                                  <div className="border-t border-border/60 p-2">
-                                    <Button
-                                      size="sm"
-                                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                                      onClick={() => handleSavePostTags(post.id)}
-                                    >
-                                      Save Changes
-                                    </Button>
-                                  </div>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewPost(post.id)}
-                              className="h-8 w-8"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            
-                            {post.status === "Pending" && (
+                              )}
+
+                              {post.status !== "Flagged" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleFlagPost(post.id)}
+                                  className="h-8 w-8 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
+                                >
+                                  <Flag className="h-4 w-4" />
+                                </Button>
+                              )}
+
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleApprovePost(post.id)}
-                                className="h-8 w-8 text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                                onClick={() => handleDeletePost(post.id)}
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                               >
-                                <CheckCircle className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            )}
-                            
-                            {post.status !== "Flagged" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleFlagPost(post.id)}
-                                className="h-8 w-8 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10"
-                              >
-                                <Flag className="h-4 w-4" />
-                              </Button>
-                            )}
-                            
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeletePost(post.id)}
-                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }))}
                 </TableBody>
               </Table>
             </div>
