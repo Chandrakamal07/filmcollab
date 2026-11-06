@@ -1041,7 +1041,7 @@ export default function ProfilePage() {
       setIsUploadingDirectoryFile(true);
 
       let publicUrl = "";
-      let additionalUrls: string[] = [];
+      const additionalUrls: string[] = [];
 
       // Upload primary file
       const fileExt = primaryFile.name.split('.').pop();
@@ -3696,12 +3696,16 @@ export default function ProfilePage() {
                         e.stopPropagation();
                         if (window.confirm("Are you sure you want to delete this file?")) {
                           try {
-                            await supabase.from('directory_files').delete().eq('id', file.id);
+                            const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', file.id).select('id');
+                            if (delErr || !delData || delData.length === 0) {
+                              toast({ title: "Failed to delete file", description: delErr?.message || "File not found or permission denied.", variant: "destructive" });
+                              return;
+                            }
                             setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
                             toast({ title: "File deleted successfully" });
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error(err);
-                            toast({ title: "Failed to delete file", variant: "destructive" });
+                            toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
                           }
                         }
                       }}>
@@ -3966,13 +3970,17 @@ export default function ProfilePage() {
                                 const newAdd = newUrls.slice(1);
 
                                 try {
-                                  await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                  const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                  if (upErr || !upData || upData.length === 0) {
+                                    toast({ title: "Failed to reorder", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                    return;
+                                  }
                                   const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
                                   setPreviewFile(updatedFile);
                                   setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
                                   setPreviewImageIndex(idx - 1);
-                                } catch (err) {
-                                  toast({ title: "Failed to reorder", variant: "destructive" });
+                                } catch (err: any) {
+                                  toast({ title: "Failed to reorder", description: err?.message || "Operation failed", variant: "destructive" });
                                 }
                               }}>
                                 <ChevronLeft className="w-3 h-3" />
@@ -3988,20 +3996,32 @@ export default function ProfilePage() {
                                   const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])].filter((_, i) => i !== idx);
                                   if (newUrls.length === 0) {
                                     try {
-                                      await supabase.from('directory_files').delete().eq('id', previewFile.id);
+                                      const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', previewFile.id).select('id');
+                                      if (delErr || !delData || delData.length === 0) {
+                                        toast({ title: "Failed to delete file", description: delErr?.message || "Permission denied", variant: "destructive" });
+                                        return;
+                                      }
                                       setDirectoryFiles(prev => prev.filter(f => f.id !== previewFile.id));
                                       setPreviewFile(null);
-                                    } catch (err) { }
+                                    } catch (err: any) {
+                                      toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
+                                    }
                                   } else {
                                     const newMain = newUrls[0];
                                     const newAdd = newUrls.slice(1);
                                     try {
-                                      await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                      const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                      if (upErr || !upData || upData.length === 0) {
+                                        toast({ title: "Failed to update image", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                        return;
+                                      }
                                       const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
                                       setPreviewFile(updatedFile);
                                       setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
                                       if (previewImageIndex >= newUrls.length) setPreviewImageIndex(newUrls.length - 1);
-                                    } catch (err) { }
+                                    } catch (err: any) {
+                                      toast({ title: "Failed to update image", description: err?.message || "Operation failed", variant: "destructive" });
+                                    }
                                   }
                                 }
                               });
@@ -4020,12 +4040,18 @@ export default function ProfilePage() {
                                 const newAdd = newUrls.slice(1);
 
                                 try {
-                                  await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
+                                  const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                  if (upErr || !upData || upData.length === 0) {
+                                    toast({ title: "Failed to reorder", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                    return;
+                                  }
                                   const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
                                   setPreviewFile(updatedFile);
                                   setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
                                   setPreviewImageIndex(idx + 1);
-                                } catch (err) { }
+                                } catch (err: any) {
+                                  toast({ title: "Failed to reorder", description: err?.message || "Operation failed", variant: "destructive" });
+                                }
                               }}>
                                 <ChevronRight className="w-3 h-3" />
                               </Button>

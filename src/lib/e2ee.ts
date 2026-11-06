@@ -159,3 +159,32 @@ export async function encryptForRecipientOrThrow(params: {
     envelope
   };
 }
+
+/**
+ * Retrieve or generate a local ECDH P-256 keypair for a profile.
+ * Stored safely in localStorage with profile ID namespace.
+ */
+export async function getOrInitUserE2EE(profileId: string) {
+  let privKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_priv_${profileId}`) : null;
+  let pubKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_pub_${profileId}`) : null;
+  let privKey: CryptoKey;
+  let pubKeyJwk: JsonWebKey;
+
+  if (privKeyStr && pubKeyStr) {
+    const jwk = JSON.parse(privKeyStr);
+    pubKeyJwk = JSON.parse(pubKeyStr);
+    privKey = await importPrivateKey(jwk);
+  } else {
+    const keys = await generateKeyPair();
+    privKeyStr = JSON.stringify(keys.privateKeyJwk);
+    pubKeyStr = JSON.stringify(keys.publicKeyJwk);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`e2ee_priv_${profileId}`, privKeyStr);
+      localStorage.setItem(`e2ee_pub_${profileId}`, pubKeyStr);
+    }
+    pubKeyJwk = keys.publicKeyJwk;
+    privKey = await importPrivateKey(keys.privateKeyJwk);
+  }
+
+  return { privKey, pubKeyStr, pubKeyJwk };
+}

@@ -62,6 +62,22 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Ensure id default exists on existing profiles table
 ALTER TABLE public.profiles ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
+-- Explicitly drop legacy foreign key on profiles.id if pointing to auth.users (M02)
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT conname 
+        FROM pg_constraint 
+        WHERE conrelid = 'public.profiles'::regclass 
+          AND contype = 'f' 
+          AND conkey = ARRAY[1]::smallint[]
+    ) LOOP
+        EXECUTE 'ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS ' || quote_ident(r.conname);
+    END LOOP;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
 CREATE INDEX IF NOT EXISTS idx_profiles_short_id ON public.profiles(short_id);
@@ -72,6 +88,47 @@ DROP POLICY IF EXISTS "profiles_select_public" ON public.profiles;
 DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "profiles_select_public" ON public.profiles
     FOR SELECT USING (true);
+
+-- Controlled Public Profile Projection (M11: Privacy enforcement)
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true) AS
+SELECT 
+    id, user_id, full_name, first_name, last_name, username, avatar_url, cover_image_url,
+    bio, profession, category, skills, experience, city, state, country, location,
+    website, company, portfolio_url, imdb_url, linkedin_url, instagram_url, youtube_url, twitter_url,
+    social_links, pricing_rate, pricing_unit, pricing_currency, role, short_id, public_key,
+    is_verified, allow_messages_from, allow_connections_from, allow_profile_views,
+    privacy_show_phone, privacy_show_email, privacy_show_dob, privacy_show_directory, privacy_show_location,
+    CASE 
+        WHEN auth.uid() = user_id 
+             OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+             OR COALESCE(privacy_show_phone, false) = true
+        THEN phone 
+        ELSE NULL 
+    END AS phone,
+    CASE 
+        WHEN auth.uid() = user_id 
+             OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+             OR COALESCE(privacy_show_email, false) = true
+        THEN email 
+        ELSE NULL 
+    END AS email,
+    CASE 
+        WHEN auth.uid() = user_id 
+             OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+             OR COALESCE(privacy_show_dob, false) = true
+        THEN date_of_birth 
+        ELSE NULL 
+    END AS date_of_birth,
+    followers_count, following_count, projects_count, posts_count, created_at, updated_at
+FROM public.profiles;
+
+GRANT SELECT ON public.public_profiles TO anon, authenticated;
+DO $$
+BEGIN
+    REVOKE SELECT (email, phone, date_of_birth) ON public.profiles FROM anon;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
 
 DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
@@ -329,6 +386,13 @@ CREATE TABLE IF NOT EXISTS public.tickets (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS profile_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+-- Drop legacy user_id foreign key constraint if existing from historical schema (M02)
+DO $$
+BEGIN
+    ALTER TABLE public.tickets DROP CONSTRAINT IF EXISTS tickets_user_id_fkey;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
 ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Anyone can update tickets" ON public.tickets;
@@ -374,9 +438,16 @@ CREATE TABLE IF NOT EXISTS public.ticket_messages (
     message TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+DO $$
+BEGIN
+    ALTER TABLE public.ticket_messages DROP CONSTRAINT IF EXISTS ticket_messages_author_id_fkey;
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
 ALTER TABLE public.ticket_messages ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Anyone can read ticket messages" ON public.ticket_messages;
+DROP POLICY IF EXISTS "Anyone can insert ticket messages" ON public.ticket_messages;
 DROP POLICY IF EXISTS "ticket_messages_participant_read" ON public.ticket_messages;
 CREATE POLICY "ticket_messages_participant_read" ON public.ticket_messages
     FOR SELECT USING (
@@ -416,10 +487,35 @@ CREATE POLICY "ticket_messages_participant_insert" ON public.ticket_messages
 CREATE TABLE IF NOT EXISTS public.ticket_updates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
-    message TEXT NOT NULL,
+    author_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    content TEXT,
+    message TEXT,
     author_name TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.ticket_updates ADD COLUMN IF NOT EXISTS author_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.ticket_updates ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE public.ticket_updates ADD COLUMN IF NOT EXISTS message TEXT;
+ALTER TABLE public.ticket_updates ADD COLUMN IF NOT EXISTS author_name TEXT;
+
+-- Synchronize content and message fields (M02)
+UPDATE public.ticket_updates SET content = COALESCE(content, message);
+UPDATE public.ticket_updates SET message = COALESCE(message, content);
+
+CREATE OR REPLACE FUNCTION public.sync_ticket_update_content()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.content := COALESCE(NEW.content, NEW.message);
+    NEW.message := COALESCE(NEW.message, NEW.content);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_ticket_update_content ON public.ticket_updates;
+CREATE TRIGGER trg_sync_ticket_update_content
+BEFORE INSERT OR UPDATE ON public.ticket_updates
+FOR EACH ROW EXECUTE FUNCTION public.sync_ticket_update_content();
+
 ALTER TABLE public.ticket_updates ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Anyone can insert ticket updates" ON public.ticket_updates;
@@ -443,12 +539,8 @@ CREATE POLICY "ticket_updates_insert" ON public.ticket_updates
     FOR INSERT WITH CHECK (
         auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
         OR EXISTS (
-            SELECT 1 FROM public.tickets t 
-            WHERE t.id = ticket_updates.ticket_id 
-            AND (
-                t.user_id = auth.uid() 
-                OR EXISTS (SELECT 1 FROM public.profiles p WHERE (p.id = t.user_id OR p.id = t.profile_id) AND p.user_id = auth.uid())
-            )
+            SELECT 1 FROM public.admin_team_members atm 
+            WHERE atm.user_id = auth.uid() AND atm.status = 'Active'
         )
     );
 
@@ -504,8 +596,11 @@ CREATE TABLE IF NOT EXISTS public.subscription_plans (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.subscription_plans ALTER COLUMN price SET DEFAULT 0;
 ALTER TABLE public.subscription_plans ADD COLUMN IF NOT EXISTS monthly_price NUMERIC;
 ALTER TABLE public.subscription_plans ADD COLUMN IF NOT EXISTS yearly_price NUMERIC;
+ALTER TABLE public.subscription_plans ADD COLUMN IF NOT EXISTS final_monthly_price NUMERIC;
+ALTER TABLE public.subscription_plans ADD COLUMN IF NOT EXISTS final_yearly_price NUMERIC;
 ALTER TABLE public.subscription_plans ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "subscription_plans_read_public" ON public.subscription_plans;
@@ -516,22 +611,26 @@ CREATE POLICY "subscription_plans_admin_manage" ON public.subscription_plans FOR
     auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
 );
 
--- 8. FORWARD UPGRADES ON EXISTING TABLES (M21, M22, M08, M26)
+-- 8. FORWARD UPGRADES ON EXISTING TABLES (M21, M22, M08, M25, M26)
 -- Ensure all workspace columns exist on companies
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS jobs JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS auditions JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS internships JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS projects JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS team JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS courses JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS events JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS banner TEXT;
 ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS cover_image TEXT;
 
 -- Ensure requirements column exists on jobs
 ALTER TABLE public.jobs ADD COLUMN IF NOT EXISTS requirements TEXT;
 
--- Ensure missing columns exist on casting_calls
+-- Ensure missing columns exist on casting_calls (M08)
 ALTER TABLE public.casting_calls ADD COLUMN IF NOT EXISTS google_maps_link TEXT;
 ALTER TABLE public.casting_calls ADD COLUMN IF NOT EXISTS script_attachment_url TEXT;
+ALTER TABLE public.casting_calls ADD COLUMN IF NOT EXISTS deadline TIMESTAMP WITH TIME ZONE;
+UPDATE public.casting_calls SET deadline = COALESCE(deadline, last_date_to_apply);
 
 -- Ensure client_message_id exists on messages for idempotent delivery (M26)
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS client_message_id TEXT;
@@ -583,10 +682,37 @@ CREATE POLICY "companies_update_owner" ON public.companies
 DROP POLICY IF EXISTS "directory_files_select_all" ON public.directory_files;
 CREATE POLICY "directory_files_select_all" ON public.directory_files
     FOR SELECT USING (
-        (status != 'blocked' AND NOT ('Blocked' = ANY(COALESCE(tags, '{}'))))
+        (
+            status != 'blocked' 
+            AND NOT ('Blocked' = ANY(COALESCE(tags, '{}')))
+            AND EXISTS (
+                SELECT 1 FROM public.profiles p 
+                WHERE (p.id = directory_files.user_id OR p.user_id = directory_files.user_id)
+                  AND COALESCE(p.privacy_show_directory, true) = true
+            )
+        )
         OR user_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid())
         OR user_id = auth.uid()
         OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
+
+-- Storage objects policy for directory_assets bucket (M11)
+DROP POLICY IF EXISTS "directory_assets_public_access" ON storage.objects;
+DROP POLICY IF EXISTS "directory_assets_select_policy" ON storage.objects;
+CREATE POLICY "directory_assets_select_policy" ON storage.objects
+    FOR SELECT USING (
+        bucket_id = 'directory_assets' AND (
+            auth.uid() = owner
+            OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+            OR EXISTS (
+                SELECT 1 FROM public.directory_files df
+                JOIN public.profiles p ON (p.id = df.user_id OR p.user_id = df.user_id)
+                WHERE df.file_url LIKE '%' || storage.objects.name || '%'
+                  AND df.status != 'blocked'
+                  AND NOT ('Blocked' = ANY(COALESCE(df.tags, '{}')))
+                  AND COALESCE(p.privacy_show_directory, true) = true
+            )
+        )
     );
 
 DROP POLICY IF EXISTS "directory_files_insert_auth" ON public.directory_files;
@@ -670,16 +796,22 @@ CREATE POLICY "project_members_delete_creator" ON public.project_members
     );
 
 -- Project Privacy & Visibility (M03)
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public';
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS project_status TEXT DEFAULT 'Public';
+UPDATE public.projects SET visibility = COALESCE(visibility, LOWER(project_status), 'public');
+UPDATE public.projects SET project_status = COALESCE(project_status, INITCAP(visibility), 'Public');
+
 DROP POLICY IF EXISTS "Anyone can view projects" ON public.projects;
 DROP POLICY IF EXISTS "projects_select_policy" ON public.projects;
 CREATE POLICY "projects_select_policy" ON public.projects
     FOR SELECT USING (
-        visibility = 'public' 
-        OR visibility IS NULL 
+        (LOWER(COALESCE(visibility, project_status, 'public')) = 'public')
         OR created_by = auth.uid()
         OR EXISTS (
             SELECT 1 FROM public.project_members pm 
-            WHERE pm.project_id = projects.id AND pm.user_id = auth.uid()
+            WHERE pm.project_id = projects.id 
+              AND pm.user_id = auth.uid()
+              AND pm.role != 'Applicant'
         )
         OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
     );
@@ -757,6 +889,31 @@ CREATE POLICY "messages_update_received" ON public.messages
         OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
     );
 
+-- Enforce immutability of message content and identity on UPDATE (M07)
+CREATE OR REPLACE FUNCTION public.check_message_update_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin') THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.sender_id IS DISTINCT FROM OLD.sender_id OR
+       NEW.receiver_id IS DISTINCT FROM OLD.receiver_id OR
+       NEW.content IS DISTINCT FROM OLD.content OR
+       NEW.type IS DISTINCT FROM OLD.type OR
+       NEW.client_message_id IS DISTINCT FROM OLD.client_message_id THEN
+        RAISE EXCEPTION 'Cannot modify message content, sender, or receiver identity' USING ERRCODE = '42501';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_message_update_immutability ON public.messages;
+CREATE TRIGGER trg_check_message_update_immutability
+BEFORE UPDATE ON public.messages
+FOR EACH ROW EXECUTE FUNCTION public.check_message_update_immutability();
+
 -- Social Connections & Saves Policies (M04)
 DROP POLICY IF EXISTS "connections_insert_policy" ON public.connections;
 CREATE POLICY "connections_insert_policy" ON public.connections
@@ -794,6 +951,18 @@ CREATE POLICY "connections_delete_policy" ON public.connections
         )
     );
 
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.user_saves;
+DROP POLICY IF EXISTS "user_saves_insert_policy" ON public.user_saves;
+CREATE POLICY "user_saves_insert_policy" ON public.user_saves
+    FOR INSERT WITH CHECK (
+        auth.uid() = user_id
+        OR EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE (profiles.id = user_saves.user_id OR profiles.user_id = user_saves.user_id)
+            AND (profiles.user_id = auth.uid() OR profiles.id = auth.uid())
+        )
+    );
+
 DROP POLICY IF EXISTS "user_saves_select_policy" ON public.user_saves;
 CREATE POLICY "user_saves_select_policy" ON public.user_saves
     FOR SELECT USING (
@@ -804,6 +973,18 @@ CREATE POLICY "user_saves_select_policy" ON public.user_saves
             AND (profiles.user_id = auth.uid() OR profiles.id = auth.uid())
         )
         OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
+
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.user_likes;
+DROP POLICY IF EXISTS "user_likes_insert_policy" ON public.user_likes;
+CREATE POLICY "user_likes_insert_policy" ON public.user_likes
+    FOR INSERT WITH CHECK (
+        auth.uid() = user_id
+        OR EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE (profiles.id = user_likes.user_id OR profiles.user_id = user_likes.user_id)
+            AND (profiles.user_id = auth.uid() OR profiles.id = auth.uid())
+        )
     );
 
 DROP POLICY IF EXISTS "user_likes_delete_policy" ON public.user_likes;
@@ -872,6 +1053,7 @@ CREATE POLICY "posts_delete_policy" ON public.posts
     );
 
 -- Post Likes Policies (M10: Profile PK vs Auth ID compatibility)
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.post_likes;
 DROP POLICY IF EXISTS "post_likes_insert_policy" ON public.post_likes;
 CREATE POLICY "post_likes_insert_policy" ON public.post_likes
     FOR INSERT WITH CHECK (
@@ -895,6 +1077,7 @@ CREATE POLICY "post_likes_delete_policy" ON public.post_likes
     );
 
 -- Post Saves Policies (M10)
+DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.post_saves;
 DROP POLICY IF EXISTS "post_saves_insert_policy" ON public.post_saves;
 CREATE POLICY "post_saves_insert_policy" ON public.post_saves
     FOR INSERT WITH CHECK (
@@ -935,6 +1118,29 @@ CREATE POLICY "job_applications_insert" ON public.job_applications
         OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
     );
 
+-- Enforce immutability of job applicant identity and job association on UPDATE (M22)
+CREATE OR REPLACE FUNCTION public.check_job_application_update_immutability()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin') THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.user_id IS DISTINCT FROM OLD.user_id OR
+       NEW.profile_id IS DISTINCT FROM OLD.profile_id OR
+       NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+        RAISE EXCEPTION 'Cannot alter candidate identity or job association' USING ERRCODE = '42501';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_job_application_update_immutability ON public.job_applications;
+CREATE TRIGGER trg_check_job_application_update_immutability
+BEFORE UPDATE ON public.job_applications
+FOR EACH ROW EXECUTE FUNCTION public.check_job_application_update_immutability();
+
 DROP POLICY IF EXISTS "job_applications_read" ON public.job_applications;
 CREATE POLICY "job_applications_read" ON public.job_applications
     FOR SELECT USING (
@@ -947,18 +1153,48 @@ CREATE POLICY "job_applications_read" ON public.job_applications
     );
 
 -- Community Group Join & Post Policies (M13)
+ALTER TABLE public.community_groups ADD COLUMN IF NOT EXISTS require_approval BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.community_groups ADD COLUMN IF NOT EXISTS allow_member_posts BOOLEAN DEFAULT TRUE;
+
+ALTER TABLE public.community_group_members DROP CONSTRAINT IF EXISTS community_group_members_role_check;
+ALTER TABLE public.community_group_members ADD CONSTRAINT community_group_members_role_check CHECK (role IN ('Owner', 'Admin', 'Moderator', 'Member', 'Pending'));
+
+-- Keep settings JSONB and columns synchronized (M13)
+CREATE OR REPLACE FUNCTION public.sync_community_group_settings()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.require_approval := COALESCE(NEW.require_approval, (NEW.settings->>'requireApproval')::boolean, false);
+    NEW.allow_member_posts := COALESCE(NEW.allow_member_posts, (NEW.settings->>'allowMemberPosts')::boolean, true);
+    NEW.settings := jsonb_set(
+        jsonb_set(
+            COALESCE(NEW.settings, '{}'::jsonb),
+            '{requireApproval}',
+            to_jsonb(NEW.require_approval)
+        ),
+        '{allowMemberPosts}',
+        to_jsonb(NEW.allow_member_posts)
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_community_group_settings ON public.community_groups;
+CREATE TRIGGER trg_sync_community_group_settings
+BEFORE INSERT OR UPDATE ON public.community_groups
+FOR EACH ROW EXECUTE FUNCTION public.sync_community_group_settings();
+
 DROP POLICY IF EXISTS "community_group_members_insert" ON public.community_group_members;
 CREATE POLICY "community_group_members_insert" ON public.community_group_members
     FOR INSERT WITH CHECK (
         auth.uid() = user_id AND (
             (role = 'Member' AND EXISTS (
                 SELECT 1 FROM public.community_groups g
-                WHERE g.id = group_id AND g.privacy = 'public' AND COALESCE(g.require_approval, false) = false
+                WHERE g.id = group_id AND g.privacy = 'public' AND COALESCE(g.require_approval, (g.settings->>'requireApproval')::boolean, false) = false
             ))
             OR
             (role = 'Pending' AND EXISTS (
                 SELECT 1 FROM public.community_groups g
-                WHERE g.id = group_id AND COALESCE(g.require_approval, false) = true
+                WHERE g.id = group_id AND COALESCE(g.require_approval, (g.settings->>'requireApproval')::boolean, false) = true
             ))
             OR
             (role = 'Owner' AND EXISTS (
@@ -990,7 +1226,7 @@ CREATE POLICY "community_group_messages_insert" ON public.community_group_messag
                 AND (
                     g.created_by = auth.uid()
                     OR (
-                        COALESCE(g.allow_member_posts, true) = true 
+                        COALESCE(g.allow_member_posts, (g.settings->>'allowMemberPosts')::boolean, true) = true 
                         AND EXISTS (
                             SELECT 1 FROM public.community_group_members m 
                             WHERE m.group_id = g.id AND m.user_id = auth.uid() AND m.role != 'Pending'
@@ -1030,6 +1266,153 @@ CREATE POLICY "notifications_insert_policy" ON public.notifications
             AND (p.user_id = auth.uid() OR p.id = auth.uid())
         )
     );
+
+-- Authorized Cross-Account Notification RPC (M09)
+CREATE OR REPLACE FUNCTION public.send_authorized_notification(
+    p_recipient_id UUID,
+    p_title TEXT,
+    p_message TEXT,
+    p_type TEXT DEFAULT 'general',
+    p_link TEXT DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_recipient_auth_id UUID;
+    v_notification_id UUID;
+BEGIN
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'Authentication required to send notifications' USING ERRCODE = '42501';
+    END IF;
+
+    SELECT COALESCE(user_id, id) INTO v_recipient_auth_id 
+    FROM public.profiles 
+    WHERE id = p_recipient_id OR user_id = p_recipient_id
+    LIMIT 1;
+
+    IF v_recipient_auth_id IS NULL THEN
+        v_recipient_auth_id := p_recipient_id;
+    END IF;
+
+    INSERT INTO public.notifications (
+        id,
+        user_id,
+        title,
+        message,
+        type,
+        link,
+        is_read,
+        created_at
+    ) VALUES (
+        gen_random_uuid(),
+        v_recipient_auth_id,
+        p_title,
+        p_message,
+        COALESCE(p_type, 'general'),
+        p_link,
+        false,
+        NOW()
+    ) RETURNING id INTO v_notification_id;
+
+    RETURN v_notification_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.send_authorized_notification TO authenticated;
+
+-- Atomic Admin Team Provisioning & Revocation (M06)
+CREATE OR REPLACE FUNCTION public.provision_admin_team_member(
+    p_user_id UUID,
+    p_profile_id UUID,
+    p_role TEXT,
+    p_status TEXT,
+    p_permissions JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_member_id UUID;
+    v_db_role TEXT;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin') THEN
+        RAISE EXCEPTION 'Only administrators can provision team members' USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO public.admin_team_members (
+        user_id,
+        profile_id,
+        role,
+        status,
+        permissions
+    ) VALUES (
+        p_user_id,
+        p_profile_id,
+        p_role,
+        p_status,
+        p_permissions
+    ) RETURNING id INTO v_member_id;
+
+    v_db_role := CASE 
+        WHEN LOWER(p_role) = 'admin' THEN 'admin'
+        WHEN LOWER(p_role) = 'moderator' THEN 'moderator'
+        ELSE 'support'
+    END;
+
+    IF p_status = 'Active' THEN
+        INSERT INTO public.user_roles (user_id, role)
+        VALUES (p_user_id, v_db_role)
+        ON CONFLICT (user_id, role) DO NOTHING;
+    END IF;
+
+    RETURN v_member_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.revoke_admin_team_member(p_member_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_role TEXT;
+    v_db_role TEXT;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin') THEN
+        RAISE EXCEPTION 'Only administrators can revoke team members' USING ERRCODE = '42501';
+    END IF;
+
+    SELECT user_id, role INTO v_user_id, v_role 
+    FROM public.admin_team_members 
+    WHERE id = p_member_id;
+
+    IF v_user_id IS NOT NULL THEN
+        DELETE FROM public.admin_team_members WHERE id = p_member_id;
+
+        v_db_role := CASE 
+            WHEN LOWER(v_role) = 'admin' THEN 'admin'
+            WHEN LOWER(v_role) = 'moderator' THEN 'moderator'
+            ELSE 'support'
+        END;
+
+        DELETE FROM public.user_roles 
+        WHERE user_id = v_user_id AND role = v_db_role;
+        RETURN TRUE;
+    END IF;
+
+    RETURN FALSE;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.provision_admin_team_member TO authenticated;
+GRANT EXECUTE ON FUNCTION public.revoke_admin_team_member TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.handle_new_job_notifications()
 RETURNS TRIGGER AS $$
@@ -1092,6 +1475,7 @@ CREATE POLICY "Users can delete their own casting calls" ON public.casting_calls
         OR auth.uid() = creator_id
     );
 
+DROP POLICY IF EXISTS "Users can insert their own applications" ON public.casting_applicants;
 DROP POLICY IF EXISTS "Users can insert applications" ON public.casting_applicants;
 DROP POLICY IF EXISTS "Users can manage their own applications" ON public.casting_applicants;
 DROP POLICY IF EXISTS "Users can view their own applications" ON public.casting_applicants;
@@ -1108,10 +1492,39 @@ CREATE POLICY "Users can insert applications" ON public.casting_applicants
         AND EXISTS (
             SELECT 1 FROM public.casting_calls cc
             WHERE cc.id = casting_applicants.casting_call_id
-              AND (cc.status = 'open' OR cc.status = 'active' OR cc.status IS NULL)
-              AND (cc.deadline IS NULL OR cc.deadline >= CURRENT_DATE)
+              AND (LOWER(COALESCE(cc.status, 'open')) IN ('open', 'active'))
+              AND (COALESCE(cc.deadline, cc.last_date_to_apply) IS NULL OR COALESCE(cc.deadline, cc.last_date_to_apply) >= CURRENT_DATE)
         )
     );
+
+-- Atomic Casting Capacity Check Trigger (M08)
+CREATE OR REPLACE FUNCTION public.check_casting_capacity()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_max INT;
+    v_current INT;
+BEGIN
+    SELECT max_applications INTO v_max 
+    FROM public.casting_calls 
+    WHERE id = NEW.casting_call_id;
+
+    IF v_max IS NOT NULL AND v_max > 0 THEN
+        SELECT COUNT(*) INTO v_current 
+        FROM public.casting_applicants 
+        WHERE casting_call_id = NEW.casting_call_id;
+
+        IF v_current >= v_max THEN
+            RAISE EXCEPTION 'Casting call has reached maximum applicant capacity' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_casting_capacity ON public.casting_applicants;
+CREATE TRIGGER trg_check_casting_capacity
+BEFORE INSERT ON public.casting_applicants
+FOR EACH ROW EXECUTE FUNCTION public.check_casting_capacity();
 
 DROP POLICY IF EXISTS "Users can view relevant applications" ON public.casting_applicants;
 CREATE POLICY "Users can view relevant applications" ON public.casting_applicants
@@ -1161,6 +1574,18 @@ CREATE POLICY "Users can delete applications" ON public.casting_applicants
 DROP POLICY IF EXISTS "Users can insert saves" ON public.casting_call_saves;
 DROP POLICY IF EXISTS "Users can manage their own saves" ON public.casting_call_saves;
 DROP POLICY IF EXISTS "Users can view their own saves" ON public.casting_call_saves;
+DROP POLICY IF EXISTS "casting_call_saves_select" ON public.casting_call_saves;
+CREATE POLICY "casting_call_saves_select" ON public.casting_call_saves
+    FOR SELECT USING (
+        auth.uid() = user_id
+        OR EXISTS (
+            SELECT 1 FROM public.profiles AS p 
+            WHERE p.id = casting_call_saves.user_id 
+              AND p.user_id = auth.uid()
+        )
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
+
 CREATE POLICY "Users can insert saves" ON public.casting_call_saves
     FOR INSERT WITH CHECK (
         auth.uid() = user_id
@@ -1170,6 +1595,21 @@ CREATE POLICY "Users can insert saves" ON public.casting_call_saves
               AND p.user_id = auth.uid()
         )
     );
+
+DROP POLICY IF EXISTS "Users can delete saves" ON public.casting_call_saves;
+CREATE POLICY "Users can delete saves" ON public.casting_call_saves
+    FOR DELETE USING (
+        auth.uid() = user_id
+        OR EXISTS (
+            SELECT 1 FROM public.profiles AS p 
+            WHERE p.id = casting_call_saves.user_id 
+              AND p.user_id = auth.uid()
+        )
+    );
+
+-- Drop unsafe legacy repair storage policies (M05)
+DROP POLICY IF EXISTS "Anyone can delete post media" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete post media" ON storage.objects;
 
 DROP POLICY IF EXISTS "Users can delete saves" ON public.casting_call_saves;
 CREATE POLICY "Users can delete saves" ON public.casting_call_saves

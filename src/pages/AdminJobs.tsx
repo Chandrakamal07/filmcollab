@@ -148,7 +148,9 @@ export default function AdminJobs() {
       await supabase.from("jobs").delete().eq("id", jobId);
       setJobs(prev => prev.filter(j => j.id !== jobId));
       toast({ title: "Job deleted" });
-    } catch (e) {}
+    } catch (e: any) {
+      toast({ title: "Failed to delete job", description: e?.message || "Operation failed", variant: "destructive" });
+    }
   };
 
   const handleUpdateStatus = async (jobId: string, newStatus: string) => {

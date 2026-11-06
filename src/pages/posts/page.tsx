@@ -542,8 +542,8 @@ const PostsPage = () => {
       const hashtags = hashtagMatches ? hashtagMatches.map(tag => tag.substring(1)) : [];
 
       // Upload media files if any
-      let uploadedUrls: string[] = [...newPost.mediaUrls];
-      let uploadedTypes: string[] = [];
+      const uploadedUrls: string[] = [...newPost.mediaUrls];
+      const uploadedTypes: string[] = [];
 
       for (const file of newPost.mediaFiles) {
         const fileExt = file.name.split('.').pop();

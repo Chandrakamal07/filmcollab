@@ -1124,7 +1124,16 @@ export default function IndustryHubPage() {
                   <Button
                     onClick={() => {
                       const targetLink = selectedCourse.website_link || selectedCourse.link;
-                      if (targetLink && targetLink.startsWith('http')) {
+                      const isValidHttpUrl = (str?: string | null) => {
+                        if (!str || !str.startsWith('http')) return false;
+                        try {
+                          const url = new URL(str);
+                          return url.protocol === "http:" || url.protocol === "https:";
+                        } catch {
+                          return false;
+                        }
+                      };
+                      if (targetLink && targetLink.startsWith('http') && isValidHttpUrl(targetLink)) {
                         window.open(targetLink, '_blank', 'noopener,noreferrer');
                       } else {
                         toast({
@@ -1452,7 +1461,16 @@ export default function IndustryHubPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   const targetLink = course.website_link || course.link;
-                                  if (targetLink && targetLink.startsWith('http')) {
+                                  const isValidHttpUrl = (str?: string | null) => {
+                                    if (!str || !str.startsWith('http')) return false;
+                                    try {
+                                      const url = new URL(str);
+                                      return url.protocol === "http:" || url.protocol === "https:";
+                                    } catch {
+                                      return false;
+                                    }
+                                  };
+                                  if (targetLink && targetLink.startsWith('http') && isValidHttpUrl(targetLink)) {
                                     window.open(targetLink, '_blank', 'noopener,noreferrer');
                                   } else {
                                     toast({

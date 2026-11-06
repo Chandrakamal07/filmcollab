@@ -75,7 +75,7 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
     try {
       setIsUploadingDirectoryFile(true);
       let publicUrl = "";
-      let additionalUrls: string[] = [];
+      const additionalUrls: string[] = [];
       let finalName = "";
       let finalSize = "0 MB";
 

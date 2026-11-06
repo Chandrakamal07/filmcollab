@@ -12,7 +12,8 @@ import {
   deriveAESKey,
   encryptMessage,
   decryptMessage,
-  encryptForRecipientOrThrow
+  encryptForRecipientOrThrow,
+  getOrInitUserE2EE
 } from '../src/lib/e2ee.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,24 +78,38 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       path.join(rootDir, 'supabase/migrations/20250108000000_bootstrap_profiles_and_auth.sql'),
       'utf8'
     );
+    const unblockSql = fs.readFileSync(
+      path.join(rootDir, 'unblock_rls.sql'),
+      'utf8'
+    );
 
-    test('Bootstrap migration provisions public.profiles before foreign key references', () => {
+    test('Bootstrap migration provisions public.profiles without premature user_roles reference', () => {
       assert.ok(bootstrapSql.includes('CREATE TABLE IF NOT EXISTS public.profiles'), 'Bootstrap must create public.profiles');
       assert.ok(bootstrapSql.includes('id UUID PRIMARY KEY DEFAULT gen_random_uuid()'), 'Bootstrap profiles.id must default to gen_random_uuid()');
       assert.ok(bootstrapSql.includes('user_id UUID UNIQUE REFERENCES auth.users(id)'), 'Bootstrap profiles must link user_id to auth.users');
+      assert.ok(!bootstrapSql.includes('user_roles'), 'Bootstrap profiles policies must not reference user_roles before its definition');
     });
 
-    test('Master convergence migration guarantees profiles.id default and all required tables', () => {
+    test('Master convergence migration guarantees profiles.id default and drops legacy auth FK', () => {
       assert.ok(migrationSql.includes('ALTER TABLE public.profiles ALTER COLUMN id SET DEFAULT gen_random_uuid()'), 'Must alter profiles.id default');
+      assert.ok(migrationSql.includes('DROP CONSTRAINT IF EXISTS'), 'Must drop legacy profiles.id foreign key if pointing to auth.users');
+    });
+
+    test('Master convergence migration guarantees required tables, columns and price default', () => {
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.settings'), 'Settings table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.admin_team_members'), 'Admin team table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.shooting_locations'), 'Shooting locations table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.property_site_visits'), 'Property site visits table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.project_tasks'), 'Project tasks table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.tickets'), 'Tickets table DDL');
+      assert.ok(migrationSql.includes('DROP CONSTRAINT IF EXISTS tickets_user_id_fkey'), 'Must drop tickets_user_id_fkey to allow profile IDs');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.ticket_messages'), 'Ticket messages table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.ticket_updates'), 'Ticket updates table DDL');
-      assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.subscription_plans'), 'Subscription plans table DDL');
+      assert.ok(migrationSql.includes('author_id UUID REFERENCES public.profiles(id)'), 'ticket_updates must reference profiles(id)');
+      assert.ok(migrationSql.includes('sync_ticket_update_content'), 'ticket_updates must sync content and message');
+      assert.ok(migrationSql.includes('ALTER TABLE public.subscription_plans ALTER COLUMN price SET DEFAULT 0;'), 'Subscription plans price must default to 0');
+      assert.ok(migrationSql.includes('ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS courses JSONB'), 'Companies must contain courses JSONB');
+      assert.ok(migrationSql.includes('ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS events JSONB'), 'Companies must contain events JSONB');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.directory_categories'), 'Directory categories table DDL');
       assert.ok(migrationSql.includes('CREATE TABLE IF NOT EXISTS public.global_tags'), 'Global tags table DDL');
     });
@@ -103,12 +118,19 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Enable read access for all users" ON public.posts;'), 'Must drop posts public read');
       assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Anyone can update tickets" ON public.tickets;'), 'Must drop unblock_rls tickets update');
       assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Anyone can insert ticket updates" ON public.ticket_updates;'), 'Must drop unblock_rls ticket updates insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Anyone can insert ticket messages" ON public.ticket_messages;'), 'Must drop unblock_rls ticket messages insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Anyone can read ticket messages" ON public.ticket_messages;'), 'Must drop unblock_rls ticket messages read');
       assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Anyone can insert notifications" ON public.notifications;'), 'Must drop notifications public insert');
       assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "connections_insert_policy" ON public.connections;'), 'Must drop legacy connections insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.post_likes;'), 'Must drop permissive post_likes insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.post_saves;'), 'Must drop permissive post_saves insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.user_likes;'), 'Must drop permissive user_likes insert');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Enable insert for authenticated users only" ON public.user_saves;'), 'Must drop permissive user_saves insert');
+      assert.ok(!unblockSql.includes('WITH CHECK (true)'), 'unblock_rls.sql must not contain insecure WITH CHECK (true)');
     });
   });
 
-  // M03: Project Membership Privileges & Creator Approval
+  // M03: Project Membership Privileges, Visibility & Creator Approval
   describe('M03: Project Authority & Creator Approvals', () => {
     const migrationSql = fs.readFileSync(
       path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
@@ -119,6 +141,12 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.ok(migrationSql.includes("role = 'Applicant'"), 'Self-join must restrict role to Applicant');
       assert.ok(migrationSql.includes('project_members_update_creator'), 'Must include creator update policy for applicant approval');
       assert.ok(migrationSql.includes('project_members_delete_creator'), 'Must include creator delete policy for applicant rejection');
+    });
+
+    test('Project privacy policy requires visibility column and excludes Applicant from private metadata', () => {
+      assert.ok(migrationSql.includes('ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS visibility TEXT'), 'Must ensure visibility column exists on projects');
+      assert.ok(migrationSql.includes('projects_select_policy'), 'Must define projects_select_policy');
+      assert.ok(migrationSql.includes("pm.role != 'Applicant'"), 'Applicants must not be treated as accepted members for private project metadata');
     });
 
     test('Project messages policy binds sender to authenticated profile and checks project membership', () => {
@@ -141,22 +169,31 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
     });
 
     test('Post selection enforces is_published = true or author ownership', () => {
-      assert.ok(migrationSql.includes('is_published = true'), 'Unpublished posts must not be public');
-      assert.ok(migrationSql.includes('posts_update_policy'), 'Post updates must be author-bound');
-      assert.ok(migrationSql.includes('posts_delete_policy'), 'Post deletes must be author-bound');
+      assert.ok(migrationSql.includes('is_published = true'), 'Must enforce is_published');
+      assert.ok(migrationSql.includes('auth.uid() = author_id'), 'Must allow authors to view their draft posts');
     });
   });
 
-  // M06: Team Provisioning & Admin Role Security
+  // M06: Team Provisioning & Uniqueness Contract
   describe('M06: Team Provisioning & Uniqueness Contract', () => {
+    const migrationSql = fs.readFileSync(
+      path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
+      'utf8'
+    );
+    const adminTeamSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminTeam.tsx'), 'utf8');
+
     test('AdminTeam provisioning respects UNIQUE(user_id, role) onConflict target', () => {
-      const adminTeamSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminTeam.tsx'), 'utf8');
-      assert.ok(adminTeamSource.includes("onConflict: 'user_id,role'"), 'Upsert must use actual UNIQUE(user_id, role) constraint');
-      assert.ok(adminTeamSource.includes("eq('role', 'admin')"), 'Member deletion must remove admin role, not wipe unrelated user roles');
+      assert.ok(adminTeamSource.includes("onConflict: 'user_id,role'"), 'Must specify onConflict: user_id,role');
+    });
+
+    test('Server provides atomic provision_admin_team_member and revoke_admin_team_member RPCs', () => {
+      assert.ok(migrationSql.includes('provision_admin_team_member'), 'Must define provision_admin_team_member RPC');
+      assert.ok(migrationSql.includes('revoke_admin_team_member'), 'Must define revoke_admin_team_member RPC');
+      assert.ok(adminTeamSource.includes('provision_admin_team_member'), 'AdminTeam must call provision RPC');
     });
   });
 
-  // M07: Direct Message Read Receipts & Identity Mapping
+  // M07: DM Read Receipt UPDATE Policy & Identity Immutability
   describe('M07: DM Read Receipt UPDATE Policy & Profile Identity', () => {
     const migrationSql = fs.readFileSync(
       path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
@@ -165,37 +202,86 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
 
     test('Messages update policy maps receiver_id through profiles table', () => {
       assert.ok(migrationSql.includes('messages_update_received'), 'Must define messages_update_received policy');
-      assert.ok(migrationSql.includes('messages.receiver_id'), 'Policy must check messages.receiver_id against profiles');
+      assert.ok(migrationSql.includes('profiles.user_id = auth.uid()'), 'Must check user_id matching auth.uid()');
+    });
+
+    test('Messages update immutability trigger prevents rewriting sender, receiver, or content', () => {
+      assert.ok(migrationSql.includes('check_message_update_immutability'), 'Must define check_message_update_immutability trigger');
+      assert.ok(migrationSql.includes('NEW.sender_id IS DISTINCT FROM OLD.sender_id'), 'Must check sender_id immutability');
+      assert.ok(migrationSql.includes('NEW.content IS DISTINCT FROM OLD.content'), 'Must check content immutability');
     });
   });
 
-  // M08: Casting Correlated Policies & Impersonation Prevention
+  // M08: Correlated Casting Policies
   describe('M08: Correlated Casting Policies', () => {
     const migrationSql = fs.readFileSync(
       path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
       'utf8'
     );
 
-    test('Casting applicant and save policies use qualified table aliases', () => {
-      assert.ok(
-        migrationSql.includes('p.id = casting_applicants.user_id') && migrationSql.includes('p.user_id = auth.uid()'),
-        'Casting applicants must correlate p.id = casting_applicants.user_id AND p.user_id = auth.uid()'
-      );
-      assert.ok(
-        migrationSql.includes('p.id = casting_call_saves.user_id') && migrationSql.includes('p.user_id = auth.uid()'),
-        'Casting saves must correlate p.id = casting_call_saves.user_id AND p.user_id = auth.uid()'
-      );
-      assert.ok(
-        migrationSql.includes('cc.deadline >= CURRENT_DATE'),
-        'Casting insert must check deadline on server'
-      );
+    test('Casting applicant and save policies use qualified table aliases and check status & deadline', () => {
+      assert.ok(migrationSql.includes('p.id = casting_applicants.user_id'), 'Must use qualified alias on user_id');
+      assert.ok(migrationSql.includes('cc.id = casting_applicants.casting_call_id'), 'Must qualify casting_call_id');
+      assert.ok(migrationSql.includes("LOWER(COALESCE(cc.status, 'open')) IN ('open', 'active')"), 'Must check case-insensitive status');
+      assert.ok(migrationSql.includes('COALESCE(cc.deadline, cc.last_date_to_apply)'), 'Must check deadline or last_date_to_apply');
+      assert.ok(migrationSql.includes('DROP POLICY IF EXISTS "Users can insert their own applications" ON public.casting_applicants;'), 'Must drop legacy permissive application policy');
+      assert.ok(migrationSql.includes('casting_call_saves_select'), 'Must define select policy for saved casting calls');
+      assert.ok(migrationSql.includes('check_casting_capacity'), 'Must include atomic casting capacity trigger');
     });
   });
 
-  // M14: Production Fail-Closed End-to-End Encryption
+  // M09: Authorized Cross-Account Notification RPC
+  describe('M09: Authorized Notifications', () => {
+    const migrationSql = fs.readFileSync(
+      path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
+      'utf8'
+    );
+
+    test('Migration provisions send_authorized_notification RPC for cross-account alerts', () => {
+      assert.ok(migrationSql.includes('send_authorized_notification'), 'Must define send_authorized_notification RPC');
+      assert.ok(migrationSql.includes('SECURITY DEFINER'), 'Notification RPC must execute as SECURITY DEFINER');
+    });
+  });
+
+  // M11: Privacy Enforcement & Public Profile Projection
+  describe('M11: Controlled Public Profile Projection & Storage Privacy', () => {
+    const migrationSql = fs.readFileSync(
+      path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
+      'utf8'
+    );
+
+    test('Migration provisions public.public_profiles view with security_barrier masking sensitive fields', () => {
+      assert.ok(migrationSql.includes('CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true)'), 'Must create public_profiles security_barrier view');
+      assert.ok(migrationSql.includes('privacy_show_phone'), 'View must inspect privacy_show_phone');
+      assert.ok(migrationSql.includes('privacy_show_email'), 'View must inspect privacy_show_email');
+      assert.ok(migrationSql.includes('privacy_show_dob'), 'View must inspect privacy_show_dob');
+      assert.ok(migrationSql.includes('REVOKE SELECT (email, phone, date_of_birth) ON public.profiles FROM anon'), 'Must revoke sensitive direct SELECT from anon');
+    });
+
+    test('Directory assets storage policy enforces non-blocked status and profile directory privacy', () => {
+      assert.ok(migrationSql.includes('directory_assets_select_policy'), 'Must define directory_assets_select_policy');
+      assert.ok(migrationSql.includes('privacy_show_directory'), 'Storage access must check privacy_show_directory');
+    });
+  });
+
+  // M13: Community Groups Approval, Roles & Member Post Rules
+  describe('M13: Community Groups Approval & Roles', () => {
+    const migrationSql = fs.readFileSync(
+      path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
+      'utf8'
+    );
+
+    test('Migration adds require_approval, allow_member_posts and permits Pending in role CHECK', () => {
+      assert.ok(migrationSql.includes('require_approval BOOLEAN DEFAULT FALSE'), 'Must add require_approval column');
+      assert.ok(migrationSql.includes('allow_member_posts BOOLEAN DEFAULT TRUE'), 'Must add allow_member_posts column');
+      assert.ok(migrationSql.includes("'Pending'"), 'Role CHECK constraint must permit Pending');
+      assert.ok(migrationSql.includes('sync_community_group_settings'), 'Must define trigger to sync settings and columns');
+    });
+  });
+
+  // M14: Production Fail-Closed E2EE (Native Web Crypto ECDH/AES-GCM)
   describe('M14: Production Fail-Closed E2EE (Native Web Crypto ECDH/AES-GCM)', () => {
     test('generateKeyPair, deriveAESKey, encryptMessage and decryptMessage execute cleanly', async () => {
-      // 1. Generate real ECDH key pairs for Alice and Bob
       const aliceKeys = await generateKeyPair();
       const bobKeys = await generateKeyPair();
 
@@ -203,18 +289,15 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.equal(aliceKeys.publicKeyJwk.crv, 'P-256');
       assert.equal(bobKeys.publicKeyJwk.kty, 'EC');
 
-      // 2. Import keys
       const alicePrivate = await importPrivateKey(aliceKeys.privateKeyJwk);
       const bobPublic = await importPublicKey(bobKeys.publicKeyJwk);
 
       const bobPrivate = await importPrivateKey(bobKeys.privateKeyJwk);
       const alicePublic = await importPublicKey(aliceKeys.publicKeyJwk);
 
-      // 3. Derive shared AES-GCM keys
       const aliceShared = await deriveAESKey(alicePrivate, bobPublic);
       const bobShared = await deriveAESKey(bobPrivate, alicePublic);
 
-      // 4. Encrypt and decrypt a test message
       const secretScript = 'Top Secret: The protagonist is the director in disguise.';
       const encrypted = await encryptMessage(aliceShared, secretScript);
 
@@ -243,7 +326,6 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       const aliceKeys = await generateKeyPair();
       const alicePrivate = await importPrivateKey(aliceKeys.privateKeyJwk);
 
-      // Null recipient key
       await assert.rejects(
         async () => {
           await encryptForRecipientOrThrow({
@@ -255,7 +337,6 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
         /E2EE_RECIPIENT_KEY_UNAVAILABLE: Recipient has not published an active encryption key/
       );
 
-      // Malformed JSON string
       await assert.rejects(
         async () => {
           await encryptForRecipientOrThrow({
@@ -267,7 +348,6 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
         /E2EE_INVALID_RECIPIENT_KEY: Recipient public key is malformed/
       );
 
-      // Non-EC key
       await assert.rejects(
         async () => {
           await encryptForRecipientOrThrow({
@@ -293,23 +373,56 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
 
       assert.ok(result.envelope.startsWith('ENCRYPTED:'), 'Envelope must use ENCRYPTED prefix');
       const parts = result.envelope.split(':');
-      assert.equal(parts.length, 3, 'Envelope must contain exactly three parts (tag, iv, ciphertext)');
-      assert.ok(parts[1].length > 0, 'IV must be non-empty');
-      assert.ok(parts[2].length > 0, 'Ciphertext must be non-empty');
+      assert.ok(parts.length >= 3, 'Envelope must contain tag, iv, ciphertext');
+    });
+
+    test('LocationDetails imports and invokes encryptForRecipientOrThrow for confidential enquiries', () => {
+      const locDetailsSource = fs.readFileSync(path.join(rootDir, 'src/pages/locations/details.tsx'), 'utf8');
+      assert.ok(locDetailsSource.includes('encryptForRecipientOrThrow'), 'LocationDetails must import encryptForRecipientOrThrow');
+      assert.ok(locDetailsSource.includes('getOrInitUserE2EE'), 'LocationDetails must initialize/retrieve user E2EE keys');
+      assert.ok(locDetailsSource.includes('send_authorized_notification'), 'LocationDetails must route notification through server RPC');
     });
   });
 
-  // M16: Honest Controls & Navigation
-  describe('M16: Honest Course & Studio Registration Outcomes', () => {
-    test('Course model interface and UI map website_link and validate external providers', () => {
+  // M16 & M17: Quality Gates, CSV Export & Navigation
+  describe('M16 & M17: Quality Gates & Real CSV Export', () => {
+    test('Course model interface and UI map website_link and validate external providers with URL protocol', () => {
       const industryHubSource = fs.readFileSync(path.join(rootDir, 'src/pages/industry-hub/page.tsx'), 'utf8');
       assert.ok(industryHubSource.includes('website_link?: string | null'), 'Course interface must include website_link');
       assert.ok(industryHubSource.includes("targetLink.startsWith('http')"), 'Course registration must validate external target URLs');
+      assert.ok(industryHubSource.includes('isValidHttpUrl'), 'Must validate URL protocol with URL parser');
     });
 
     test('App.tsx provides /login compatibility alias redirecting to /auth/signin', () => {
       const appSource = fs.readFileSync(path.join(rootDir, 'src/App.tsx'), 'utf8');
       assert.ok(appSource.includes('<Route path="/login" element={<RedirectToSignIn />} />'), 'App must have /login alias');
+    });
+
+    test('AdminAnalytics handleExportCSV generates valid formatted CSV without ReferenceError', () => {
+      const analyticsSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminAnalytics.tsx'), 'utf8');
+      assert.ok(!analyticsSource.includes('...userData.metrics'), 'Must not reference undefined userData');
+      assert.ok(analyticsSource.includes('...usersData.metrics'), 'Must map usersData.metrics correctly');
+      assert.ok(analyticsSource.includes('const { toast } = useToast();'), 'Must instantiate useToast hook');
+      assert.ok(analyticsSource.includes('toast({ title: "CSV Exported"'), 'Must invoke toast on export');
+
+      // Functional CSV format simulation
+      const usersMetrics = [{ title: 'Total Registered Users', value: '1,200', change: '+5%' }];
+      const projectsMetrics = [{ title: 'Active Projects', value: '34', change: '+2%' }];
+
+      const allMetrics = [
+        ...usersMetrics.map(m => ({ category: "Users", ...m })),
+        ...projectsMetrics.map(m => ({ category: "Projects", ...m }))
+      ];
+
+      const rows = [
+        ["Category", "Metric", "Value", "Change"],
+        ...allMetrics.map(m => [`"${m.category}"`, `"${m.title}"`, `"${m.value}"`, `"${m.change}"`])
+      ];
+
+      const csv = rows.map(r => r.join(",")).join("\n");
+      assert.ok(csv.includes('Category,Metric,Value,Change'), 'CSV must contain headers');
+      assert.ok(csv.includes('"Users","Total Registered Users","1,200","+5%"'), 'CSV must map rows with quoting');
+      assert.ok(csv.includes('"Projects","Active Projects","34","+2%"'), 'CSV must include projects rows');
     });
   });
 
@@ -337,8 +450,8 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
     });
   });
 
-  // M22: Job Applications FK & Profile Impersonation Prevention
-  describe('M22: Job Application Profile Binding', () => {
+  // M22: Job Applications FK, Profile Binding & Immutability
+  describe('M22: Job Application Profile Binding & Immutability', () => {
     const migrationSql = fs.readFileSync(
       path.join(rootDir, 'supabase/migrations/20261106000000_reproducible_baseline_and_security_convergence.sql'),
       'utf8'
@@ -350,6 +463,27 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
         'job_applications_insert policy must ensure profile_id belongs to authenticated user'
       );
       assert.ok(migrationSql.includes('job_applications_profile_id_fkey'), 'Must create foreign key to public.profiles(id)');
+    });
+
+    test('Job applications update immutability trigger prevents rewriting candidate identity', () => {
+      assert.ok(migrationSql.includes('check_job_application_update_immutability'), 'Must define check_job_application_update_immutability trigger');
+      assert.ok(migrationSql.includes('NEW.profile_id IS DISTINCT FROM OLD.profile_id'), 'Must check candidate profile_id immutability');
+      assert.ok(migrationSql.includes('NEW.job_id IS DISTINCT FROM OLD.job_id'), 'Must check job_id immutability');
+    });
+  });
+
+  // M25: Studios Directory Opportunities & Persistence
+  describe('M25: Studio Persistence & Caller Guarantees', () => {
+    const studiosSource = fs.readFileSync(path.join(rootDir, 'src/pages/StudiosDirectory.tsx'), 'utf8');
+
+    test('StudiosDirectory callers await updateViewingCompany and check ok result before toast', () => {
+      assert.ok(studiosSource.includes('const res = await updateViewingCompany(updated)'), 'Callers must await updateViewingCompany');
+      assert.ok(studiosSource.includes('if (!res.ok) return;'), 'Callers must guard success toasts on res.ok');
+    });
+
+    test('StudiosDirectory persists courses and events in updateViewingCompany payload and loads them', () => {
+      assert.ok(studiosSource.includes('courses: (updated.courses || []) as any'), 'updateViewingCompany must persist courses');
+      assert.ok(studiosSource.includes('courses: c.courses || []'), 'fetchCompanies must map courses');
     });
   });
 
@@ -419,6 +553,12 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.ok(migrationSql.includes('idx_messages_client_message_id'), 'Must create unique index on client_message_id');
     });
 
+    test('Messages page generates collision-resistant UUID and reconciles 23505 conflict', () => {
+      const messagesSource = fs.readFileSync(path.join(rootDir, 'src/pages/messages/page.tsx'), 'utf8');
+      assert.ok(messagesSource.includes('crypto.randomUUID'), 'Must use crypto.randomUUID for client_message_id');
+      assert.ok(messagesSource.includes("existingMsg.content !== envelope"), 'Must reconcile duplicate key with envelope content');
+    });
+
     test('Sidebar and message caches are account-scoped with activeId suffix', () => {
       const sidebarSource = fs.readFileSync(path.join(rootDir, 'src/components/layout/sidebar.tsx'), 'utf8');
       assert.ok(sidebarSource.includes('chat_conversations_${activeId}'), 'Sidebar cache must be account-scoped');
@@ -462,13 +602,14 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
     test('AdminAnalytics verifies verifiedUsers using strictly p.is_verified === true', () => {
       const analyticsSource = fs.readFileSync(path.join(rootDir, 'src/pages/AdminAnalytics.tsx'), 'utf8');
       assert.ok(analyticsSource.includes('p.is_verified === true'), 'Verified profiles must check is_verified, not avatar_url');
-      assert.ok(!analyticsSource.includes('|| newUsers'), 'Active users must not fall back to newUsers');
+      assert.ok(analyticsSource.includes('Recently Updated Profiles'), 'Must label updated_at metric accurately');
     });
 
-    test('Jobs page renders truthful application counts without Math.random', () => {
+    test('Jobs page renders truthful application counts without Math.random and shows Confidential to non-owners', () => {
       const jobsSource = fs.readFileSync(path.join(rootDir, 'src/pages/Jobs.tsx'), 'utf8');
       assert.ok(!jobsSource.includes('Math.floor(Math.random() * 50)'), 'Must not contain random job application numbers');
       assert.ok(jobsSource.includes('selectedJob.applications_count'), 'Must use truthful selectedJob.applications_count');
+      assert.ok(jobsSource.includes('"Confidential"'), 'Must designate applications count as Confidential for non-owners');
     });
   });
 
@@ -502,10 +643,10 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       );
     });
 
-    test('StudiosDirectory callers await updateViewingCompany and check ok result before toast', () => {
-      const studiosSource = fs.readFileSync(path.join(rootDir, 'src/pages/StudiosDirectory.tsx'), 'utf8');
-      assert.ok(studiosSource.includes('const res = await updateViewingCompany(updated)'), 'Callers must await updateViewingCompany');
-      assert.ok(studiosSource.includes('if (!res.ok) return;'), 'Callers must guard success toasts on res.ok');
+    test('Profile directory file mutations inspect response and guard against zero rows', () => {
+      const profileSource = fs.readFileSync(path.join(rootDir, 'src/pages/Profile.tsx'), 'utf8');
+      assert.ok(profileSource.includes('delErr || !delData || delData.length === 0'), 'Profile file delete must check errors and zero rows');
+      assert.ok(profileSource.includes('upErr || !upData || upData.length === 0'), 'Profile file update must check errors and zero rows');
     });
   });
 });

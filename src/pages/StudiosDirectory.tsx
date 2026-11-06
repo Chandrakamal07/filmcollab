@@ -136,6 +136,8 @@ export default function StudiosDirectory() {
             jobs: c.jobs || [],
             auditions: c.auditions || [],
             internships: c.internships || [],
+            courses: c.courses || [],
+            events: c.events || [],
             opportunities: [],
             userId: c.user_id
           }));
@@ -404,6 +406,8 @@ export default function StudiosDirectory() {
           jobs: updated.jobs as any,
           auditions: updated.auditions as any,
           internships: updated.internships as any,
+          courses: (updated.courses || []) as any,
+          events: ((updated as any).events || []) as any,
           projects: updated.projects as any,
           team: updated.team as any,
           gallery: updated.gallery
@@ -3128,14 +3132,15 @@ export default function StudiosDirectory() {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     const reader = new FileReader();
-                    reader.onloadend = () => {
+                    reader.onloadend = async () => {
                       const base64String = reader.result as string;
                       if (!viewingCompany) return;
                       const updated = {
                         ...viewingCompany,
                         coverImage: base64String
                       };
-                      updateViewingCompany(updated);
+                      const res = await updateViewingCompany(updated);
+                      if (!res.ok) return;
                       setIsEditBannerOpen(false);
                       toast({ title: "Banner updated!", description: "Your studio cover banner has been successfully updated." });
                     };
@@ -3171,14 +3176,15 @@ export default function StudiosDirectory() {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     const reader = new FileReader();
-                    reader.onloadend = () => {
+                    reader.onloadend = async () => {
                       const base64String = reader.result as string;
                       if (!viewingCompany) return;
                       const updated = {
                         ...viewingCompany,
                         logo: base64String
                       };
-                      updateViewingCompany(updated);
+                      const res = await updateViewingCompany(updated);
+                      if (!res.ok) return;
                       setIsEditLogoOpen(false);
                       toast({ title: "Logo updated!", description: "Your studio logo/profile picture has been successfully updated." });
                     };
@@ -3823,14 +3829,15 @@ export default function StudiosDirectory() {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     const reader = new FileReader();
-                    reader.onloadend = () => {
+                    reader.onloadend = async () => {
                       const base64String = reader.result as string;
                       if (!viewingCompany) return;
                       const updated = {
                         ...viewingCompany,
                         gallery: [...(viewingCompany.gallery || []), base64String]
                       };
-                      updateViewingCompany(updated);
+                      const res = await updateViewingCompany(updated);
+                      if (!res.ok) return;
                       setIsUploadMediaOpen(false);
                       toast({ title: "Media uploaded!", description: "Your image has been added to the studio gallery." });
                     };

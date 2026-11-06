@@ -70,19 +70,10 @@ CREATE POLICY "profiles_select_public" ON public.profiles
 -- Allow authenticated users to insert their own profile
 DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
 CREATE POLICY "profiles_insert_own" ON public.profiles
-    FOR INSERT WITH CHECK (
-        auth.uid() = user_id
-        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
-    );
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 -- Allow users to update their own profile
 DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own" ON public.profiles
-    FOR UPDATE USING (
-        auth.uid() = user_id
-        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
-    ) WITH CHECK (
-        auth.uid() = user_id
-        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
-    );
+    FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 

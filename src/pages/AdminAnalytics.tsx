@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AdminLayout } from "@/components/layout/admin-layout";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +61,7 @@ const deterministicDirectoryBenchmarks = [
 ];
 
 export default function AdminAnalytics() {
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("30");
 
@@ -258,7 +260,7 @@ export default function AdminAnalytics() {
         metrics: [
           { title: "Total Registered Users", value: totalUsers.toLocaleString(), change: "—", icon: Users, color: "text-primary" },
           { title: `New Users (${timeRange}d)`, value: newUsers.toLocaleString(), change: "—", icon: UserPlus, color: "text-primary" },
-          { title: `Active Users (${timeRange}d)`, value: activeUsers.toLocaleString(), change: "—", icon: Activity, color: "text-primary" },
+          { title: `Recently Updated Profiles (${timeRange}d)`, value: activeUsers.toLocaleString(), change: "—", icon: Activity, color: "text-primary" },
           { title: "Verified Profiles", value: verifiedUsers.toLocaleString(), change: "—", icon: Target, color: "text-primary" }
         ],
         chartData: userChartData.length ? userChartData : [{ month: 'No Data', total: 0, new: 0, active: 0 }],
@@ -370,7 +372,7 @@ export default function AdminAnalytics() {
 
   const handleExportCSV = () => {
     const allMetrics = [
-      ...userData.metrics.map(m => ({ category: "Users", ...m })),
+      ...usersData.metrics.map(m => ({ category: "Users", ...m })),
       ...projectsData.metrics.map(m => ({ category: "Projects", ...m })),
       ...jobsData.metrics.map(m => ({ category: "Jobs", ...m })),
       ...ticketsData.metrics.map(m => ({ category: "Tickets", ...m })),

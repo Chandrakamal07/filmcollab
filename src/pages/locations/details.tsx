@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { encryptForRecipientOrThrow, getOrInitUserE2EE } from "@/lib/e2ee";
 
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -100,22 +101,55 @@ export default function LocationDetails() {
       }
       senderProfileId = senderProfileId || user.id;
 
+      let messageContent = enquiryMessage.trim();
+
+      // Retrieve recipient public key for E2EE if available (M14)
+      const { data: rxProfile } = await supabase
+        .from('profiles')
+        .select('public_key')
+        .eq('id', receiverProfileId)
+        .maybeSingle();
+
+      if (rxProfile?.public_key) {
+        try {
+          const { privKey } = await getOrInitUserE2EE(senderProfileId);
+          const { envelope } = await encryptForRecipientOrThrow({
+            senderPrivateKey: privKey,
+            recipientPublicKeyJwkOrStr: rxProfile.public_key,
+            plaintext: messageContent
+          });
+          messageContent = envelope;
+        } catch (encErr) {
+          console.warn("E2EE encryption warning for enquiry:", encErr);
+        }
+      }
+
+      const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
       // 1. Insert message
       const { error: msgErr } = await supabase.from('messages').insert({
         sender_id: senderProfileId,
         receiver_id: receiverProfileId,
-        content: enquiryMessage.trim(),
-        type: 'property_enquiry'
+        content: messageContent,
+        type: 'property_enquiry',
+        client_message_id: clientUuid
       });
       if (msgErr) throw msgErr;
 
-      // 2. Insert notification (secondary, best-effort)
-      await supabase.from('notifications').insert({
-        user_id: receiverProfileId,
-        title: 'New Property Enquiry',
-        description: `Someone sent an enquiry for ${location.name}`,
-        type: 'message'
-      });
+      // 2. Insert notification (secondary, authorized server RPC)
+      try {
+        await supabase.rpc('send_authorized_notification', {
+          p_recipient_id: receiverProfileId,
+          p_title: 'New Property Enquiry',
+          p_message: `Someone sent an enquiry for ${location.name}`,
+          p_type: 'message',
+          p_link: `/locations/${location.id}`
+        });
+      } catch (notifErr) {
+        console.warn("Secondary notification could not be delivered:", notifErr);
+      }
 
       toast.success("Enquiry sent successfully!");
       setIsEnquireOpen(false);

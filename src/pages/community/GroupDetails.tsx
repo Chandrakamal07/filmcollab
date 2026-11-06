@@ -815,6 +815,8 @@ export default function GroupDetails() {
                               name: groupSettings.name.trim(),
                               description: groupSettings.description.trim(),
                               privacy: groupSettings.privacy,
+                              require_approval: groupSettings.requireApproval,
+                              allow_member_posts: groupSettings.allowMemberPosts,
                               settings: {
                                 allowMemberInvites: groupSettings.allowMemberInvites,
                                 allowMemberPosts: groupSettings.allowMemberPosts,

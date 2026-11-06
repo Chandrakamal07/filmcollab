@@ -1644,6 +1644,10 @@ export type Database = {
 
           settings: Json | null
 
+          require_approval: boolean | null
+
+          allow_member_posts: boolean | null
+
         }
 
         Insert: {
@@ -1667,6 +1671,10 @@ export type Database = {
           updated_at?: string | null
 
           settings?: Json | null
+
+          require_approval?: boolean | null
+
+          allow_member_posts?: boolean | null
 
         }
 
@@ -1692,6 +1700,10 @@ export type Database = {
 
           settings?: Json | null
 
+          require_approval?: boolean | null
+
+          allow_member_posts?: boolean | null
+
         }
 
         Relationships: []
@@ -1708,7 +1720,7 @@ export type Database = {
 
           user_id: string
 
-          role: "Owner" | "Admin" | "Moderator" | "Member"
+          role: "Owner" | "Admin" | "Moderator" | "Member" | "Pending"
 
           joined_at: string | null
 
@@ -1722,7 +1734,7 @@ export type Database = {
 
           user_id: string
 
-          role?: "Owner" | "Admin" | "Moderator" | "Member"
+          role?: "Owner" | "Admin" | "Moderator" | "Member" | "Pending"
 
           joined_at?: string | null
 
@@ -1736,7 +1748,7 @@ export type Database = {
 
           user_id?: string
 
-          role?: "Owner" | "Admin" | "Moderator" | "Member"
+          role?: "Owner" | "Admin" | "Moderator" | "Member" | "Pending"
 
           joined_at?: string | null
 
@@ -2060,6 +2072,10 @@ export type Database = {
 
           internships: Json | null
 
+          courses: Json | null
+
+          events: Json | null
+
           projects: Json | null
 
           team: Json | null
@@ -2126,6 +2142,10 @@ export type Database = {
 
           internships?: Json | null
 
+          courses?: Json | null
+
+          events?: Json | null
+
           projects?: Json | null
 
           team?: Json | null
@@ -2191,6 +2211,10 @@ export type Database = {
           auditions?: Json | null
 
           internships?: Json | null
+
+          courses?: Json | null
+
+          events?: Json | null
 
           projects?: Json | null
 
@@ -4326,6 +4350,60 @@ export type Database = {
       }
 
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+
+      provision_admin_team_member: {
+
+        Args: {
+
+          p_user_id: string
+
+          p_profile_id: string
+
+          p_role: string
+
+          p_status: string
+
+          p_permissions: Json
+
+        }
+
+        Returns: Json
+
+      }
+
+      revoke_admin_team_member: {
+
+        Args: {
+
+          p_member_id: string
+
+        }
+
+        Returns: boolean
+
+      }
+
+      send_authorized_notification: {
+
+        Args: {
+
+          p_recipient_id: string
+
+          p_title: string
+
+          p_message: string
+
+          p_type?: string
+
+          p_link?: string | null
+
+          p_metadata?: Json
+
+        }
+
+        Returns: string
+
+      }
 
     }
 

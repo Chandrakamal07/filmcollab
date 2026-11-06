@@ -453,7 +453,9 @@ export default function MessagesPage() {
              if (m.content.startsWith("ENCRYPTED:")) {
                 if (sharedKey) {
                    try {
-                      const [, iv, cipher] = m.content.split(":");
+                      const parts = m.content.split(":");
+                      const iv = parts.length === 4 ? parts[2] : parts[1];
+                      const cipher = parts.length === 4 ? parts[3] : parts[2];
                       m.content = await decryptMessage(sharedKey, iv, cipher);
                    } catch(e) {
                       m.content = "🔒 [Encrypted Message - Unable to decrypt]";
@@ -735,8 +737,11 @@ export default function MessagesPage() {
     if (!content) return;
 
     const timestamp = Date.now();
+    const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
     const newMsg: ChatMessage = {
-      id: "msg_temp_" + timestamp,
+      id: clientUuid,
       sender: "me",
       type,
       content,
@@ -813,8 +818,26 @@ export default function MessagesPage() {
           client_message_id: newMsg.id
         });
 
-        if (error && error.code !== '23505') {
-          throw error;
+        if (error) {
+          if (error.code === '23505') {
+            // Reconcile with existing server record to verify this exact message delivery
+            const { data: existingMsg } = await supabase
+              .from("messages")
+              .select("id, sender_id, receiver_id, content")
+              .eq("client_message_id", newMsg.id)
+              .maybeSingle();
+
+            if (
+              !existingMsg ||
+              existingMsg.sender_id !== currentUserId ||
+              existingMsg.receiver_id !== activeId ||
+              existingMsg.content !== envelope
+            ) {
+              throw new Error("Message client identifier conflict. Delivery could not be verified.");
+            }
+          } else {
+            throw error;
+          }
         }
         loadChatData();
       } catch (err: any) {
@@ -883,8 +906,25 @@ export default function MessagesPage() {
         client_message_id: msgToRetry.id
       });
 
-      if (error && error.code !== '23505') {
-        throw error;
+      if (error) {
+        if (error.code === '23505') {
+          const { data: existingMsg } = await supabase
+            .from("messages")
+            .select("id, sender_id, receiver_id, content")
+            .eq("client_message_id", msgToRetry.id)
+            .maybeSingle();
+
+          if (
+            !existingMsg ||
+            existingMsg.sender_id !== currentUserId ||
+            existingMsg.receiver_id !== activeId ||
+            existingMsg.content !== envelope
+          ) {
+            throw new Error("Message client identifier conflict on retry. Delivery could not be verified.");
+          }
+        } else {
+          throw error;
+        }
       }
 
       toast({

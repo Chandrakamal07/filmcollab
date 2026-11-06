@@ -810,6 +810,8 @@ export default function Jobs() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      const count = (data || []).length;
+      setSelectedJob((prev) => prev ? { ...prev, applications_count: count } : prev);
       setApplicants((data || []).map((app: any) => ({
         id: app.id,
         name: app.name || "Applicant",
@@ -2497,7 +2499,7 @@ export default function Jobs() {
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-2 border-b border-muted/50">
                               <span className="text-sm text-muted-foreground">Total Applications</span>
-                              <span className="font-semibold">{selectedJob.applications_count ?? "0"}</span>
+                              <span className="font-semibold">{selectedJob.applications_count !== undefined && selectedJob.applications_count !== null ? selectedJob.applications_count : (selectedJob.user_id === user?.id ? "0" : "Confidential")}</span>
                             </div>
                           </div>
                         </div>

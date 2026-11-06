@@ -167,20 +167,30 @@ export default function CommunityPage() {
     }
 
     try {
+      const reqApproval = group.require_approval ?? group.settings?.requireApproval ?? false;
+      const roleToInsert = reqApproval ? "Pending" : "Member";
+
       const { error } = await supabase
         .from("community_group_members")
         .insert({
           group_id: group.id,
           user_id: user.id,
-          role: "Member",
+          role: roleToInsert,
         });
 
       if (error) throw error;
 
-      toast({
-        title: "Joined Group",
-        description: `You are now a member of ${group.name}.`,
-      });
+      if (roleToInsert === "Pending") {
+        toast({
+          title: "Request Submitted",
+          description: `Your request to join ${group.name} has been submitted for approval.`,
+        });
+      } else {
+        toast({
+          title: "Joined Group",
+          description: `You are now a member of ${group.name}.`,
+        });
+      }
       await fetchGroups();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to join group.";

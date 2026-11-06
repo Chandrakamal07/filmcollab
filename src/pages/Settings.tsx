@@ -327,7 +327,7 @@ const Settings = () => {
     setIsLoading(true);
     try {
       if (profile?.id) {
-        let updateData: any = {};
+        const updateData: any = {};
         if (section === 'Privacy') {
           updateData.privacy_settings = privacySettings;
           updateData.visible_to_categories = visibleToCategories;
