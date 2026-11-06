@@ -8,6 +8,11 @@ import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  DIRECTORY_STORAGE_BUCKET,
+  toCanonicalDirectoryStorageUri,
+  cleanupUploadedStorageObjects,
+} from "@/lib/directory-storage";
 
 interface AddFileDialogProps {
   open: boolean;
@@ -72,10 +77,13 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
       return;
     }
 
+    const uploadedPaths: string[] = [];
     try {
       setIsUploadingDirectoryFile(true);
-      let publicUrl = "";
+      let fileReferenceUrl = "";
+      let primaryStoragePath: string | null = null;
       const additionalUrls: string[] = [];
+      const additionalStoragePaths: string[] = [];
       let finalName = "";
       let finalSize = "0 MB";
 
@@ -87,16 +95,13 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
         const primaryPath = `${userId}/${primaryName}`;
 
         const { error: primaryUploadError } = await supabase.storage
-          .from('directory_assets')
+          .from(DIRECTORY_STORAGE_BUCKET)
           .upload(primaryPath, primaryFile);
 
         if (primaryUploadError) throw primaryUploadError;
-
-        const { data: primaryData } = supabase.storage
-          .from('directory_assets')
-          .getPublicUrl(primaryPath);
-        
-        publicUrl = primaryData.publicUrl;
+        uploadedPaths.push(primaryPath);
+        primaryStoragePath = primaryPath;
+        fileReferenceUrl = toCanonicalDirectoryStorageUri(primaryPath, DIRECTORY_STORAGE_BUCKET);
         finalName = primaryFile.name;
         finalSize = `${(primaryFile.size / (1024 * 1024)).toFixed(2)} MB`;
 
@@ -109,53 +114,54 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
             const path = `${userId}/${name}`;
 
             const { error: uploadError } = await supabase.storage
-              .from('directory_assets')
+              .from(DIRECTORY_STORAGE_BUCKET)
               .upload(path, file);
 
-            if (!uploadError) {
-              const { data } = supabase.storage
-                .from('directory_assets')
-                .getPublicUrl(path);
-              additionalUrls.push(data.publicUrl);
-            }
+            if (uploadError) throw uploadError;
+            uploadedPaths.push(path);
+            additionalStoragePaths.push(path);
+            additionalUrls.push(toCanonicalDirectoryStorageUri(path, DIRECTORY_STORAGE_BUCKET));
           }
         }
       } else {
         // Video URL
-        publicUrl = videoUrl.trim();
+        fileReferenceUrl = videoUrl.trim();
         finalName = "Linked Video";
         finalSize = "Link";
       }
 
       let coverUrl = "";
+      let coverStoragePath: string | null = null;
       if (selectedCoverImage) {
         const coverExt = selectedCoverImage.name.split('.').pop();
         const coverName = `${crypto.randomUUID()}_cover.${coverExt}`;
         const coverPath = `${userId}/${coverName}`;
 
         const { error: coverUploadError } = await supabase.storage
-          .from('directory_assets')
+          .from(DIRECTORY_STORAGE_BUCKET)
           .upload(coverPath, selectedCoverImage);
 
-        if (!coverUploadError) {
-          const { data: coverData } = supabase.storage
-            .from('directory_assets')
-            .getPublicUrl(coverPath);
-          coverUrl = coverData.publicUrl;
-        }
+        if (coverUploadError) throw coverUploadError;
+        uploadedPaths.push(coverPath);
+        coverStoragePath = coverPath;
+        coverUrl = toCanonicalDirectoryStorageUri(coverPath, DIRECTORY_STORAGE_BUCKET);
       }
 
       const finalTitle = addFileTitle.trim() || finalName.replace(/\.[^/.]+$/, "");
 
       let fileUserId = userId;
+      let ownerShowDirectory = true;
       if (userId) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, privacy_show_directory')
           .or(`id.eq.${userId},user_id.eq.${userId}`)
           .limit(1)
           .maybeSingle();
         if (prof?.id) fileUserId = prof.id;
+        if (typeof (prof as any)?.privacy_show_directory === "boolean") {
+          ownerShowDirectory = (prof as any).privacy_show_directory;
+        }
       }
 
       const { error: insertError } = await supabase
@@ -164,13 +170,19 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
           user_id: fileUserId,
           project_id: projectId || null,
           title: finalTitle,
-          file_url: publicUrl,
+          file_url: fileReferenceUrl,
           additional_urls: additionalUrls.length > 0 ? additionalUrls : [],
+          cover_image_url: coverUrl || null,
+          storage_bucket: DIRECTORY_STORAGE_BUCKET,
+          storage_path: primaryStoragePath,
+          additional_paths: additionalStoragePaths,
+          cover_storage_path: coverStoragePath,
+          is_public: ownerShowDirectory,
           file_type: fileType,
           file_size: finalSize,
           tags: selectedCategory ? [selectedCategory] : [],
           stats: { likes: 0, views: 0, downloads: 0, coverUrl: coverUrl }
-        });
+        } as any);
 
       if (insertError) throw insertError;
 
@@ -189,6 +201,9 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, pro
       }
 
     } catch (err: any) {
+      if (uploadedPaths.length > 0) {
+        await cleanupUploadedStorageObjects(uploadedPaths, DIRECTORY_STORAGE_BUCKET);
+      }
       console.error("Error uploading file:", err);
       toast.error(err.message || "An error occurred while uploading.");
     } finally {

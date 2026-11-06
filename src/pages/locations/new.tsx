@@ -14,7 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useEffect, useMemo } from "react";
-import { State, City } from "country-state-city";
+import { State, City } from "@/lib/india-locations";
+import { cleanupUploadedStorageObjects } from "@/lib/directory-storage";
 
 
 export default function NewLocation() {
@@ -181,6 +182,7 @@ export default function NewLocation() {
     }
 
     setIsSubmitting(true);
+    const newlyUploadedPaths: string[] = [];
     
     try {
       const uploadedUrls: string[] = [];
@@ -193,6 +195,7 @@ export default function NewLocation() {
             .from('location_media')
             .upload(filePath, file);
           if (uploadError) throw uploadError;
+          newlyUploadedPaths.push(filePath);
 
           const { data: { publicUrl } } = supabase.storage
             .from('location_media')
@@ -253,6 +256,9 @@ export default function NewLocation() {
       });
       navigate("/locations");
     } catch (error: any) {
+      if (newlyUploadedPaths.length > 0) {
+        await cleanupUploadedStorageObjects(newlyUploadedPaths, "location_media");
+      }
       console.error("Error creating listing:", error);
       toast({
         title: "Error",

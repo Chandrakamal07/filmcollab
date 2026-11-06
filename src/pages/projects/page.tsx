@@ -11,19 +11,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Heart, 
-  Share2, 
-  Eye, 
-  Users, 
-  Clock, 
-  MapPin, 
-  Film, 
-  Tv, 
-  Star, 
+import {
+  Search,
+  Filter,
+  Plus,
+  Heart,
+  Share2,
+  Eye,
+  Users,
+  Clock,
+  MapPin,
+  Film,
+  Tv,
+  Star,
   TrendingUp,
   UserPlus,
   Bookmark,
@@ -63,7 +63,7 @@ interface Project {
   popular: boolean;
   created_at: string;
   updated_at: string;
-   likes_count?: number;
+  likes_count?: number;
   is_liked?: boolean;
   is_member?: boolean;
   creator_username?: string;
@@ -373,7 +373,7 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch projects from Supabase dynamically
       const { data, error } = await supabase
         .from("projects")
@@ -398,7 +398,7 @@ export default function ProjectsPage() {
           .from("project_members")
           .select("project_id, role")
           .eq("user_id", user.id);
-          
+
         if (memberData) {
           memberData.forEach(m => {
             if (m.role && m.role !== "Applicant") {
@@ -448,7 +448,7 @@ export default function ProjectsPage() {
         }) => {
           const isLiked = likedProjects.includes(project.id);
           const isMember = memberOfProjects.has(project.id);
-          
+
           return {
             id: project.id,
             title: project.title,
@@ -494,13 +494,13 @@ export default function ProjectsPage() {
 
   const fetchLikedProjects = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from("project_likes")
         .select("project_id")
         .eq("user_id", user.id);
-      
+
       if (error) throw error;
       if (data) {
         setLikedProjects(data.map((item: { project_id: string }) => item.project_id));
@@ -512,7 +512,7 @@ export default function ProjectsPage() {
 
   const fetchSavedProjects = async () => {
     if (!user) return;
-    
+
     try {
       const saved = localStorage.getItem(`saved_projects_${user.id}`);
       if (saved) {
@@ -534,7 +534,7 @@ export default function ProjectsPage() {
         .select("project_id")
         .eq("user_id", user.id)
         .eq("role", "Applicant");
-      
+
       if (error) throw error;
       if (data) {
         setAppliedProjects(data.map((item: { project_id: string }) => item.project_id));
@@ -549,7 +549,7 @@ export default function ProjectsPage() {
     if (!user) return;
 
     try {
-      const skillsArray = data.skills_required 
+      const skillsArray = data.skills_required
         ? data.skills_required.split(',').map(skill => skill.trim()).filter(skill => skill.length > 0)
         : [];
 
@@ -589,7 +589,7 @@ export default function ProjectsPage() {
         });
         return;
       }
-      
+
       toast({
         title: "Success",
         description: "Project created successfully"
@@ -699,7 +699,7 @@ export default function ProjectsPage() {
 
       // Add to applied projects
       setAppliedProjects(prev => [...prev, projectId]);
-      
+
       const project = projects.find(p => p.id === projectId);
       if (project && project.created_by && project.created_by !== user.id) {
         supabase.rpc("send_authorized_notification", {
@@ -713,7 +713,7 @@ export default function ProjectsPage() {
           if (notifError) console.error("Notification error:", notifError);
         });
       }
-      
+
       toast({
         title: "Application submitted",
         description: "Your application has been submitted successfully."
@@ -732,7 +732,7 @@ export default function ProjectsPage() {
   const handleShareProject = async (project: Project) => {
     const projectUrl = `${window.location.origin}/projects/${project.id}`;
     const shareText = `Check out this project: ${project.title}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -777,7 +777,7 @@ export default function ProjectsPage() {
           role: "Director"
         },
         {
-          id: "2", 
+          id: "2",
           name: "Sarah Johnson",
           email: "sarah.j@email.com",
           avatar: "SJ",
@@ -790,7 +790,7 @@ export default function ProjectsPage() {
         {
           id: "3",
           name: "Mike Chen",
-          email: "mike.chen@email.com", 
+          email: "mike.chen@email.com",
           avatar: "MC",
           appliedDate: "2025-01-06",
           status: "shortlisted",
@@ -830,7 +830,7 @@ export default function ProjectsPage() {
         project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.project_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.skills_required?.some(skill => 
+        project.skills_required?.some(skill =>
           skill.toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
@@ -902,7 +902,7 @@ export default function ProjectsPage() {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 30) {
       if (diffDays <= 0) return "today";
       return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
@@ -942,7 +942,7 @@ export default function ProjectsPage() {
               Discover and collaborate on film and entertainment projects
             </p>
           </div>
-          <Button 
+          <Button
             className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium w-full sm:w-auto"
             onClick={() => setIsCreateDialogOpen(true)}
           >
@@ -968,7 +968,7 @@ export default function ProjectsPage() {
               <span className="hidden md:inline">Filters</span>
             </Button>
           </div>
-          
+
           <div className="hidden md:block">
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-40 bg-background border-border text-foreground">
@@ -1013,11 +1013,11 @@ export default function ProjectsPage() {
                   <Film className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold text-foreground mb-2">No projects found</h3>
                   <p className="text-muted-foreground">
-                    {activeTab === 'created' 
+                    {activeTab === 'created'
                       ? "You haven't created any projects yet. Click 'Create Project' to get started."
                       : activeTab === 'saved'
-                      ? "You haven't saved any projects yet. Click the save icon on projects to add them here."
-                      : "Try adjusting your search criteria or check back later for new projects."
+                        ? "You haven't saved any projects yet. Click the save icon on projects to add them here."
+                        : "Try adjusting your search criteria or check back later for new projects."
                     }
                   </p>
                 </CardContent>
@@ -1042,7 +1042,7 @@ export default function ProjectsPage() {
                       <TableRow key={project.id} className="border-b border-border">
                         <TableCell className="font-medium">
                           <div className="space-y-1">
-                            <div 
+                            <div
                               className="font-semibold cursor-pointer hover:text-primary transition-colors text-foreground"
                               onClick={() => {
                                 handleViewProjectDetails(project);
@@ -1090,15 +1090,15 @@ export default function ProjectsPage() {
                           <div className="flex items-center justify-end gap-2">
                             {activeTab === "created" ? (
                               <>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleViewProjectDetails(project)}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleShareProject(project)}
                                 >
@@ -1107,23 +1107,23 @@ export default function ProjectsPage() {
                               </>
                             ) : (
                               <>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleViewProjectDetails(project)}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleSaveProject(project.id)}
                                   className={savedProjects.includes(project.id) ? "text-primary" : ""}
                                 >
                                   <Bookmark className={`h-4 w-4 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleShareProject(project)}
                                 >
@@ -1152,133 +1152,133 @@ export default function ProjectsPage() {
                   ];
                   const backdropUrl = projectBackdrops[pIdx % projectBackdrops.length];
                   return (
-                  <DimensionalCard key={project.id} tiltStrength={5.5} className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/45 transition-all duration-300 flex flex-col justify-between">
-                    <div>
-                      <div
-                        onClick={() => handleViewProjectDetails(project)}
-                        className="aspect-[16/9] w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden cursor-pointer"
-                      >
-                        <ImageReveal
-                          src={backdropUrl}
-                          alt={project.title}
-                          containerClassName="w-full h-full"
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-black/20" />
-                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
-                          <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
-                            {project.project_type} • {project.category}
-                          </span>
-                          <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/15 font-mono text-[10px] uppercase tracking-wider text-white/90 flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(project.status)}`} />
-                            {project.status}
-                          </span>
-                        </div>
-                        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 z-10">
-                          <div>
-                            <h3 className="font-serif text-xl font-bold tracking-tight line-clamp-1 text-white group-hover:text-primary transition-colors">
-                              {project.title}
-                            </h3>
-                            <p className="text-[11px] text-white/75 mt-0.5">
-                              by <span className="font-medium text-primary">@{project.creator_username || "studio"}</span>
-                            </p>
+                    <DimensionalCard key={project.id} tiltStrength={5.5} className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/45 transition-all duration-300 flex flex-col justify-between">
+                      <div>
+                        <div
+                          onClick={() => handleViewProjectDetails(project)}
+                          className="aspect-[16/9] w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden cursor-pointer"
+                        >
+                          <ImageReveal
+                            src={backdropUrl}
+                            alt={project.title}
+                            containerClassName="w-full h-full"
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-black/20" />
+                          <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                            <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
+                              {project.project_type} • {project.category}
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/15 font-mono text-[10px] uppercase tracking-wider text-white/90 flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(project.status)}`} />
+                              {project.status}
+                            </span>
+                          </div>
+                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 z-10">
+                            <div>
+                              <h3 className="font-serif text-xl font-bold tracking-tight line-clamp-1 text-white group-hover:text-primary transition-colors">
+                                {project.title}
+                              </h3>
+                              <p className="text-[11px] text-white/75 mt-0.5">
+                                by <span className="font-medium text-primary">@{project.creator_username || "studio"}</span>
+                              </p>
+                            </div>
                           </div>
                         </div>
+                        <CardHeader className="pb-2 pt-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5 text-primary/80" />
+                              <span>{project.location || "Remote / Global"}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSaveProject(project.id)}
+                                className={savedProjects.includes(project.id) ? "text-primary h-7 w-7 p-0" : "h-7 w-7 p-0"}
+                              >
+                                <Bookmark className={`h-3.5 w-3.5 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handleShareProject(project)}
+                              >
+                                <Share2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
                       </div>
-                    <CardHeader className="pb-2 pt-3">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5 text-primary/80" />
-                          <span>{project.location || "Remote / Global"}</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleSaveProject(project.id)}
-                            className={savedProjects.includes(project.id) ? "text-primary h-7 w-7 p-0" : "h-7 w-7 p-0"}
-                          >
-                            <Bookmark className={`h-3.5 w-3.5 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => handleShareProject(project)}
-                          >
-                            <Share2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    </div>
-                    
-                    <CardContent className="space-y-4">
-                      <CardDescription className="line-clamp-2 text-muted-foreground">
-                        {project.description}
-                      </CardDescription>
 
-                      {project.project_tags && project.project_tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {project.project_tags.map((tag: string, index: number) => (
-                            <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border border-primary/25">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>{project.team_size} team members</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span>{formatDate(project.created_at)}</span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-mono text-xs font-medium text-primary">Budget: {formatBudget(project.budget_min, project.budget_max, project.budget_currency)}</span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">
-                            {project.duration_minutes ? `${project.duration_minutes} minutes` : 
-                             project.episodes ? `${project.episodes} episodes` : 'Duration not specified'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2 pt-2">
-                        <Button 
-                          size="sm" 
-                          className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
-                          onClick={() => handleViewProjectDetails(project)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                        {!project.is_member && project.created_by !== user?.id && project.allow_applicants !== false && (
-                          <Button 
-                            variant={appliedProjects.includes(project.id) ? "secondary" : "outline"}
-                            size="sm"
-                            className={appliedProjects.includes(project.id) 
-                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold opacity-100 disabled:opacity-100 cursor-default" 
-                              : "border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
-                            }
-                            onClick={() => handleJoinProject(project.id)}
-                            disabled={appliedProjects.includes(project.id)}
-                          >
-                            {appliedProjects.includes(project.id) ? (
-                              <Check className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
-                            ) : (
-                              <UserPlus className="h-4 w-4 mr-2" />
-                            )}
-                            {appliedProjects.includes(project.id) ? "Applied" : "Join Project"}
-                          </Button>
+                      <CardContent className="space-y-4">
+                        <CardDescription className="line-clamp-2 text-muted-foreground">
+                          {project.description}
+                        </CardDescription>
+
+                        {project.project_tags && project.project_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {project.project_tags.map((tag: string, index: number) => (
+                              <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border border-primary/25">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
-                      </div>
-                    </CardContent>
-                  </DimensionalCard>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span>{project.team_size} team members</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span>{formatDate(project.created_at)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="font-mono text-xs font-medium text-primary">Budget: {formatBudget(project.budget_min, project.budget_max, project.budget_currency)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">
+                              {project.duration_minutes ? `${project.duration_minutes} minutes` :
+                                project.episodes ? `${project.episodes} episodes` : 'Duration not specified'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
+                            onClick={() => handleViewProjectDetails(project)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                          {!project.is_member && project.created_by !== user?.id && project.allow_applicants !== false && (
+                            <Button
+                              variant={appliedProjects.includes(project.id) ? "secondary" : "outline"}
+                              size="sm"
+                              className={appliedProjects.includes(project.id)
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold opacity-100 disabled:opacity-100 cursor-default"
+                                : "border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
+                              }
+                              onClick={() => handleJoinProject(project.id)}
+                              disabled={appliedProjects.includes(project.id)}
+                            >
+                              {appliedProjects.includes(project.id) ? (
+                                <Check className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
+                              ) : (
+                                <UserPlus className="h-4 w-4 mr-2" />
+                              )}
+                              {appliedProjects.includes(project.id) ? "Applied" : "Join Project"}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </DimensionalCard>
                   );
                 })}
               </div>
@@ -1295,7 +1295,7 @@ export default function ProjectsPage() {
                 Share your creative vision and find collaborators
               </DialogDescription>
             </DialogHeader>
-            
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1312,7 +1312,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="project_type"
@@ -1346,7 +1346,7 @@ export default function ProjectsPage() {
                     <FormItem>
                       <FormLabel className="text-foreground">Description</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Describe your project, its vision, and what you're looking for in collaborators..."
                           className="min-h-[100px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                           {...field}
@@ -1380,7 +1380,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="status"
@@ -1468,7 +1468,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="budget_max"
@@ -1516,7 +1516,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="episodes"
@@ -1542,16 +1542,16 @@ export default function ProjectsPage() {
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     className="border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
                     onClick={() => setIsCreateDialogOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   >
                     Create Project
@@ -1569,9 +1569,9 @@ export default function ProjectsPage() {
               <div className="px-0 py-2 md:p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold">Filters & Sort</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setShowFilters(false)}
                   >
                     <X className="h-5 w-5" />
@@ -1671,8 +1671,8 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="pt-4 border-t">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
                       onClick={() => setFilters({
                         projectType: "all",
@@ -1700,7 +1700,7 @@ export default function ProjectsPage() {
                 {selectedProject?.description}
               </DialogDescription>
             </DialogHeader>
-            
+
             {selectedProject && (
               <div className="space-y-6">
                 {/* Tabs for created projects */}
@@ -1709,7 +1709,7 @@ export default function ProjectsPage() {
                     <TabsList className="grid w-full grid-cols-1">
                       <TabsTrigger value="details">Project Details</TabsTrigger>
                     </TabsList>
-                    
+
                     <TabsContent value="details" className="space-y-6">
                       {/* Project Details Content */}
                       <div className="space-y-6">
@@ -1745,8 +1745,8 @@ export default function ProjectsPage() {
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Duration:</span>
                                 <span className="font-medium">
-                                  {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` : 
-                                   selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
+                                  {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` :
+                                    selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
                                 </span>
                               </div>
                               <div className="flex justify-between">
@@ -1899,8 +1899,8 @@ export default function ProjectsPage() {
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Duration:</span>
                             <span className="font-medium">
-                              {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` : 
-                               selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
+                              {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` :
+                                selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
                             </span>
                           </div>
                           <div className="flex justify-between">
@@ -1961,7 +1961,7 @@ export default function ProjectsPage() {
 
                     <div className="flex gap-2 pt-4">
                       {appliedProjects.includes(selectedProject.id) ? (
-                        <Button 
+                        <Button
                           disabled
                           className="flex-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold opacity-100 disabled:opacity-100 cursor-default"
                         >
@@ -1969,7 +1969,7 @@ export default function ProjectsPage() {
                           Applied
                         </Button>
                       ) : (selectedProject.created_by !== user?.id && selectedProject.allow_applicants === false) ? null : (
-                        <Button 
+                        <Button
                           className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                           onClick={() => handleJoinProject(selectedProject.id)}
                         >

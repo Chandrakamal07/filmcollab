@@ -88,59 +88,95 @@ export default function StudiosDirectory() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Fetch real companies from Supabase
+  // Fetch real companies, reviews, and follower state from Supabase
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const { data, error } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
+        const [{ data, error }, { data: reviewsRows }, followerRes] = await Promise.all([
+          supabase.from("companies").select("*").order("created_at", { ascending: false }),
+          supabase.from("company_reviews" as any).select("*").order("created_at", { ascending: false }),
+          user?.id
+            ? supabase.from("company_followers" as any).select("company_id").eq("user_id", user.id)
+            : Promise.resolve({ data: null, error: null })
+        ]);
+
+        if (followerRes?.data && Array.isArray(followerRes.data)) {
+          const dbFollowedIds = followerRes.data.map((r: any) => String(r.company_id));
+          setFollowedIds((prev) => Array.from(new Set([...prev.filter((id) => !isUuid(id)), ...dbFollowedIds])));
+        }
+
+        const reviewsByCompany = new Map<string, Review[]>();
+        if (Array.isArray(reviewsRows)) {
+          for (const rev of reviewsRows as any[]) {
+            const cId = String(rev.company_id);
+            if (!reviewsByCompany.has(cId)) {
+              reviewsByCompany.set(cId, []);
+            }
+            reviewsByCompany.get(cId)!.push({
+              id: rev.id,
+              author: rev.author_name || "Film Professional",
+              rating: Number(rev.rating) || 5,
+              comment: rev.comment || "",
+              date: rev.created_at ? new Date(rev.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+            });
+          }
+        }
+
         if (!error && data && data.length > 0) {
-          const dbCompanies: Company[] = data.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            logo: c.logo || c.name.slice(0, 2).toUpperCase(),
-            coverImage: c.cover_image || c.banner || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
-            category: c.category || "Production House",
-            description: c.description || "",
-            establishedYear: c.established_year || 2020,
-            founder: c.founder || "Not Specified",
-            services: c.services || ["Film Production"],
-            languages: c.languages || ["English", "Hindi"],
-            email: c.email || "",
-            phone: c.phone || "",
-            website: c.website || "https://www.filmcollab.com",
-            socials: c.socials || {},
-            address: c.address || "",
-            city: c.city || "Mumbai",
-            state: c.state || "Maharashtra",
-            country: c.country || "India",
-            mapsLocation: c.maps_location || "",
-            workingHours: c.working_hours || "10:00 AM - 6:00 PM",
-            verified: c.verified || false,
-            hiringNow: c.hiring_now || false,
-            openAuditions: c.open_auditions || false,
-            internshipsAvailable: c.internships_available || false,
-            acceptingFreshers: c.accepting_freshers || false,
-            openForCollaboration: c.open_for_collaboration || true,
-            employeeCount: c.employee_count || 10,
-            projectsCompleted: c.projects_completed || 5,
-            followersCount: c.followers_count || 0,
-            rating: Number(c.rating) || 4.5,
-            reviewsCount: c.reviews_count || 0,
-            featured: c.featured || false,
-            trending: c.trending || false,
-            recentlyAdded: c.recently_added || false,
-            gallery: c.gallery || [],
-            projects: c.projects || [],
-            team: c.team || [],
-            reviews: c.reviews || [],
-            jobs: c.jobs || [],
-            auditions: c.auditions || [],
-            internships: c.internships || [],
-            courses: c.courses || [],
-            events: c.events || [],
-            opportunities: [],
-            userId: c.user_id
-          }));
+          const dbCompanies: Company[] = data.map((c: any) => {
+            const persistedReviews = reviewsByCompany.get(c.id) || (Array.isArray(c.reviews) ? c.reviews : []);
+            const computedRating =
+              persistedReviews.length > 0
+                ? Number((persistedReviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / persistedReviews.length).toFixed(1))
+                : Number(c.rating) || 4.5;
+            return {
+              id: c.id,
+              name: c.name,
+              logo: c.logo || c.name.slice(0, 2).toUpperCase(),
+              coverImage: c.cover_image || c.banner || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+              category: c.category || "Production House",
+              description: c.description || "",
+              establishedYear: c.established_year || 2020,
+              founder: c.founder || "Not Specified",
+              services: c.services || ["Film Production"],
+              languages: c.languages || ["English", "Hindi"],
+              email: c.email || "",
+              phone: c.phone || "",
+              website: c.website || "https://www.filmcollab.com",
+              socials: c.socials || {},
+              address: c.address || "",
+              city: c.city || "Mumbai",
+              state: c.state || "Maharashtra",
+              country: c.country || "India",
+              mapsLocation: c.maps_location || "",
+              workingHours: c.working_hours || "10:00 AM - 6:00 PM",
+              verified: c.verified || false,
+              hiringNow: c.hiring_now || false,
+              openAuditions: c.open_auditions || false,
+              internshipsAvailable: c.internships_available || false,
+              acceptingFreshers: c.accepting_freshers || false,
+              openForCollaboration: c.open_for_collaboration || true,
+              employeeCount: c.employee_count || 10,
+              projectsCompleted: c.projects_completed || 5,
+              followersCount: c.followers_count || 0,
+              rating: computedRating,
+              reviewsCount: Math.max(Number(c.reviews_count) || 0, persistedReviews.length),
+              featured: c.featured || false,
+              trending: c.trending || false,
+              recentlyAdded: c.recently_added || false,
+              gallery: c.gallery || [],
+              projects: c.projects || [],
+              team: c.team || [],
+              reviews: persistedReviews,
+              jobs: c.jobs || [],
+              auditions: c.auditions || [],
+              internships: c.internships || [],
+              courses: c.courses || [],
+              events: c.events || [],
+              opportunities: [],
+              userId: c.user_id
+            };
+          });
 
           setCompanies(prev => {
             const dbIds = new Set(data.map((d: any) => d.id));
@@ -153,7 +189,7 @@ export default function StudiosDirectory() {
       }
     };
     fetchCompanies();
-  }, []);
+  }, [user?.id]);
 
   // Sync real applications from Supabase for company owners
   useEffect(() => {
@@ -530,23 +566,85 @@ export default function StudiosDirectory() {
     });
   };
 
-  // Action: Follow / Unfollow
-  const handleFollow = (companyId: string) => {
-    if (followedIds.includes(companyId)) {
+  // Action: Follow / Unfollow (persisted to public.company_followers for DB-backed studios)
+  const handleFollow = async (companyId: string) => {
+    const isCurrentlyFollowing = followedIds.includes(companyId);
+
+    if (isUuid(companyId) && !user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Sign in required",
+        description: "Please sign in to follow production studios."
+      });
+      return;
+    }
+
+    // Optimistic update
+    if (isCurrentlyFollowing) {
       setFollowedIds(prev => prev.filter(id => id !== companyId));
       setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, followersCount: Math.max(0, c.followersCount - 1) } : c));
-      toast({
-        title: "Unfollowed",
-        description: "You stopped following this company.",
-      });
+      if (viewingCompany?.id === companyId) {
+        setViewingCompany(prev => prev ? { ...prev, followersCount: Math.max(0, prev.followersCount - 1) } : prev);
+      }
     } else {
       setFollowedIds(prev => [...prev, companyId]);
       setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, followersCount: c.followersCount + 1 } : c));
-      toast({
-        title: "Following",
-        description: "You are now following this company for future updates!",
-      });
+      if (viewingCompany?.id === companyId) {
+        setViewingCompany(prev => prev ? { ...prev, followersCount: prev.followersCount + 1 } : prev);
+      }
     }
+
+    if (isUuid(companyId) && user?.id) {
+      try {
+        if (isCurrentlyFollowing) {
+          const { data, error } = await supabase
+            .from("company_followers" as any)
+            .delete()
+            .eq("company_id", companyId)
+            .eq("user_id", user.id)
+            .select("id");
+          if (error || !data || data.length === 0) {
+            throw error || new Error("Follow relationship not found or could not be removed.");
+          }
+        } else {
+          const { data, error } = await supabase
+            .from("company_followers" as any)
+            .upsert({ company_id: companyId, user_id: user.id }, { onConflict: "company_id,user_id" })
+            .select("id");
+          if (error || !data || data.length === 0) {
+            throw error || new Error("Could not persist studio follow.");
+          }
+        }
+      } catch (err: any) {
+        // Roll back optimistic state on DB failure
+        if (isCurrentlyFollowing) {
+          setFollowedIds(prev => [...prev, companyId]);
+          setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, followersCount: c.followersCount + 1 } : c));
+          if (viewingCompany?.id === companyId) {
+            setViewingCompany(prev => prev ? { ...prev, followersCount: prev.followersCount + 1 } : prev);
+          }
+        } else {
+          setFollowedIds(prev => prev.filter(id => id !== companyId));
+          setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, followersCount: Math.max(0, c.followersCount - 1) } : c));
+          if (viewingCompany?.id === companyId) {
+            setViewingCompany(prev => prev ? { ...prev, followersCount: Math.max(0, prev.followersCount - 1) } : prev);
+          }
+        }
+        toast({
+          variant: "destructive",
+          title: "Follow Update Failed",
+          description: err?.message || "Could not update follow status on server."
+        });
+        return;
+      }
+    }
+
+    toast({
+      title: isCurrentlyFollowing ? "Unfollowed" : "Following",
+      description: isCurrentlyFollowing
+        ? "You stopped following this company."
+        : "You are now following this company for future updates!"
+    });
   };
 
   // Action: Save / Unsave
@@ -603,8 +701,8 @@ export default function StudiosDirectory() {
     setContactForm({ name: "", email: "", message: "" });
   };
 
-  // Action: Leave Review
-  const handleAddReview = (e: React.FormEvent, companyId: string) => {
+  // Action: Leave Review (persisted to public.company_reviews for DB-backed studios)
+  const handleAddReview = async (e: React.FormEvent, companyId: string) => {
     e.preventDefault();
     if (!reviewComment.trim()) {
       toast({
@@ -615,27 +713,77 @@ export default function StudiosDirectory() {
       return;
     }
 
+    if (isUuid(companyId) && !user?.id) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to post a verified studio review.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const authorName = user?.email ? user.email.split("@")[0] : "Anonymous Guest";
+    let persistedId = "r_" + Date.now();
+    let persistedDate = new Date().toISOString().split("T")[0];
+
+    if (isUuid(companyId) && user?.id) {
+      try {
+        const { data, error } = await supabase
+          .from("company_reviews" as any)
+          .upsert(
+            {
+              company_id: companyId,
+              user_id: user.id,
+              author_name: authorName,
+              rating: reviewRating,
+              comment: reviewComment.trim()
+            },
+            { onConflict: "company_id,user_id" }
+          )
+          .select()
+          .single();
+
+        if (error || !data) {
+          throw error || new Error("Review could not be saved.");
+        }
+        persistedId = (data as any).id || persistedId;
+        if ((data as any).created_at) {
+          persistedDate = new Date((data as any).created_at).toISOString().split("T")[0];
+        }
+      } catch (err: any) {
+        toast({
+          title: "Review Submission Failed",
+          description: err?.message || "Could not save your review to the server. Your input has been preserved.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     const newRev: Review = {
-      id: "r_" + Date.now(),
-      author: user?.email ? user.email.split("@")[0] : "Anonymous Guest",
+      id: persistedId,
+      author: authorName,
       rating: reviewRating,
-      comment: reviewComment,
-      date: new Date().toISOString().split("T")[0]
+      comment: reviewComment.trim(),
+      date: persistedDate
     };
 
-    setCompanies(prev => prev.map(c => {
-      if (c.id === companyId) {
-        const updatedReviews = [newRev, ...c.reviews];
-        const avgRating = parseFloat((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1));
-        return {
-          ...c,
-          reviews: updatedReviews,
-          reviewsCount: updatedReviews.length,
-          rating: avgRating
-        };
-      }
-      return c;
-    }));
+    const applyReviewUpdate = (c: Company): Company => {
+      const filteredExisting = c.reviews.filter(r => r.id !== newRev.id && r.author !== newRev.author);
+      const updatedReviews = [newRev, ...filteredExisting];
+      const avgRating = parseFloat((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1));
+      return {
+        ...c,
+        reviews: updatedReviews,
+        reviewsCount: updatedReviews.length,
+        rating: avgRating
+      };
+    };
+
+    setCompanies(prev => prev.map(c => (c.id === companyId ? applyReviewUpdate(c) : c)));
+    if (viewingCompany?.id === companyId) {
+      setViewingCompany(prev => (prev ? applyReviewUpdate(prev) : prev));
+    }
 
     toast({
       title: "Review Posted!",

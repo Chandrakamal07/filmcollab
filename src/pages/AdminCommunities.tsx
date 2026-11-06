@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { 
+import {
   Search,
   Tags,
   User,
@@ -217,12 +217,12 @@ export default function AdminCommunities() {
 
   // Filter communities based on search and filters
   const filteredCommunities = communities.filter(community => {
-    const matchesSearch = 
+    const matchesSearch =
       community.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       community.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       community.creator.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || community.status.toLowerCase() === statusFilter.toLowerCase();
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -253,7 +253,7 @@ export default function AdminCommunities() {
                   className="pl-10 bg-surface-elevated border-border/80"
                 />
               </div>
-              
+
               <div className="flex gap-4 items-center">
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-medium text-muted-foreground">Status:</label>
@@ -303,161 +303,161 @@ export default function AdminCommunities() {
                     </TableRow>
                   ) : (
                     filteredCommunities.map((community) => (
-                    <TableRow key={community.id} className="border-border/60 hover:bg-surface-hover/50">
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{community.name}</span>
-                          <span className="text-sm text-muted-foreground truncate max-w-xs">
-                            {community.description}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col font-mono">
-                          <span className="font-medium text-foreground">{community.totalMembers.toLocaleString()}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {community.activeMembers.toLocaleString()} active
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
-                            <User className="h-4 w-4 text-primary" />
-                          </div>
+                      <TableRow key={community.id} className="border-border/60 hover:bg-surface-hover/50">
+                        <TableCell>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-foreground">{community.creator.name}</span>
-                            <span className="text-xs font-mono text-muted-foreground">@{community.creator.username}</span>
+                            <span className="font-medium text-foreground">{community.name}</span>
+                            <span className="text-sm text-muted-foreground truncate max-w-xs">
+                              {community.description}
+                            </span>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={getStatusBadgeStyle(community.status)}>
-                          {community.status === "Active" ? (
-                            <Shield className="h-3 w-3 mr-1" />
-                          ) : (
-                            <Eye className="h-3 w-3 mr-1" />
-                          )}
-                          {community.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="flex flex-wrap gap-2 flex-1">
-                            {community.tags.map((tag, index) => (
-                              <Badge 
-                                key={index}
-                                variant="secondary" 
-                                className={getTagBadgeStyle(tag) || ""}
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col font-mono">
+                            <span className="font-medium text-foreground">{community.totalMembers.toLocaleString()}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {community.activeMembers.toLocaleString()} active
+                            </span>
                           </div>
-                          <Popover 
-                            open={editingTags?.id === community.id}
-                            onOpenChange={(open) => {
-                              if (open) {
-                                handleEditTags(community.id, community.tags);
-                              } else {
-                                setEditingTags(null);
-                              }
-                            }}
-                          >
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 hover:bg-primary/10"
-                              >
-                                <Tags className="h-4 w-4 text-primary" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
-                              <Command className="bg-card">
-                                <CommandInput placeholder="Search tags..." />
-                                <CommandEmpty>No tags found.</CommandEmpty>
-                                <CommandGroup>
-                                  {availableTags.map((tag) => {
-                                    const isSelected = editingTags?.tags.includes(tag.label);
-                                    return (
-                                      <CommandItem
-                                        key={tag.value}
-                                        onSelect={() => handleTagToggle(tag.label)}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <div className={cn(
-                                          "flex h-4 w-4 items-center justify-center rounded border",
-                                          isSelected ? "bg-primary border-primary" : "border-border"
-                                        )}>
-                                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                                        </div>
-                                        <Badge 
-                                          variant="secondary"
-                                          className={getTagBadgeStyle(tag.label) || ""}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                              <User className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-foreground">{community.creator.name}</span>
+                              <span className="text-xs font-mono text-muted-foreground">@{community.creator.username}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={getStatusBadgeStyle(community.status)}>
+                            {community.status === "Active" ? (
+                              <Shield className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Eye className="h-3 w-3 mr-1" />
+                            )}
+                            {community.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap gap-2 flex-1">
+                              {community.tags.map((tag, index) => (
+                                <Badge
+                                  key={index}
+                                  variant="secondary"
+                                  className={getTagBadgeStyle(tag) || ""}
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                            <Popover
+                              open={editingTags?.id === community.id}
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  handleEditTags(community.id, community.tags);
+                                } else {
+                                  setEditingTags(null);
+                                }
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-primary/10"
+                                >
+                                  <Tags className="h-4 w-4 text-primary" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                                <Command className="bg-card">
+                                  <CommandInput placeholder="Search tags..." />
+                                  <CommandEmpty>No tags found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {availableTags.map((tag) => {
+                                      const isSelected = editingTags?.tags.includes(tag.label);
+                                      return (
+                                        <CommandItem
+                                          key={tag.value}
+                                          onSelect={() => handleTagToggle(tag.label)}
+                                          className="flex items-center gap-2"
                                         >
-                                          {tag.label}
-                                        </Badge>
-                                      </CommandItem>
-                                    );
-                                  })}
-                                </CommandGroup>
-                                <div className="border-t border-border/60 p-2">
-                                  <Button
-                                    size="sm"
-                                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                                    onClick={() => handleSaveCommunityTags(community.id)}
-                                  >
-                                    Save Changes
-                                  </Button>
-                                </div>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col font-mono">
-                          <span className="text-sm text-foreground">{community.lastActive}</span>
-                          <span className="text-xs text-muted-foreground">
-                            Created: {community.dateCreated}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Open Community Messages"
-                            onClick={() => navigate(`/community/group/${community.id}`)}
-                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </Button>
-                          
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Manage Settings"
-                            onClick={() => navigate(`/community/group/${community.id}`)}
-                            className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
-                          >
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                          
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteCommunity(community.id)}
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )))}
+                                          <div className={cn(
+                                            "flex h-4 w-4 items-center justify-center rounded border",
+                                            isSelected ? "bg-primary border-primary" : "border-border"
+                                          )}>
+                                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                          </div>
+                                          <Badge
+                                            variant="secondary"
+                                            className={getTagBadgeStyle(tag.label) || ""}
+                                          >
+                                            {tag.label}
+                                          </Badge>
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                  <div className="border-t border-border/60 p-2">
+                                    <Button
+                                      size="sm"
+                                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                                      onClick={() => handleSaveCommunityTags(community.id)}
+                                    >
+                                      Save Changes
+                                    </Button>
+                                  </div>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col font-mono">
+                            <span className="text-sm text-foreground">{community.lastActive}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Created: {community.dateCreated}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Open Community Messages"
+                              onClick={() => navigate(`/community/group/${community.id}`)}
+                              className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Manage Settings"
+                              onClick={() => navigate(`/community/group/${community.id}`)}
+                              className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteCommunity(community.id)}
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )))}
                 </TableBody>
               </Table>
             </div>

@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring } from "@/lib/e2ee";
+import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring, getOrInitUserE2EE } from "@/lib/e2ee";
 
 type MessageType = "text" | "image" | "video" | "document" | "audio";
 
@@ -66,11 +66,13 @@ interface ConnectedUser {
 // Database Interfaces to avoid "any"
 interface DBProfile {
   id: string;
+  user_id?: string | null;
   full_name: string | null;
   username: string | null;
   avatar_url: string | null;
   category: string | null;
   public_key?: string | null;
+  public_key_history?: unknown[] | null;
 }
 
 interface DBConnection {
@@ -131,6 +133,8 @@ export default function MessagesPage() {
   // E2EE States
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [e2eeReady, setE2eeReady] = useState(false);
+  const [keyRotationRequired, setKeyRotationRequired] = useState(false);
+  const profilesCacheRef = useRef<Map<string, DBProfile>>(new Map());
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const chatBodyRef = useRef<HTMLDivElement | null>(null);
@@ -146,47 +150,48 @@ export default function MessagesPage() {
     const handleUrlRecipient = async () => {
       if (recipientParam && isUuid(recipientParam)) {
         setIsMobileChatOpen(true);
-        let recProfile = null;
+        let recProfile: DBProfile | null = null;
         const { data: byId } = await supabase
-          .from("profiles")
-          .select("id, full_name, username, avatar_url, category")
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
           .eq("id", recipientParam)
           .maybeSingle();
-        recProfile = byId;
+        recProfile = (byId as unknown as DBProfile) || null;
 
         if (!recProfile) {
           const { data: byUserId } = await supabase
-            .from("profiles")
-            .select("id, full_name, username, avatar_url, category")
+            .from("public_profiles" as any)
+            .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
             .eq("user_id", recipientParam)
             .maybeSingle();
-          recProfile = byUserId;
+          recProfile = (byUserId as unknown as DBProfile) || null;
         }
 
         if (!recProfile && usernameParam) {
           const { data: byUsername } = await supabase
-            .from("profiles")
-            .select("id, full_name, username, avatar_url, category")
+            .from("public_profiles" as any)
+            .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
             .eq("username", usernameParam)
             .maybeSingle();
-          recProfile = byUsername;
+          recProfile = (byUsername as unknown as DBProfile) || null;
         }
 
         if (recProfile) {
+          profilesCacheRef.current.set(recProfile.id, recProfile);
           setActiveId(recProfile.id);
           const fullName = recProfile.full_name || recProfile.username || "Film Professional";
           const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
           setConnectedUsers((prev) => {
-            if (prev.some((u) => u.id === recProfile.id)) return prev;
+            if (prev.some((u) => u.id === recProfile!.id)) return prev;
             return [
               ...prev,
               {
-                id: recProfile.id,
-                username: recProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+                id: recProfile!.id,
+                username: recProfile!.username || fullName.toLowerCase().replace(/\s+/g, ""),
                 fullName,
-                avatarUrl: recProfile.avatar_url,
+                avatarUrl: recProfile!.avatar_url,
                 avatarInitials: initials || "U",
-                category: recProfile.category || "Professional"
+                category: recProfile!.category || "Professional"
               }
             ];
           });
@@ -194,12 +199,14 @@ export default function MessagesPage() {
           setActiveId(recipientParam);
         }
       } else if (usernameParam) {
-        const { data: recProfile } = await supabase
-          .from("profiles")
-          .select("id, full_name, username, avatar_url, category")
+        const { data: rawRecProfile } = await supabase
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
           .eq("username", usernameParam)
           .maybeSingle();
+        const recProfile = (rawRecProfile as unknown as DBProfile) || null;
         if (recProfile) {
+          profilesCacheRef.current.set(recProfile.id, recProfile);
           setActiveId(recProfile.id);
           setIsMobileChatOpen(true);
           const fullName = recProfile.full_name || recProfile.username || "Film Professional";
@@ -232,33 +239,21 @@ export default function MessagesPage() {
       if (isGuestSession) return;
 
       try {
-        let privKeyStr = localStorage.getItem(`e2ee_priv_${profile.id}`);
-        let pubKeyStr = localStorage.getItem(`e2ee_pub_${profile.id}`);
-        
-        let privKey: CryptoKey;
-        let pubKeyJwk: JsonWebKey;
-        let privKeyJwk: JsonWebKey;
+        const { privKey, pubKeyStr, requiresExplicitKeyRotation } = await getOrInitUserE2EE(profile.id, {
+          existingRemotePublicKey: profile.public_key
+        });
 
-        if (privKeyStr && pubKeyStr) {
-          privKeyJwk = JSON.parse(privKeyStr);
-          pubKeyJwk = JSON.parse(pubKeyStr);
-          privKey = await importPrivateKey(privKeyJwk);
+        if (!profile.public_key) {
+          await Promise.resolve(
+            supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id)
+          ).catch(() => {});
+          setKeyRotationRequired(false);
+        } else if (requiresExplicitKeyRotation) {
+          // Do not silently overwrite a server public_key from a new browser without explicit rotation;
+          // the DB trigger `guard_profile_updates_and_key_history` preserves retired keys in `public_key_history`.
+          setKeyRotationRequired(true);
         } else {
-          // Generate new keys
-          const keys = await generateKeyPair();
-          privKeyJwk = keys.privateKeyJwk;
-          pubKeyJwk = keys.publicKeyJwk;
-          privKeyStr = JSON.stringify(privKeyJwk);
-          pubKeyStr = JSON.stringify(pubKeyJwk);
-          localStorage.setItem(`e2ee_priv_${profile.id}`, privKeyStr);
-          localStorage.setItem(`e2ee_pub_${profile.id}`, pubKeyStr);
-          privKey = await importPrivateKey(privKeyJwk);
-        }
-
-        registerKeyInRing(profile.id, privKeyJwk, pubKeyJwk);
-
-        if (!profile.public_key || profile.public_key !== pubKeyStr) {
-          await Promise.resolve(supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id)).catch(() => {});
+          setKeyRotationRequired(false);
         }
 
         setPrivateKey(privKey);
@@ -268,7 +263,31 @@ export default function MessagesPage() {
       }
     };
     initE2EE();
-  }, [user, profile?.id]);
+  }, [user, profile?.id, profile?.public_key]);
+
+  const handleConfirmKeyRotation = async () => {
+    if (!profile?.id) return;
+    const pubKeyStr = localStorage.getItem(`e2ee_pub_${profile.id}`);
+    if (!pubKeyStr) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ public_key: pubKeyStr })
+      .eq("id", profile.id)
+      .select("id");
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Key Rotation Failed",
+        description: error.message || "Could not publish rotated encryption key."
+      });
+      return;
+    }
+    setKeyRotationRequired(false);
+    toast({
+      title: "Encryption Key Rotated",
+      description: "Your new browser key is active and your previous public key was archived in key history."
+    });
+  };
 
   // Load and merge all data
   const loadLocalData = useCallback(() => {
@@ -336,50 +355,91 @@ export default function MessagesPage() {
           id,
           user_id,
           connected_user_id,
-          status,
-          profiles!connections_connected_user_id_fkey (id, full_name, username, avatar_url, category),
-          sender_profile:profiles!connections_user_id_fkey (id, full_name, username, avatar_url, category)
+          status
         `)
         .eq("status", "accepted")
         .or(`user_id.eq.${currentUserId},connected_user_id.eq.${currentUserId}`);
 
-      const connectionsData = rawConnectionsData as unknown as DBConnection[];
+      const connectionsData = (rawConnectionsData as unknown as Array<{
+        id: string;
+        user_id: string;
+        connected_user_id: string;
+        status: string;
+      }>) || [];
+
+      // 2. Fetch real messages involving current user
+      const { data: rawMessagesData, error: msgErr } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .order("created_at", { ascending: true });
+
+      const messagesData = (rawMessagesData as unknown as DBMessage[]) || [];
+
+      // 3. Collect only distinct peer profile IDs involved in connections, messages, or active selection (R7-13)
+      const redirectedId = localStorage.getItem("active_chat_recipient_id");
+      const peerIdSet = new Set<string>();
+      if (!connErr && connectionsData) {
+        connectionsData.forEach((conn) => {
+          const otherId = conn.user_id === currentUserId ? conn.connected_user_id : conn.user_id;
+          if (isUuid(otherId) && otherId !== currentUserId) {
+            peerIdSet.add(otherId);
+          }
+        });
+      }
+      if (!msgErr && messagesData) {
+        messagesData.forEach((m) => {
+          const otherId = m.sender_id === currentUserId ? m.receiver_id : m.sender_id;
+          if (isUuid(otherId) && otherId !== currentUserId) {
+            peerIdSet.add(otherId);
+          }
+        });
+      }
+      if (isUuid(activeId) && activeId !== currentUserId) {
+        peerIdSet.add(activeId!);
+      }
+      if (isUuid(redirectedId) && redirectedId !== currentUserId) {
+        peerIdSet.add(redirectedId!);
+      }
+
+      // 4. Fetch participant profiles via redacted public_profiles projection (M11, R7-08, R7-13)
+      const peerIds = Array.from(peerIdSet);
+      if (peerIds.length > 0) {
+        const { data: rawProfilesData } = await supabase
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+          .in("id", peerIds);
+
+        const profilesData = (rawProfilesData as unknown as DBProfile[]) || [];
+        profilesData.forEach((p) => profilesCacheRef.current.set(p.id, p));
+      }
+      const profilesMap = profilesCacheRef.current;
+
       const connectedList: ConnectedUser[] = [];
       const connectedSet = new Set<string>();
 
       if (!connErr && connectionsData) {
         connectionsData.forEach((conn) => {
-          const otherProfile = conn.user_id === currentUserId ? conn.profiles : conn.sender_profile;
-          if (otherProfile && otherProfile.id !== currentUserId && !connectedSet.has(otherProfile.id)) {
-            connectedSet.add(otherProfile.id);
-            const fullName = otherProfile.full_name || otherProfile.username || "Anonymous User";
+          const otherId = conn.user_id === currentUserId ? conn.connected_user_id : conn.user_id;
+          const otherProfile = profilesMap.get(otherId);
+          if (otherId && otherId !== currentUserId && !connectedSet.has(otherId)) {
+            connectedSet.add(otherId);
+            const fullName = otherProfile?.full_name || otherProfile?.username || "Film Professional";
             const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
             connectedList.push({
-              id: otherProfile.id,
-              username: otherProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+              id: otherId,
+              username: otherProfile?.username || fullName.toLowerCase().replace(/\s+/g, ""),
               fullName,
-              avatarUrl: otherProfile.avatar_url,
+              avatarUrl: otherProfile?.avatar_url || null,
               avatarInitials: initials || "U",
-              category: otherProfile.category || "Professional"
+              category: otherProfile?.category || "Professional"
             });
           }
         });
       }
 
-      // 2. Fetch profiles via redacted public_profiles projection (M11)
-      const { data: rawProfilesData } = await supabase
-        .from("public_profiles")
-        .select("id, full_name, username, avatar_url, category, public_key");
-
-      const profilesData = rawProfilesData as unknown as DBProfile[];
-      const profilesMap = new Map<string, DBProfile>();
-      if (profilesData) {
-        profilesData.forEach(p => profilesMap.set(p.id, p));
-      }
-
       // Handle redirected active chat recipient ID
       let nextActiveId = activeId;
-      const redirectedId = localStorage.getItem("active_chat_recipient_id");
       if (redirectedId) {
         setActiveId(redirectedId);
         nextActiveId = redirectedId;
@@ -401,23 +461,12 @@ export default function MessagesPage() {
               avatarInitials: initials || "U",
               category: otherProfile.category || "Professional"
             });
-          } else if (isUuid(redirectedId)) {
-            // Already fetched in loadLocalData fallback or not found, wait for unified list update
           }
         }
       }
 
       // Set connected users
       setConnectedUsers(connectedList);
-
-      // 3. Fetch real messages involving current user
-      const { data: rawMessagesData, error: msgErr } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
-        .order("created_at", { ascending: true });
-
-      const messagesData = rawMessagesData as unknown as DBMessage[];
 
       const dbConversations: Conversation[] = [];
       const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
@@ -447,48 +496,21 @@ export default function MessagesPage() {
           const otherProfile = profilesMap.get(otherId);
           const name = otherProfile ? (otherProfile.full_name || otherProfile.username || "Film Professional") : "User";
           const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
-          
-          let sharedKey: CryptoKey | null = null;
-          if (privateKey && otherProfile?.public_key) {
-            try {
-              const otherPubKey = await importPublicKey(JSON.parse(otherProfile.public_key));
-              sharedKey = await deriveAESKey(privateKey, otherPubKey);
-            } catch (e) {
-              console.debug("E2EE key derivation skipped:", e);
-            }
-          }
 
           const decryptedMsgs = await Promise.all(msgs.map(async m => {
              if (m.content.startsWith("ENCRYPTED:")) {
-                if (sharedKey) {
-                   try {
-                      const parts = m.content.split(":");
-                      const iv = parts.length === 4 ? parts[2] : parts[1];
-                      const cipher = parts.length === 4 ? parts[3] : parts[2];
-                      m.content = await decryptMessage(sharedKey, iv, cipher);
-                   } catch(e) {
-                      try {
-                        m.content = await decryptEnvelopeWithKeyring({
-                          envelope: m.content,
-                          recipientProfileId: currentUserId,
-                          primaryPrivateKey: privateKey,
-                          senderPublicKeyJwkOrStr: otherProfile?.public_key
-                        });
-                      } catch {
-                        m.content = "🔒 [Encrypted Message - Unable to decrypt]";
-                      }
-                   }
-                } else {
-                   try {
-                      m.content = await decryptEnvelopeWithKeyring({
-                        envelope: m.content,
-                        recipientProfileId: currentUserId,
-                        primaryPrivateKey: privateKey,
-                        senderPublicKeyJwkOrStr: otherProfile?.public_key
-                      });
-                   } catch {
-                      m.content = "🔒 [Encrypted Message - Key missing]";
-                   }
+                try {
+                  m.content = await decryptEnvelopeWithKeyring({
+                    envelope: m.content,
+                    recipientProfileId: currentUserId,
+                    primaryPrivateKey: privateKey,
+                    senderPublicKeyJwkOrStr: otherProfile?.public_key,
+                    peerPublicKeyHistory: otherProfile?.public_key_history
+                  });
+                } catch {
+                  m.content = privateKey
+                    ? "🔒 [Encrypted Message - Unable to decrypt]"
+                    : "🔒 [Encrypted Message - Key missing]";
                 }
              }
              return m;
@@ -569,11 +591,14 @@ export default function MessagesPage() {
     loadChatData();
   }, [loadChatData]);
 
-  // Periodic Polling to keep chat fully live (every 4 seconds)
+  // Periodic Polling to keep chat fully live (every 4 seconds while tab is visible)
   useEffect(() => {
     const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
     if (!user || isGuestSession) return;
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       loadChatData();
     }, 4000);
     return () => clearInterval(interval);
@@ -1115,38 +1140,41 @@ export default function MessagesPage() {
           return;
         }
 
-        // Derive sharedKey for activeConv if privateKey exists
-        let sharedKey: CryptoKey | null = null;
-        if (privateKey) {
-          try {
-            const { data: otherP } = await supabase
-              .from("profiles")
-              .select("public_key")
-              .eq("id", activeConv.id)
-              .maybeSingle();
+        // Fetch peer public key and key history from public_profiles (R7-08)
+        let peerPublicKey: string | null | undefined = profilesCacheRef.current.get(activeConv.id)?.public_key;
+        let peerPublicKeyHistory: unknown[] | null | undefined = profilesCacheRef.current.get(activeConv.id)?.public_key_history;
+        try {
+          const { data: otherP } = await supabase
+            .from("public_profiles" as any)
+            .select("public_key, public_key_history")
+            .eq("id", activeConv.id)
+            .maybeSingle();
 
-            if (otherP?.public_key) {
-              const otherPubKey = await importPublicKey(JSON.parse(otherP.public_key));
-              sharedKey = await deriveAESKey(privateKey, otherPubKey);
-            }
-          } catch (e) {
-            console.debug("E2EE derive failed for older msgs:", e);
+          const typedOther = otherP as unknown as { public_key?: string | null; public_key_history?: unknown[] | null } | null;
+          if (typedOther?.public_key) {
+            peerPublicKey = typedOther.public_key;
+            peerPublicKeyHistory = typedOther.public_key_history;
           }
+        } catch (e) {
+          console.debug("E2EE key lookup failed for older msgs:", e);
         }
 
         const mappedOlder: ChatMessage[] = await Promise.all(
           olderDbMessages.reverse().map(async (m) => {
             let content = m.content;
             if (content && typeof content === "string" && content.startsWith("ENCRYPTED:")) {
-              if (sharedKey) {
-                try {
-                  const [, iv, cipher] = content.split(":");
-                  content = await decryptMessage(sharedKey, iv, cipher);
-                } catch {
-                  content = "🔒 [Encrypted Message - Unable to decrypt]";
-                }
-              } else {
-                content = "🔒 [Encrypted Message - Key missing]";
+              try {
+                content = await decryptEnvelopeWithKeyring({
+                  envelope: content,
+                  recipientProfileId: currentUserId,
+                  primaryPrivateKey: privateKey,
+                  senderPublicKeyJwkOrStr: peerPublicKey,
+                  peerPublicKeyHistory
+                });
+              } catch {
+                content = privateKey
+                  ? "🔒 [Encrypted Message - Unable to decrypt]"
+                  : "🔒 [Encrypted Message - Key missing]";
               }
             }
             return {
@@ -1261,6 +1289,19 @@ export default function MessagesPage() {
             <p className="text-xs text-muted-foreground mb-3">
               Chat with connected film professionals
             </p>
+            {keyRotationRequired && (
+              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+                <span>New device detected. Rotate encryption key for this browser?</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleConfirmKeyRotation}
+                  className="h-7 px-2.5 text-[11px] border-amber-500/40 text-amber-100 hover:bg-amber-500/20"
+                >
+                  Rotate Key
+                </Button>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input

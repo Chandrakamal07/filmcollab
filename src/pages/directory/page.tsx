@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveDirectoryMediaUrl, resolveDirectoryMediaUrls } from "@/lib/directory-storage";
 import { motion, AnimatePresence } from "motion/react";
 import { AddFileDialog } from "@/components/directory/AddFileDialog";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
@@ -638,37 +639,75 @@ export default function DirectoryPage() {
         (user?.id && item.user_id === user.id)
       );
 
-      return visibleData.map((item: any) => {
-        const typeMap: Record<string, DirType> = {
-          'image': 'images',
-          'video': 'videos',
-          'audio': 'audios',
-          'document': 'documents'
-        };
+      const missingProfileIds = Array.from(
+        new Set(
+          visibleData
+            .filter((item: any) => !item.profiles && item.user_id)
+            .map((item: any) => item.user_id)
+        )
+      );
+      const profileLookup = new Map<string, { id: string; full_name?: string | null; username?: string | null }>();
+      if (missingProfileIds.length > 0) {
+        const { data: pubProfiles } = await supabase
+          .from("public_profiles" as any)
+          .select("id, full_name, username")
+          .in("id", missingProfileIds);
+        if (Array.isArray(pubProfiles)) {
+          pubProfiles.forEach((p: any) => {
+            if (p?.id) profileLookup.set(p.id, p);
+          });
+        }
+      }
 
-        const stats = item.stats as any || { likes: 0, views: 0, downloads: 0 };
+      const mappedItems = await Promise.all(
+        visibleData.map(async (item: any) => {
+          const typeMap: Record<string, DirType> = {
+            'image': 'images',
+            'video': 'videos',
+            'audio': 'audios',
+            'document': 'documents'
+          };
 
-        return {
-          id: item.id,
-          userId: item.profiles?.id || item.user_id,
-          title: item.title,
-          type: typeMap[item.file_type] || 'documents',
-          username: item.profiles?.username || item.profiles?.full_name || 'unknown',
-          uploadDate: new Date(item.created_at).toISOString().split('T')[0],
-          likes: stats.likes || 0,
-          likedByUser: false,
-          tags: item.tags || [],
-          description: undefined,
-          coverUrl: (stats as any)?.coverUrl,
-          thumbnailUrl: (stats as any)?.coverUrl || item.file_url,
-          additionalUrls: item.additional_urls,
-          videoUrl: item.file_type === 'video' ? item.file_url : undefined,
-          audioUrl: item.file_type === 'audio' ? item.file_url : undefined,
-          fileUrl: item.file_url,
-          outline: item.file_type === 'document' ? ['Document Preview'] : undefined,
-          pages: item.file_type === 'document' ? [item.description || 'No content available for preview.'] : undefined
-        } as DirItem;
-      });
+          const stats = (item.stats as any) || { likes: 0, views: 0, downloads: 0 };
+          const bucket = item.storage_bucket || 'directory_assets';
+          const primarySource = item.storage_path || item.file_url;
+          const coverSource = item.cover_storage_path || item.cover_image_url || (stats as any)?.coverUrl;
+          const additionalSources = Array.isArray(item.additional_paths) && item.additional_paths.length > 0
+            ? item.additional_paths
+            : item.additional_urls;
+
+          const [resolvedPrimaryUrl, resolvedCoverUrl, resolvedAdditionalUrls] = await Promise.all([
+            resolveDirectoryMediaUrl(primarySource, { bucket }),
+            coverSource ? resolveDirectoryMediaUrl(coverSource, { bucket }) : Promise.resolve(""),
+            resolveDirectoryMediaUrls(additionalSources, { bucket }),
+          ]);
+
+          const creatorProfile = item.profiles || profileLookup.get(item.user_id);
+
+          return {
+            id: item.id,
+            userId: creatorProfile?.id || item.user_id,
+            title: item.title,
+            type: typeMap[item.file_type] || 'documents',
+            username: creatorProfile?.username || creatorProfile?.full_name || 'Creator',
+            uploadDate: new Date(item.created_at).toISOString().split('T')[0],
+            likes: stats.likes || 0,
+            likedByUser: false,
+            tags: item.tags || [],
+            description: undefined,
+            coverUrl: resolvedCoverUrl || undefined,
+            thumbnailUrl: resolvedCoverUrl || resolvedPrimaryUrl,
+            additionalUrls: resolvedAdditionalUrls,
+            videoUrl: item.file_type === 'video' ? resolvedPrimaryUrl : undefined,
+            audioUrl: item.file_type === 'audio' ? resolvedPrimaryUrl : undefined,
+            fileUrl: resolvedPrimaryUrl,
+            outline: item.file_type === 'document' ? ['Document Preview'] : undefined,
+            pages: item.file_type === 'document' ? [item.description || 'No content available for preview.'] : undefined
+          } as DirItem;
+        })
+      );
+
+      return mappedItems.filter((it: any) => Boolean(it.fileUrl || it.thumbnailUrl || it.type === 'documents'));
     },
     staleTime: 5 * 60 * 1000, // 5 minutes cache
   });

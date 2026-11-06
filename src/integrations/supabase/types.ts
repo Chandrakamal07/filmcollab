@@ -944,6 +944,20 @@ export type Database = {
 
           public_key: string | null
 
+          public_key_history: Json | null
+
+          account_status: string | null
+
+          privacy_show_phone: boolean | null
+
+          privacy_show_email: boolean | null
+
+          privacy_show_dob: boolean | null
+
+          privacy_show_location: boolean | null
+
+          privacy_show_directory: boolean | null
+
         }
 
         Insert: {
@@ -1026,6 +1040,20 @@ export type Database = {
 
           public_key?: string | null
 
+          public_key_history?: Json | null
+
+          account_status?: string | null
+
+          privacy_show_phone?: boolean | null
+
+          privacy_show_email?: boolean | null
+
+          privacy_show_dob?: boolean | null
+
+          privacy_show_location?: boolean | null
+
+          privacy_show_directory?: boolean | null
+
         }
 
         Update: {
@@ -1107,6 +1135,20 @@ export type Database = {
           short_id?: string | null
 
           public_key?: string | null
+
+          public_key_history?: Json | null
+
+          account_status?: string | null
+
+          privacy_show_phone?: boolean | null
+
+          privacy_show_email?: boolean | null
+
+          privacy_show_dob?: boolean | null
+
+          privacy_show_location?: boolean | null
+
+          privacy_show_directory?: boolean | null
 
         }
 
@@ -1878,6 +1920,18 @@ export type Database = {
 
           status: string
 
+          cover_image_url: string | null
+
+          is_public: boolean | null
+
+          storage_bucket: string | null
+
+          storage_path: string | null
+
+          additional_paths: string[] | null
+
+          cover_storage_path: string | null
+
           created_at: string | null
 
           updated_at: string | null
@@ -1910,6 +1964,18 @@ export type Database = {
 
           status?: string
 
+          cover_image_url?: string | null
+
+          is_public?: boolean | null
+
+          storage_bucket?: string | null
+
+          storage_path?: string | null
+
+          additional_paths?: string[] | null
+
+          cover_storage_path?: string | null
+
           created_at?: string | null
 
           updated_at?: string | null
@@ -1941,6 +2007,18 @@ export type Database = {
           stats?: Json | null
 
           status?: string
+
+          cover_image_url?: string | null
+
+          is_public?: boolean | null
+
+          storage_bucket?: string | null
+
+          storage_path?: string | null
+
+          additional_paths?: string[] | null
+
+          cover_storage_path?: string | null
 
           created_at?: string | null
 
@@ -3041,7 +3119,22 @@ export type Database = {
 
         }
 
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tickets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
 
       }
 
@@ -4314,6 +4407,146 @@ export type Database = {
         }
 
         Relationships: []
+
+      }
+
+      company_followers: {
+
+        Row: {
+
+          id: string
+
+          company_id: string
+
+          user_id: string
+
+          created_at: string | null
+
+        }
+
+        Insert: {
+
+          id?: string
+
+          company_id: string
+
+          user_id: string
+
+          created_at?: string | null
+
+        }
+
+        Update: {
+
+          id?: string
+
+          company_id?: string
+
+          user_id?: string
+
+          created_at?: string | null
+
+        }
+
+        Relationships: [
+
+          {
+
+            foreignKeyName: "company_followers_company_id_fkey"
+
+            columns: ["company_id"]
+
+            isOneToOne: false
+
+            referencedRelation: "companies"
+
+            referencedColumns: ["id"]
+
+          }
+
+        ]
+
+      }
+
+      company_reviews: {
+
+        Row: {
+
+          id: string
+
+          company_id: string
+
+          user_id: string
+
+          author_name: string
+
+          rating: number
+
+          comment: string
+
+          created_at: string | null
+
+          updated_at: string | null
+
+        }
+
+        Insert: {
+
+          id?: string
+
+          company_id: string
+
+          user_id: string
+
+          author_name?: string
+
+          rating: number
+
+          comment: string
+
+          created_at?: string | null
+
+          updated_at?: string | null
+
+        }
+
+        Update: {
+
+          id?: string
+
+          company_id?: string
+
+          user_id?: string
+
+          author_name?: string
+
+          rating?: number
+
+          comment?: string
+
+          created_at?: string | null
+
+          updated_at?: string | null
+
+        }
+
+        Relationships: [
+
+          {
+
+            foreignKeyName: "company_reviews_company_id_fkey"
+
+            columns: ["company_id"]
+
+            isOneToOne: false
+
+            referencedRelation: "companies"
+
+            referencedColumns: ["id"]
+
+          }
+
+        ]
 
       }
 

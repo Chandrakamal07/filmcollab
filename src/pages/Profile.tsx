@@ -20,6 +20,14 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DIRECTORY_STORAGE_BUCKET,
+  toCanonicalDirectoryStorageUri,
+  resolveDirectoryMediaUrl,
+  resolveDirectoryMediaUrls,
+  invalidateDirectoryUrlCache,
+  cleanupUploadedStorageObjects,
+} from "@/lib/directory-storage";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -406,6 +414,7 @@ function profileToRow(p: ProfileData, userId: string) {
     privacy_show_email: p.privacyShowEmail ?? true,
     privacy_show_dob: p.privacyShowDob ?? true,
     privacy_show_directory: p.privacyShowDirectory ?? true,
+    privacy_show_location: p.privacyShowLocation ?? true,
   };
 }
 
@@ -1037,27 +1046,25 @@ export default function ProfilePage() {
 
     const finalTitle = addFileTitle.trim() || primaryFile.name;
 
+    const uploadedPaths: string[] = [];
     try {
       setIsUploadingDirectoryFile(true);
 
-      let publicUrl = "";
       const additionalUrls: string[] = [];
+      const additionalStoragePaths: string[] = [];
 
       // Upload primary file
       const fileExt = primaryFile.name.split('.').pop();
       const fileName = `${user?.id || 'anon'}/${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('directory_assets')
+        .from(DIRECTORY_STORAGE_BUCKET)
         .upload(fileName, primaryFile);
 
       if (uploadError) throw uploadError;
+      uploadedPaths.push(fileName);
 
-      const { data: publicUrlData } = supabase.storage
-        .from('directory_assets')
-        .getPublicUrl(fileName);
-
-      publicUrl = publicUrlData.publicUrl;
+      const canonicalPrimaryUri = toCanonicalDirectoryStorageUri(fileName, DIRECTORY_STORAGE_BUCKET);
       const fileSizeStr = (primaryFile.size / (1024 * 1024)).toFixed(2) + " MB";
 
       // Upload additional files if any
@@ -1068,15 +1075,13 @@ export default function ProfilePage() {
           const name = `${user?.id || 'anon'}/${crypto.randomUUID()}.${ext}`;
 
           const { error: err } = await supabase.storage
-            .from('directory_assets')
+            .from(DIRECTORY_STORAGE_BUCKET)
             .upload(name, file);
 
-          if (!err) {
-            const { data } = supabase.storage
-              .from('directory_assets')
-              .getPublicUrl(name);
-            additionalUrls.push(data.publicUrl);
-          }
+          if (err) throw err;
+          uploadedPaths.push(name);
+          additionalStoragePaths.push(name);
+          additionalUrls.push(toCanonicalDirectoryStorageUri(name, DIRECTORY_STORAGE_BUCKET));
         }
       }
 
@@ -1084,8 +1089,12 @@ export default function ProfilePage() {
       const newDbFile = {
         title: finalTitle,
         file_type: type,
-        file_url: publicUrl,
+        file_url: canonicalPrimaryUri,
         additional_urls: additionalUrls.length > 0 ? additionalUrls : [],
+        storage_bucket: DIRECTORY_STORAGE_BUCKET,
+        storage_path: fileName,
+        additional_paths: additionalStoragePaths,
+        is_public: profile.privacyShowDirectory ?? true,
         file_size: fileSizeStr,
         user_id: profileDbId,
         tags: parsedTags,
@@ -1093,19 +1102,24 @@ export default function ProfilePage() {
 
       const { data: insertedFile, error: insertError } = await supabase
         .from('directory_files')
-        .insert(newDbFile)
+        .insert(newDbFile as any)
         .select()
         .single();
 
       if (insertError) throw insertError;
+
+      const [resolvedUrl, resolvedAdditionalUrls] = await Promise.all([
+        resolveDirectoryMediaUrl(fileName, { bucket: DIRECTORY_STORAGE_BUCKET }),
+        resolveDirectoryMediaUrls(additionalStoragePaths, { bucket: DIRECTORY_STORAGE_BUCKET }),
+      ]);
 
       setDirectoryFiles(prev => [{
         id: insertedFile.id,
         name: finalTitle,
         title: finalTitle,
         type: type,
-        url: publicUrl,
-        additional_urls: insertedFile.additional_urls,
+        url: resolvedUrl || canonicalPrimaryUri,
+        additional_urls: resolvedAdditionalUrls,
         uploadDate: insertedFile.created_at,
         tags: parsedTags
       }, ...prev]);
@@ -1120,6 +1134,9 @@ export default function ProfilePage() {
         description: `"${finalTitle}" has been added to your directory.`
       });
     } catch (err: any) {
+      if (uploadedPaths.length > 0) {
+        await cleanupUploadedStorageObjects(uploadedPaths, DIRECTORY_STORAGE_BUCKET);
+      }
       console.error("Error uploading file:", err);
       toast({
         title: "Upload Failed",
@@ -1518,16 +1535,30 @@ export default function ProfilePage() {
       if (error && error.code !== '42P01') {
         console.error("Error fetching directory files:", error);
       } else if (data) {
-        setDirectoryFiles(data.map(d => ({
-          id: d.id,
-          name: d.title,
-          title: d.title,
-          type: d.file_type as any,
-          url: d.file_url,
-          additional_urls: d.additional_urls,
-          uploadDate: d.created_at,
-          tags: d.tags
-        })));
+        const resolvedFiles = await Promise.all(
+          data.map(async (d: any) => {
+            const bucket = d.storage_bucket || DIRECTORY_STORAGE_BUCKET;
+            const primarySource = d.storage_path || d.file_url;
+            const additionalSources = Array.isArray(d.additional_paths) && d.additional_paths.length > 0
+              ? d.additional_paths
+              : d.additional_urls;
+            const [resolvedPrimary, resolvedAdditional] = await Promise.all([
+              resolveDirectoryMediaUrl(primarySource, { bucket }),
+              resolveDirectoryMediaUrls(additionalSources, { bucket }),
+            ]);
+            return {
+              id: d.id,
+              name: d.title,
+              title: d.title,
+              type: d.file_type as any,
+              url: resolvedPrimary,
+              additional_urls: resolvedAdditional,
+              uploadDate: d.created_at,
+              tags: d.tags,
+            };
+          })
+        );
+        setDirectoryFiles(resolvedFiles.filter((f) => Boolean(f.url || f.type === 'document')));
       }
     } catch (err) {
       console.error(err);
@@ -1561,7 +1592,7 @@ export default function ProfilePage() {
     // TODO: implement
   };
 
-  const handlePrivacyToggle = async (field: 'privacyShowPhone' | 'privacyShowEmail' | 'privacyShowDob' | 'privacyShowDirectory', value: boolean) => {
+  const handlePrivacyToggle = async (field: 'privacyShowPhone' | 'privacyShowEmail' | 'privacyShowDob' | 'privacyShowDirectory' | 'privacyShowLocation', value: boolean) => {
     setProfile(prev => ({ ...prev, [field]: value }));
     setEditForm(prev => ({ ...prev, [field]: value }));
 
@@ -1570,7 +1601,8 @@ export default function ProfilePage() {
         privacyShowPhone: 'showPhone',
         privacyShowEmail: 'showEmail',
         privacyShowDob: 'showBirthday',
-        privacyShowDirectory: 'showDirectory'
+        privacyShowDirectory: 'showDirectory',
+        privacyShowLocation: 'showLocation'
       };
       const settingsKey = settingsKeyMap[field];
       const dbField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
@@ -1581,6 +1613,11 @@ export default function ProfilePage() {
           .eq('id', profile.id);
 
         if (profErr) throw profErr;
+
+        if (field === 'privacyShowDirectory') {
+          invalidateDirectoryUrlCache(profile.id);
+          if (user.id) invalidateDirectoryUrlCache(user.id);
+        }
 
         if (settingsKey) {
           const { data: curSettings } = await supabase
@@ -1778,12 +1815,12 @@ export default function ProfilePage() {
         description: `Connection request sent to ${profile.name || profile.username || "creator"}.`
       });
 
-      await supabase.from("notifications").insert({
-        user_id: targetProfileId,
-        title: "New Connection Request",
-        description: `${authProfile?.full_name || user.email} sent you a connection request.`,
-        type: "connection",
-        action_url: `/profile/${senderProfileId}`
+      await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: targetProfileId,
+        p_title: "New Connection Request",
+        p_description: `${authProfile?.full_name || user.email} sent you a connection request.`,
+        p_type: "connection",
+        p_action_url: `/profile/${senderProfileId}`
       });
     } catch (err: any) {
       toast({

@@ -76,6 +76,7 @@ interface UserProfile {
   skills?: string[] | null;
   tags?: string[] | null;
   role?: string | null;
+  account_status?: string | null;
 }
 
 interface ExperienceEntry {
@@ -347,14 +348,16 @@ export default function AdminUsers() {
     // Category match
     const matchesCategory = categoryFilter === "all" || category.toLowerCase() === categoryFilter.toLowerCase();
 
+    const isBlocked = user.account_status === "blocked" || userRole === "blocked";
+
     // Status match (Verified, Unverified, Blocked)
     let matchesStatus = true;
     if (statusFilter === "verified") {
-      matchesStatus = isVerified;
+      matchesStatus = isVerified && !isBlocked;
     } else if (statusFilter === "unverified") {
-      matchesStatus = !isVerified && userRole !== "blocked";
+      matchesStatus = !isVerified && !isBlocked;
     } else if (statusFilter === "blocked") {
-      matchesStatus = userRole === "blocked";
+      matchesStatus = isBlocked;
     }
 
     // Date range matches
@@ -386,7 +389,7 @@ export default function AdminUsers() {
   });
 
   const getStatusBadge = (user: UserProfile) => {
-    if (user.role === 'blocked') {
+    if (user.account_status === 'blocked' || user.role === 'blocked') {
       return (
         <Badge className="bg-destructive/15 text-destructive border border-destructive/30 font-medium">
           Blocked
@@ -434,25 +437,29 @@ export default function AdminUsers() {
   };
 
   const handleBlockUser = async (user: UserProfile) => {
-    const isCurrentlyBlocked = user.role === 'blocked';
+    const isCurrentlyBlocked = user.account_status === 'blocked' || user.role === 'blocked';
     const actionText = isCurrentlyBlocked ? "unblock" : "block";
     if (!window.confirm(`Are you sure you want to ${actionText} this user?`)) {
       return;
     }
     try {
+      const targetAccountStatus = isCurrentlyBlocked ? 'active' : 'blocked';
       const targetRole = isCurrentlyBlocked ? 'user' : 'blocked';
       const { data, error } = await supabase
         .from("profiles")
-        .update({ role: targetRole })
+        .update({ account_status: targetAccountStatus, role: targetRole } as any)
         .eq("id", user.id)
-        .select("id");
+        .select("id, role, account_status");
 
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error("No profile was updated. Permission denied.");
       }
 
-      setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole } : u));
+      setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole, account_status: targetAccountStatus } : u));
+      if (selectedProfile && selectedProfile.id === user.id) {
+        setSelectedProfile(prev => prev ? { ...prev, role: targetRole, account_status: targetAccountStatus } : prev);
+      }
       toast({
         title: isCurrentlyBlocked ? "User Unblocked" : "User Blocked",
         description: `Successfully ${isCurrentlyBlocked ? "unblocked" : "blocked"} user ${user.username || user.full_name || ''}.`
@@ -817,12 +824,12 @@ export default function AdminUsers() {
                     variant="outline"
                     className={cn(
                       "border-border/80 bg-surface-elevated",
-                      selectedProfile.role === 'blocked' ? "text-emerald-500 hover:bg-emerald-500/10" : "text-destructive hover:bg-destructive/10"
+                      (selectedProfile.account_status === 'blocked' || selectedProfile.role === 'blocked') ? "text-emerald-500 hover:bg-emerald-500/10" : "text-destructive hover:bg-destructive/10"
                     )}
                     onClick={onBlockUser}
                   >
                     <AlertTriangle className="w-4 h-4 mr-1" />
-                    {selectedProfile.role === 'blocked' ? "Unblock" : "Block"}
+                    {(selectedProfile.account_status === 'blocked' || selectedProfile.role === 'blocked') ? "Unblock" : "Block"}
                   </Button>
                   <Button
                     size="sm"
@@ -1385,7 +1392,7 @@ export default function AdminUsers() {
                                   className="cursor-pointer flex items-center gap-2 text-sm text-amber-500"
                                 >
                                   <AlertTriangle className="h-4 w-4 text-amber-500" />
-                                  {user.role === 'blocked' ? "Unblock User" : "Block User"}
+                                  {(user.account_status === 'blocked' || user.role === 'blocked') ? "Unblock User" : "Block User"}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleDeleteUser(user.id)}

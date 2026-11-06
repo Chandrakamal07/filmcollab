@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateDirectoryUrlCache } from "@/lib/directory-storage";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,7 +67,26 @@ export default function AdminDirectory() {
         return;
       }
 
-      setDirectoryItems(data || []);
+      const rows = data || [];
+      const missingCreatorIds = Array.from(
+        new Set(rows.filter((r: any) => !r.profiles && r.user_id).map((r: any) => r.user_id))
+      );
+      if (missingCreatorIds.length > 0) {
+        const { data: pubProfiles } = await supabase
+          .from("public_profiles" as any)
+          .select("id, full_name, username, avatar_url")
+          .in("id", missingCreatorIds);
+        if (Array.isArray(pubProfiles)) {
+          const map = new Map(pubProfiles.map((p: any) => [p.id, p]));
+          rows.forEach((r: any) => {
+            if (!r.profiles && r.user_id && map.has(r.user_id)) {
+              r.profiles = map.get(r.user_id);
+            }
+          });
+        }
+      }
+
+      setDirectoryItems(rows);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -121,6 +141,7 @@ export default function AdminDirectory() {
         if (!data || data.length === 0) {
           throw new Error("No file was deleted. Permission denied or file not found.");
         }
+        invalidateDirectoryUrlCache();
         setDirectoryItems(prev => prev.filter(i => i.id !== itemId));
         toast.success("File deleted successfully");
       } catch (error: any) {
@@ -151,6 +172,7 @@ export default function AdminDirectory() {
         throw new Error("No file was updated. You may not have administrative privileges.");
       }
 
+      invalidateDirectoryUrlCache();
       setDirectoryItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, tags: updatedTags } : i));
       toast.success(isBlocked ? "File unblocked successfully" : "File blocked successfully");
     } catch (error: any) {

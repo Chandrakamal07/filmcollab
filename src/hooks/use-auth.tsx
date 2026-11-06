@@ -25,6 +25,7 @@ interface Profile {
   experience_level?: string | null;
   skills?: string[] | null;
   role?: string | null;
+  account_status?: string | null;
   category?: string | null;
   username?: string | null;
   phone?: string | null;
@@ -143,13 +144,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let finalProfileData = profileData;
 
       if (finalProfileData) {
-        // Fix for signup profession
+        // Fix for signup profession: store creative profession in category (not system role)
         const pendingProfession = localStorage.getItem('pending_profession');
-        if (pendingProfession && (finalProfileData.role === 'USER' || finalProfileData.role === 'user' || !finalProfileData.role)) {
+        if (pendingProfession && (!finalProfileData.category || finalProfileData.category === 'user')) {
            console.log("Updating profile with pending profession:", pendingProfession);
-           const { error: updateErr } = await supabase.from('profiles').update({ role: pendingProfession }).eq('user_id', userId);
+           const { error: updateErr } = await supabase
+             .from('profiles')
+             .update({ category: pendingProfession } as any)
+             .eq('user_id', userId);
            if (!updateErr) {
-             finalProfileData = { ...finalProfileData, role: pendingProfession };
+             finalProfileData = { ...finalProfileData, category: pendingProfession };
            }
            localStorage.removeItem('pending_profession');
         }
@@ -255,7 +259,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (activeProfile) {
-        if (activeProfile.role === 'blocked') {
+        const isAccountBlocked =
+          activeProfile.role?.toLowerCase() === 'blocked' ||
+          activeProfile.account_status?.toLowerCase() === 'blocked' ||
+          activeProfile.account_status?.toLowerCase() === 'suspended';
+        if (isAccountBlocked) {
           console.warn('Blocked user login attempt:', userId);
           await withTimeout(
             supabase.auth.signOut() as unknown as Promise<{ error: null }>,
@@ -343,6 +351,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isGuestSession()) return false;
     // Must have a live verified Supabase session and user
     if (!session || !user) return false;
+    if (
+      profile?.role?.toLowerCase() === 'blocked' ||
+      profile?.account_status?.toLowerCase() === 'blocked' ||
+      profile?.account_status?.toLowerCase() === 'suspended'
+    ) {
+      return false;
+    }
     // Authority must come strictly and exclusively from the database user_roles record (and active team status when scoped)
     if (userRole?.role === 'admin') return true;
     if (
@@ -361,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     const normalizedPage = (page || '').toLowerCase();
     const normalizedAction = action 
-      ? (action.toLowerCase() === 'update' ? 'edit' : action.toLowerCase())
+      ? (action.toLowerCase() === 'update' ? 'edit' : action.toLowerCase() === 'create' ? 'add' : action.toLowerCase())
       : 'view';
 
     // If scoped team permissions exist, enforce them
@@ -376,6 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const pagePerms = perms[matchedKey];
       if (!pagePerms) return false;
 
+      if (normalizedAction === 'add') return !!(pagePerms.add ?? pagePerms.edit);
       if (normalizedAction === 'edit') return !!pagePerms.edit;
       if (normalizedAction === 'delete') return !!pagePerms.delete;
       return !!pagePerms.view;

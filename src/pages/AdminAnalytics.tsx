@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, Activity, TrendingUp, FolderOpen, Briefcase, UserCheck, Image as ImageIcon,
   Download, BarChart3, LineChart as LineChartIcon, Eye, Target, Zap, PieChart,
-  UserPlus, Loader2, TicketCheck, UserCog, MapPin
+  UserPlus, Loader2, TicketCheck, UserCog, MapPin, AlertTriangle
 } from "lucide-react";
 
 import {
@@ -64,6 +64,7 @@ export default function AdminAnalytics() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("30");
+  const [analyticsErrors, setAnalyticsErrors] = useState<string[]>([]);
 
   // Dynamic Data States
   const [usersData, setUsersData] = useState<any>({ metrics: [], chartData: [], rolesData: [] });
@@ -80,9 +81,15 @@ export default function AdminAnalytics() {
 
   const fetchAnalyticsData = async () => {
     setIsLoading(true);
+    const queryErrors: string[] = [];
     try {
       // 1. Fetch Users Data
-      const { data: profiles } = await supabase.from('profiles').select('created_at, category, updated_at, avatar_url, is_verified');
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('created_at, category, updated_at, avatar_url, is_verified');
+      if (profilesError) {
+        queryErrors.push(`Users analytics unavailable: ${profilesError.message}`);
+      }
 
       const totalUsers = profiles?.length || 0;
       const thirtyDaysAgo = new Date();
@@ -120,7 +127,12 @@ export default function AdminAnalytics() {
       }).slice(-12);
 
       // 2. Fetch Projects Data
-      const { data: projects } = await supabase.from('projects').select('created_at, status, created_by');
+      const { data: projects, error: projectsError } = await supabase
+        .from('projects')
+        .select('created_at, status, created_by');
+      if (projectsError) {
+        queryErrors.push(`Projects analytics unavailable: ${projectsError.message}`);
+      }
       const totalProjects = projects?.length || 0;
       const activeProjects = projects?.filter(p => p.status?.toLowerCase() === 'active').length || 0;
       const completedProjects = projects?.filter(p => p.status?.toLowerCase() === 'completed').length || 0;
@@ -141,7 +153,12 @@ export default function AdminAnalytics() {
       })).slice(-12);
 
       // 3. Fetch Jobs Data
-      const { data: jobs } = await supabase.from('jobs').select('created_at, status, user_id');
+      const { data: jobs, error: jobsError } = await supabase
+        .from('jobs')
+        .select('created_at, status, user_id');
+      if (jobsError) {
+        queryErrors.push(`Jobs analytics unavailable: ${jobsError.message}`);
+      }
       const totalJobs = jobs?.length || 0;
       const activeJobs = jobs?.filter(j => j.status?.toLowerCase() === 'open' || j.status?.toLowerCase() === 'active').length || 0;
 
@@ -160,7 +177,12 @@ export default function AdminAnalytics() {
       })).slice(-12);
 
       // 4. Fetch Tickets Data
-      const { data: tickets } = await supabase.from('tickets').select('created_at, status');
+      const { data: tickets, error: ticketsError } = await supabase
+        .from('tickets')
+        .select('created_at, status');
+      if (ticketsError) {
+        queryErrors.push(`Tickets analytics unavailable: ${ticketsError.message}`);
+      }
       const totalTickets = tickets?.length || 0;
       const openTickets = tickets?.filter(t => t.status?.toLowerCase() === 'open').length || 0;
       const closedTickets = tickets?.filter(t => t.status?.toLowerCase() === 'closed').length || 0;
@@ -182,7 +204,12 @@ export default function AdminAnalytics() {
       })).slice(-12);
 
       // 5. Fetch Team Data
-      const { data: userRoles } = await supabase.from('user_roles').select('created_at, role');
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('created_at, role');
+      if (rolesError) {
+        queryErrors.push(`Team analytics unavailable: ${rolesError.message}`);
+      }
       const teamMembers = userRoles?.filter(ur => ur.role === 'admin') || [];
       const totalTeam = teamMembers.length;
 
@@ -210,22 +237,27 @@ export default function AdminAnalytics() {
       }).slice(-12);
 
       // 6. Fetch Locations Data
-      const { data: locations } = await supabase.from('shooting_locations').select('created_at, status, property_type, featured');
+      const { data: locations, error: locationsError } = await supabase
+        .from('shooting_locations')
+        .select('created_at, status, property_type, type, location_type, featured');
+      if (locationsError) {
+        queryErrors.push(`Locations analytics unavailable: ${locationsError.message}`);
+      }
       const totalLocations = locations?.length || 0;
-      const activeLocations = locations?.filter(l => l.status?.toLowerCase() === 'approved' || l.status?.toLowerCase() === 'active').length || 0;
-      const featuredLocations = locations?.filter(l => l.featured).length || 0;
+      const activeLocations = locations?.filter((l: any) => l.status?.toLowerCase() === 'approved' || l.status?.toLowerCase() === 'active').length || 0;
+      const featuredLocations = locations?.filter((l: any) => l.featured).length || 0;
 
       const locationMonths: Record<string, { total: number }> = {};
       const typeDistribution: Record<string, number> = {};
 
-      locations?.forEach(l => {
+      locations?.forEach((l: any) => {
         // Timeline data
         const month = new Date(l.created_at).toISOString().slice(0, 7);
         if (!locationMonths[month]) locationMonths[month] = { total: 0 };
         locationMonths[month].total += 1;
 
         // Type data
-        const type = l.property_type || 'Unspecified';
+        const type = l.property_type || l.type || l.location_type || 'Unspecified';
         typeDistribution[type] = (typeDistribution[type] || 0) + 1;
       });
 
@@ -241,10 +273,17 @@ export default function AdminAnalytics() {
 
       // Fetch real job applications count
       let realJobAppsCount = 0;
+      let jobAppsErrorFlag = false;
       try {
-        const { count } = await supabase.from('job_applications').select('*', { count: 'exact', head: true });
-        if (count !== null) realJobAppsCount = count;
+        const { count, error: jobAppsError } = await supabase.from('job_applications').select('*', { count: 'exact', head: true });
+        if (jobAppsError) {
+          jobAppsErrorFlag = true;
+          queryErrors.push(`Job applications count unavailable: ${jobAppsError.message}`);
+        } else if (count !== null) {
+          realJobAppsCount = count;
+        }
       } catch (e) {
+        jobAppsErrorFlag = true;
         console.warn("Could not query job_applications count:", e);
       }
 
@@ -258,68 +297,73 @@ export default function AdminAnalytics() {
       // Set states
       setUsersData({
         metrics: [
-          { title: "Total Registered Users", value: totalUsers.toLocaleString(), change: "—", icon: Users, color: "text-primary" },
-          { title: `New Users (${timeRange}d)`, value: newUsers.toLocaleString(), change: "—", icon: UserPlus, color: "text-primary" },
-          { title: `Recently Updated Profiles (${timeRange}d)`, value: activeUsers.toLocaleString(), change: "—", icon: Activity, color: "text-primary" },
-          { title: "Verified Profiles", value: verifiedUsers.toLocaleString(), change: "—", icon: Target, color: "text-primary" }
+          { title: "Total Registered Users", value: profilesError ? "Unavailable" : totalUsers.toLocaleString(), change: profilesError ? "Query error" : "—", icon: Users, color: "text-primary" },
+          { title: `New Users (${timeRange}d)`, value: profilesError ? "Unavailable" : newUsers.toLocaleString(), change: profilesError ? "Query error" : "—", icon: UserPlus, color: "text-primary" },
+          { title: `Recently Updated Profiles (${timeRange}d)`, value: profilesError ? "Unavailable" : activeUsers.toLocaleString(), change: profilesError ? "Query error" : "—", icon: Activity, color: "text-primary" },
+          { title: "Verified Profiles", value: profilesError ? "Unavailable" : verifiedUsers.toLocaleString(), change: profilesError ? "Query error" : "—", icon: Target, color: "text-primary" }
         ],
-        chartData: userChartData.length ? userChartData : [{ month: 'No Data', total: 0, new: 0, active: 0 }],
-        rolesData: rolesData.length ? rolesData : [{ name: 'No Data', value: 1 }]
+        chartData: userChartData.length ? userChartData : [{ month: profilesError ? 'Unavailable' : 'No Data', total: 0, new: 0, active: 0 }],
+        rolesData: rolesData.length ? rolesData : [{ name: profilesError ? 'Unavailable' : 'No Data', value: 1 }]
       });
 
       setProjectsData({
         metrics: [
-          { title: "Total Projects", value: totalProjects.toLocaleString(), change: "—", icon: FolderOpen, color: "text-primary" },
-          { title: "Active Projects", value: activeProjects.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
-          { title: "Completed", value: completedProjects.toLocaleString(), change: "—", icon: Target, color: "text-primary" },
+          { title: "Total Projects", value: projectsError ? "Unavailable" : totalProjects.toLocaleString(), change: projectsError ? "Query error" : "—", icon: FolderOpen, color: "text-primary" },
+          { title: "Active Projects", value: projectsError ? "Unavailable" : activeProjects.toLocaleString(), change: projectsError ? "Query error" : "—", icon: Zap, color: "text-primary" },
+          { title: "Completed", value: projectsError ? "Unavailable" : completedProjects.toLocaleString(), change: projectsError ? "Query error" : "—", icon: Target, color: "text-primary" },
           { title: "Project Views", value: "Not instrumented", change: "—", icon: Eye, color: "text-primary" }
         ],
-        chartData: projectChartData.length ? projectChartData : [{ date: 'No Data', projects: 0, uniqueUsers: 0 }]
+        chartData: projectChartData.length ? projectChartData : [{ date: projectsError ? 'Unavailable' : 'No Data', projects: 0, uniqueUsers: 0 }]
       });
 
       setJobsData({
         metrics: [
-          { title: "Total Jobs", value: totalJobs.toLocaleString(), change: "—", icon: Briefcase, color: "text-primary" },
-          { title: "Active Jobs", value: activeJobs.toLocaleString(), change: "—", icon: Briefcase, color: "text-primary" },
-          { title: "Applications", value: realJobAppsCount.toLocaleString(), change: "—", icon: UserCheck, color: "text-primary" },
+          { title: "Total Jobs", value: jobsError ? "Unavailable" : totalJobs.toLocaleString(), change: jobsError ? "Query error" : "—", icon: Briefcase, color: "text-primary" },
+          { title: "Active Jobs", value: jobsError ? "Unavailable" : activeJobs.toLocaleString(), change: jobsError ? "Query error" : "—", icon: Briefcase, color: "text-primary" },
+          { title: "Applications", value: jobAppsErrorFlag ? "Unavailable" : realJobAppsCount.toLocaleString(), change: jobAppsErrorFlag ? "Query error" : "—", icon: UserCheck, color: "text-primary" },
           { title: "Job Views", value: "Not instrumented", change: "—", icon: Eye, color: "text-primary" }
         ],
-        chartData: jobChartData.length ? jobChartData : [{ date: 'No Data', jobs: 0, uniqueUsers: 0 }]
+        chartData: jobChartData.length ? jobChartData : [{ date: jobsError ? 'Unavailable' : 'No Data', jobs: 0, uniqueUsers: 0 }]
       });
 
       setTicketsData({
         metrics: [
-          { title: "Total Tickets", value: totalTickets.toLocaleString(), change: "+5.2%", icon: TicketCheck, color: "text-primary" },
-          { title: "Open Tickets", value: openTickets.toLocaleString(), change: "-2.1%", icon: Zap, color: "text-primary" },
-          { title: "Closed Tickets", value: closedTickets.toLocaleString(), change: "+8.4%", icon: Target, color: "text-primary" },
-          { title: "Resolution Rate", value: totalTickets ? `${Math.round(closedTickets / totalTickets * 100)}%` : "0%", change: "+1.2%", icon: Activity, color: "text-primary" }
+          { title: "Total Tickets", value: ticketsError ? "Unavailable" : totalTickets.toLocaleString(), change: ticketsError ? "Query error" : "+5.2%", icon: TicketCheck, color: "text-primary" },
+          { title: "Open Tickets", value: ticketsError ? "Unavailable" : openTickets.toLocaleString(), change: ticketsError ? "Query error" : "-2.1%", icon: Zap, color: "text-primary" },
+          { title: "Closed Tickets", value: ticketsError ? "Unavailable" : closedTickets.toLocaleString(), change: ticketsError ? "Query error" : "+8.4%", icon: Target, color: "text-primary" },
+          { title: "Resolution Rate", value: ticketsError ? "Unavailable" : (totalTickets ? `${Math.round(closedTickets / totalTickets * 100)}%` : "0%"), change: ticketsError ? "Query error" : "+1.2%", icon: Activity, color: "text-primary" }
         ],
-        chartData: ticketChartData.length ? ticketChartData : [{ date: 'No Data', tickets: 0, open: 0, closed: 0 }]
+        chartData: ticketChartData.length ? ticketChartData : [{ date: ticketsError ? 'Unavailable' : 'No Data', tickets: 0, open: 0, closed: 0 }]
       });
 
       setTeamData({
         metrics: [
-          { title: "Total Admins", value: totalTeam.toLocaleString(), change: "—", icon: UserCog, color: "text-primary" },
+          { title: "Total Admins", value: rolesError ? "Unavailable" : totalTeam.toLocaleString(), change: rolesError ? "Query error" : "—", icon: UserCog, color: "text-primary" },
           { title: "Active Admins", value: activeAdminsCount.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
           { title: "Avg Resolution Time", value: "—", change: "Not instrumented", icon: Activity, color: "text-primary" },
           { title: "Customer Satisfaction", value: "—", change: "Not instrumented", icon: Target, color: "text-primary" }
         ],
-        chartData: teamChartData.length ? teamChartData : [{ date: 'No Data', members: 0 }]
+        chartData: teamChartData.length ? teamChartData : [{ date: rolesError ? 'Unavailable' : 'No Data', members: 0 }]
       });
 
       setLocationsData({
         metrics: [
-          { title: "Total Locations", value: totalLocations.toLocaleString(), change: "—", icon: MapPin, color: "text-primary" },
-          { title: "Active Locations", value: activeLocations.toLocaleString(), change: "—", icon: Zap, color: "text-primary" },
-          { title: "Featured", value: featuredLocations.toLocaleString(), change: "—", icon: Target, color: "text-primary" },
+          { title: "Total Locations", value: locationsError ? "Unavailable" : totalLocations.toLocaleString(), change: locationsError ? "Query error" : "—", icon: MapPin, color: "text-primary" },
+          { title: "Active Locations", value: locationsError ? "Unavailable" : activeLocations.toLocaleString(), change: locationsError ? "Query error" : "—", icon: Zap, color: "text-primary" },
+          { title: "Featured", value: locationsError ? "Unavailable" : featuredLocations.toLocaleString(), change: locationsError ? "Query error" : "—", icon: Target, color: "text-primary" },
           { title: "Total Views", value: "—", change: "Not instrumented", icon: Eye, color: "text-primary" }
         ],
-        chartData: locationChartData.length ? locationChartData : [{ date: 'No Data', locations: 0 }],
-        typeData: locationTypeData.length ? locationTypeData : [{ name: 'No Data', value: 1 }]
+        chartData: locationChartData.length ? locationChartData : [{ date: locationsError ? 'Unavailable' : 'No Data', locations: 0 }],
+        typeData: locationTypeData.length ? locationTypeData : [{ name: locationsError ? 'Unavailable' : 'No Data', value: 1 }]
       });
 
       // 7. Fetch Directory Files Data
-      const { data: files } = await supabase.from('directory_files').select('id, file_type, created_at');
+      const { data: files, error: filesError } = await supabase
+        .from('directory_files')
+        .select('id, file_type, created_at');
+      if (filesError) {
+        queryErrors.push(`Directory analytics unavailable: ${filesError.message}`);
+      }
       const totalFiles = files?.length || 0;
 
       let imagesCount = 0;
@@ -354,17 +398,19 @@ export default function AdminAnalytics() {
 
       setDirectoryData({
         metrics: [
-          { title: "Total Files", value: totalFiles > 0 ? totalFiles.toLocaleString() : "0", change: totalFiles > 0 ? `${totalFiles} total` : "No uploads yet", icon: ImageIcon, color: "text-primary" },
-          { title: "Images", value: imagesCount > 0 ? imagesCount.toLocaleString() : "0", change: imagesCount > 0 ? `${imagesCount} uploaded` : "No images yet", icon: ImageIcon, color: "text-primary" },
-          { title: "Videos", value: videosCount > 0 ? videosCount.toLocaleString() : "0", change: videosCount > 0 ? `${videosCount} uploaded` : "No videos yet", icon: Download, color: "text-primary" },
-          { title: "Documents & Other", value: documentsCount > 0 ? documentsCount.toLocaleString() : "0", change: documentsCount > 0 ? `${documentsCount} uploaded` : "No documents yet", icon: Download, color: "text-primary" }
+          { title: "Total Files", value: filesError ? "Unavailable" : (totalFiles > 0 ? totalFiles.toLocaleString() : "0"), change: filesError ? "Query error" : (totalFiles > 0 ? `${totalFiles} total` : "No uploads yet"), icon: ImageIcon, color: "text-primary" },
+          { title: "Images", value: filesError ? "Unavailable" : (imagesCount > 0 ? imagesCount.toLocaleString() : "0"), change: filesError ? "Query error" : (imagesCount > 0 ? `${imagesCount} uploaded` : "No images yet"), icon: ImageIcon, color: "text-primary" },
+          { title: "Videos", value: filesError ? "Unavailable" : (videosCount > 0 ? videosCount.toLocaleString() : "0"), change: filesError ? "Query error" : (videosCount > 0 ? `${videosCount} uploaded` : "No videos yet"), icon: Download, color: "text-primary" },
+          { title: "Documents & Other", value: filesError ? "Unavailable" : (documentsCount > 0 ? documentsCount.toLocaleString() : "0"), change: filesError ? "Query error" : (documentsCount > 0 ? `${documentsCount} uploaded` : "No documents yet"), icon: Download, color: "text-primary" }
         ],
-        chartData: fileChartData.length ? fileChartData : [{ date: 'No Uploads', images: 0, videos: 0, documents: 0, downloads: 0 }],
+        chartData: fileChartData.length ? fileChartData : [{ date: filesError ? 'Unavailable' : 'No Uploads', images: 0, videos: 0, documents: 0, downloads: 0 }],
         hasFiles: totalFiles > 0
       });
 
-    } catch (error) {
+      setAnalyticsErrors(queryErrors);
+    } catch (error: any) {
       console.error("Error fetching analytics:", error);
+      setAnalyticsErrors(prev => [...prev, error?.message || "Failed to load analytics data."]);
     } finally {
       setIsLoading(false);
     }
@@ -439,6 +485,27 @@ export default function AdminAnalytics() {
             </Button>
           </div>
         </div>
+
+        {analyticsErrors.length > 0 && (
+          <Card className="border-destructive/50 bg-destructive/10">
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-destructive">Some analytics queries reported errors</p>
+                  <ul className="text-xs text-muted-foreground list-disc list-inside mt-1 space-y-0.5">
+                    {analyticsErrors.map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchAnalyticsData}>
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Platform Analytics Tabs */}
         <Tabs defaultValue="users" className="space-y-6">

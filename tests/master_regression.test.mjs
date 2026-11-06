@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PGlite } from '@electric-sql/pglite';
 
 // Direct production module imports (executed natively via Node 22/24 type-stripping)
 import {
@@ -819,6 +820,687 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.ok(forwardMigrationSql.includes('v_authorized BOOLEAN := false;'), 'send_authorized_notification must verify caller-recipient relationship');
       assert.ok(forwardMigrationSql.includes('check_post_comment_update_immutability'), 'post_comments must enforce update immutability trigger');
       assert.ok(forwardMigrationSql.includes("m.role != 'Pending'"), 'is_community_group_member and message select must exclude Pending members');
+    });
+  });
+
+  // ============================================================================
+  // R7-01 through R7-13: Real PostgreSQL 16 (PGlite) & Runtime Verification Suite
+  // ============================================================================
+  describe('R7-01..R7-13: Real PostgreSQL 16 Schema, RLS, Triggers, E2EE & Performance Verification', async () => {
+    const supabaseMockPreamble = `
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          CREATE ROLE anon NOLOGIN NOINHERIT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          CREATE ROLE authenticated NOLOGIN NOINHERIT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+          CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+        END IF;
+      END $$;
+
+      GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+      CREATE SCHEMA IF NOT EXISTS auth;
+      GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+
+      CREATE TABLE IF NOT EXISTS auth.users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email TEXT,
+        raw_user_meta_data JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+      GRANT SELECT ON auth.users TO anon, authenticated, service_role;
+
+      CREATE OR REPLACE FUNCTION auth.uid()
+      RETURNS UUID
+      LANGUAGE sql
+      STABLE
+      AS $func$
+        SELECT NULLIF(
+          COALESCE(
+            current_setting('request.jwt.claim.sub', true),
+            (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+          ),
+          ''
+        )::uuid;
+      $func$;
+
+      CREATE OR REPLACE FUNCTION auth.role()
+      RETURNS TEXT
+      LANGUAGE sql
+      STABLE
+      AS $func$
+        SELECT COALESCE(
+          NULLIF(current_setting('request.jwt.claim.role', true), ''),
+          (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'),
+          current_user
+        );
+      $func$;
+
+      CREATE SCHEMA IF NOT EXISTS storage;
+      GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+
+      CREATE TABLE IF NOT EXISTS storage.buckets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        owner UUID,
+        public BOOLEAN DEFAULT false,
+        file_size_limit BIGINT,
+        allowed_mime_types TEXT[],
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+
+      CREATE TABLE IF NOT EXISTS storage.objects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        bucket_id TEXT REFERENCES storage.buckets(id),
+        name TEXT,
+        owner UUID,
+        owner_id TEXT,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now(),
+        last_accessed_at TIMESTAMPTZ DEFAULT now(),
+        metadata JSONB
+      );
+
+      ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON storage.buckets TO anon, authenticated, service_role;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO anon, authenticated, service_role;
+
+      CREATE OR REPLACE FUNCTION storage.foldername(name TEXT)
+      RETURNS TEXT[]
+      LANGUAGE sql
+      IMMUTABLE
+      AS $func$
+        SELECT string_to_array(name, '/');
+      $func$;
+      GRANT EXECUTE ON FUNCTION storage.foldername(TEXT) TO anon, authenticated, service_role;
+    `;
+
+    const migrationsDir = path.join(rootDir, 'supabase/migrations');
+    const migrationFiles = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+
+    async function asUser(db, authUid, fn) {
+      await db.exec(`
+        RESET ROLE;
+        SELECT set_config('request.jwt.claim.sub', '${authUid || ''}', false);
+        SELECT set_config('request.jwt.claim.role', '${authUid ? 'authenticated' : 'anon'}', false);
+        SELECT set_config('request.jwt.claims', '${JSON.stringify({ sub: authUid || null, role: authUid ? 'authenticated' : 'anon' })}', false);
+        SET ROLE ${authUid ? 'authenticated' : 'anon'};
+      `);
+      try {
+        return await fn();
+      } finally {
+        await db.exec(`
+          RESET ROLE;
+          SELECT set_config('request.jwt.claim.sub', '', false);
+          SELECT set_config('request.jwt.claim.role', '', false);
+          SELECT set_config('request.jwt.claims', '', false);
+        `);
+      }
+    }
+
+    test('R7-01 & R7-11: Existing-schema upgrade path (20250108..20261107 -> seed -> 20261108) executes cleanly in PostgreSQL 16', async () => {
+      const upgradeDb = new PGlite();
+      await upgradeDb.exec(supabaseMockPreamble);
+
+      const preR7Files = migrationFiles.filter(f => f < '20261108000000');
+      for (const file of preR7Files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await upgradeDb.exec(sql);
+      }
+
+      // Seed representative pre-existing data (including a ticket with auth.users.id in user_id)
+      const legacyAuthUid = '11111111-1111-4111-8111-111111111101';
+      const legacyProfileId = '22222222-2222-4222-8222-222222222201';
+      await upgradeDb.exec(`
+        INSERT INTO auth.users (id, email) VALUES ('${legacyAuthUid}', 'legacy@filmcollab.io');
+        DELETE FROM public.profiles WHERE user_id = '${legacyAuthUid}';
+        INSERT INTO public.profiles (id, user_id, username, full_name, email, role)
+        VALUES ('${legacyProfileId}', '${legacyAuthUid}', 'legacy_dir', 'Legacy Director', 'legacy@filmcollab.io', 'blocked');
+        INSERT INTO public.tickets (id, ticket_number, user_id, subject, description, category, priority, status)
+        VALUES ('33333333-3333-4333-8333-333333333301', 'TKT-LEGACY-1', '${legacyAuthUid}', 'Legacy Ticket', 'Created with auth.users.id', 'Technical', 'medium', 'open');
+      `);
+
+      const r7Sql = fs.readFileSync(
+        path.join(migrationsDir, '20261108000000_r7_complete_contract_and_security_remediation.sql'),
+        'utf8'
+      );
+      await upgradeDb.exec(r7Sql);
+
+      // Verify legacy ticket user_id was migrated from auth.users.id to profiles.id and FK constraint holds
+      const migratedTicket = await upgradeDb.query(
+        `SELECT user_id FROM public.tickets WHERE id = '33333333-3333-4333-8333-333333333301'`
+      );
+      assert.equal(migratedTicket.rows[0].user_id, legacyProfileId, 'Upgrade migration must normalize legacy ticket user_id to profiles.id');
+
+      // Verify legacy blocked role was synced to account_status = 'blocked'
+      const migratedProfile = await upgradeDb.query(
+        `SELECT account_status, role FROM public.profiles WHERE id = '${legacyProfileId}'`
+      );
+      assert.equal(migratedProfile.rows[0].account_status, 'blocked');
+      await upgradeDb.close();
+    });
+
+    test('R7-01 through R7-10: Clean install replay and full multi-role PostgreSQL 16 security & contract suite', async () => {
+      const db = new PGlite();
+      await db.exec(supabaseMockPreamble);
+
+      for (const file of migrationFiles) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await db.exec(sql);
+      }
+
+      // 1. R7-01: Verify all required tables, views, columns, FKs, RPCs, and storage buckets exist in pg_catalog
+      const requiredTables = [
+        'profiles', 'posts', 'post_likes', 'post_saves', 'post_comments',
+        'projects', 'project_likes', 'project_members', 'project_tasks', 'project_messages',
+        'jobs', 'job_applications', 'connections', 'user_likes', 'user_saves', 'user_roles',
+        'community_groups', 'community_group_members', 'community_group_messages',
+        'directory_files', 'directory_categories', 'companies', 'company_applications',
+        'company_followers', 'company_reviews', 'shooting_locations', 'shooting_location_likes',
+        'property_site_visits', 'property_types', 'messages', 'tickets', 'ticket_messages',
+        'ticket_updates', 'subscription_plans', 'contact_submissions', 'notifications',
+        'casting_calls', 'casting_applicants', 'casting_call_saves', 'categories',
+        'global_tags', 'settings', 'site_settings', 'admin_team_members',
+        'industry_news', 'industry_events', 'industry_courses', 'reports'
+      ];
+      const tablesRes = await db.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`
+      );
+      const presentTables = new Set(tablesRes.rows.map(r => r.table_name));
+      for (const t of requiredTables) {
+        assert.ok(presentTables.has(t), `Missing required table or view in public schema: ${t}`);
+      }
+
+      const viewsRes = await db.query(
+        `SELECT table_name FROM information_schema.views WHERE table_schema = 'public' AND table_name = 'public_profiles'`
+      );
+      assert.equal(viewsRes.rows.length, 1, 'public_profiles view must exist');
+
+      const bucketsRes = await db.query(`SELECT id, public FROM storage.buckets`);
+      const bucketsMap = new Map(bucketsRes.rows.map(b => [b.id, b.public]));
+      for (const b of ['avatars', 'location_media', 'post-media', 'post_media', 'site_assets', 'directory_assets', 'directory_private']) {
+        assert.ok(bucketsMap.has(b), `Missing storage bucket: ${b}`);
+      }
+      assert.equal(bucketsMap.get('directory_assets'), false, 'directory_assets bucket must be non-public (public = false)');
+      assert.equal(bucketsMap.get('directory_private'), false, 'directory_private bucket must be non-public (public = false)');
+
+      const fksRes = await db.query(`
+        SELECT conname FROM pg_constraint
+        WHERE conname IN (
+          'tickets_user_id_fkey',
+          'tickets_assigned_to_fkey',
+          'ticket_messages_author_id_fkey',
+          'ticket_updates_author_id_fkey',
+          'job_applications_profile_id_fkey',
+          'directory_files_user_id_fkey'
+        )
+      `);
+      const fkNames = new Set(fksRes.rows.map(r => r.conname));
+      for (const fk of ['tickets_user_id_fkey', 'tickets_assigned_to_fkey', 'ticket_messages_author_id_fkey', 'ticket_updates_author_id_fkey', 'job_applications_profile_id_fkey', 'directory_files_user_id_fkey']) {
+        assert.ok(fkNames.has(fk), `Missing required foreign key constraint: ${fk}`);
+      }
+
+      // 2. Seed distinct auth.users.id != profiles.id fixtures for Alice, Bob, Staff, Admin, and Blocked user
+      const aliceAuth = 'aaaa0000-0000-4000-8000-000000000001';
+      const aliceProf = 'bbbb0000-0000-4000-8000-000000000001';
+      const bobAuth   = 'aaaa0000-0000-4000-8000-000000000002';
+      const bobProf   = 'bbbb0000-0000-4000-8000-000000000002';
+      const staffAuth = 'aaaa0000-0000-4000-8000-000000000003';
+      const staffProf = 'bbbb0000-0000-4000-8000-000000000003';
+      const blockAuth = 'aaaa0000-0000-4000-8000-000000000004';
+      const blockProf = 'bbbb0000-0000-4000-8000-000000000004';
+
+      await db.exec(`
+        INSERT INTO auth.users (id, email) VALUES
+          ('${aliceAuth}', 'alice@filmcollab.io'),
+          ('${bobAuth}', 'bob@filmcollab.io'),
+          ('${staffAuth}', 'staff@filmcollab.io'),
+          ('${blockAuth}', 'blocked@filmcollab.io');
+
+        DELETE FROM public.profiles WHERE user_id IN ('${aliceAuth}', '${bobAuth}', '${staffAuth}', '${blockAuth}');
+
+        INSERT INTO public.profiles (
+          id, user_id, username, full_name, email, phone, date_of_birth,
+          location, city, state, country, current_city, current_state, current_country,
+          birth_city, birth_state, birth_country,
+          category, role, account_status,
+          privacy_show_email, privacy_show_phone, privacy_show_dob, privacy_show_location, privacy_show_directory,
+          allow_profile_views
+        ) VALUES
+          ('${aliceProf}', '${aliceAuth}', 'alice_cin', 'Alice Cinematographer', 'alice@filmcollab.io', '+919000000001', '1991-04-12',
+           'Mumbai, MH', 'Mumbai', 'Maharashtra', 'India', 'Mumbai', 'Maharashtra', 'India',
+           'Pune', 'Maharashtra', 'India',
+           'Cinematographer', 'user', 'active',
+           false, false, false, false, false, true),
+          ('${bobProf}', '${bobAuth}', 'bob_dir', 'Bob Director', 'bob@filmcollab.io', '+919000000002', '1988-08-20',
+           'Chennai, TN', 'Chennai', 'Tamil Nadu', 'India', 'Chennai', 'Tamil Nadu', 'India',
+           'Madurai', 'Tamil Nadu', 'India',
+           'Director', 'user', 'active',
+           true, true, true, true, true, true),
+          ('${staffProf}', '${staffAuth}', 'staff_mod', 'Staff Moderator', 'staff@filmcollab.io', '+919000000003', '1990-01-01',
+           'Delhi', 'New Delhi', 'Delhi', 'India', 'New Delhi', 'Delhi', 'India',
+           'New Delhi', 'Delhi', 'India',
+           'Producer', 'moderator', 'active',
+           true, true, true, true, true, true),
+          ('${blockProf}', '${blockAuth}', 'blocked_actor', 'Blocked Actor', 'blocked@filmcollab.io', '+919000000004', '1995-05-05',
+           'Kolkata', 'Kolkata', 'West Bengal', 'India', 'Kolkata', 'West Bengal', 'India',
+           'Kolkata', 'West Bengal', 'India',
+           'Actor', 'blocked', 'blocked',
+           true, true, true, true, true, true);
+
+        -- Bob follows Alice
+        INSERT INTO public.connections (user_id, connected_user_id, status)
+        VALUES ('${bobProf}', '${aliceProf}', 'accepted');
+
+        -- Provision Staff Moderator with granular permissions on tickets (edit) and jobs (delete), but NOT users
+        INSERT INTO public.user_roles (user_id, role)
+        VALUES ('${staffAuth}', 'moderator')
+        ON CONFLICT (user_id, role) DO NOTHING;
+
+        INSERT INTO public.admin_team_members (user_id, profile_id, role, status, permissions)
+        VALUES (
+          '${staffAuth}',
+          '${staffProf}',
+          'Moderator',
+          'Active',
+          '{"Tickets": {"view": true, "edit": true}, "Jobs": {"view": true, "delete": true}}'::jsonb
+        );
+      `);
+
+      // 3. R7-02 & R7-03: Public vs Private project notifications, location notifications, job notifications under ROLE authenticated
+      await asUser(db, aliceAuth, async () => {
+        // Alice creates a PUBLIC project -> should succeed and notify follower Bob (even when created_by = auth.users.id and connections uses profiles.id)
+        const pubProjRes = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Public Noir Feature', 'Direction', 'Feature Film', 'planning', 'public', '${aliceAuth}')
+          RETURNING id
+        `);
+        assert.equal(pubProjRes.rows.length, 1);
+
+        // Alice creates a PRIVATE project -> should succeed and NOT notify non-member follower Bob
+        const privProjRes = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Secret Studio Project', 'Direction', 'Feature Film', 'planning', 'private', '${aliceAuth}')
+          RETURNING id
+        `);
+        assert.equal(privProjRes.rows.length, 1);
+
+        // Alice creates a shooting location -> trigger must succeed under SECURITY DEFINER without 42501
+        const locRes = await db.query(`
+          INSERT INTO public.shooting_locations (name, city, state, property_type, price, status, created_by)
+          VALUES ('Heritage Palace Studio', 'Mumbai', 'Maharashtra', 'Studio', 25000, 'active', '${aliceAuth}')
+          RETURNING id
+        `);
+        assert.equal(locRes.rows.length, 1);
+
+        // Alice creates a job -> trigger must succeed under SECURITY DEFINER without 42501
+        const jobRes = await db.query(`
+          INSERT INTO public.jobs (job_title, company_name, job_description, job_type, experience_level, location, industry, status, user_id)
+          VALUES ('Lead Gaffer', 'Noir Productions', 'Lighting setup', 'Full-time', 'Mid-Level', 'Mumbai', 'Film', 'active', '${aliceAuth}')
+          RETURNING id
+        `);
+        assert.equal(jobRes.rows.length, 1);
+      });
+
+      const bobNotifs = await db.query(
+        `SELECT title, description FROM public.notifications WHERE user_id = '${bobProf}'`
+      );
+      assert.ok(
+        bobNotifs.rows.some(n => n.description && n.description.includes('Public Noir Feature')),
+        'Follower Bob must receive notification for Alice public project'
+      );
+      assert.ok(
+        !bobNotifs.rows.some(n => n.description && n.description.includes('Secret Studio Project')),
+        'Follower Bob must NOT receive notification for Alice private project when not an accepted project_member'
+      );
+
+      // 4. R7-04: Staff self-read on admin_team_members and granular server-side permission enforcement
+      await asUser(db, staffAuth, async () => {
+        const selfTeam = await db.query(`SELECT id, role, permissions FROM public.admin_team_members`);
+        assert.equal(selfTeam.rows.length, 1, 'Active staff member must be able to read their own admin_team_members row');
+        assert.equal(selfTeam.rows[0].role, 'Moderator');
+      });
+
+      await asUser(db, bobAuth, async () => {
+        const otherTeam = await db.query(`SELECT id FROM public.admin_team_members`);
+        assert.equal(otherTeam.rows.length, 0, 'Non-staff user must not read admin_team_members rows');
+      });
+
+      // Bob creates a ticket passing auth.users.id (normalized automatically to bobProf by trigger)
+      let bobTicketId;
+      await asUser(db, bobAuth, async () => {
+        const tktRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, category, priority)
+          VALUES ('${bobAuth}', 'Audio sync issue', 'Need help with timecode', 'Technical', 'high')
+          RETURNING id, user_id
+        `);
+        assert.equal(tktRes.rows[0].user_id, bobProf, 'normalize_ticket_profile_references must normalize auth.uid() to profiles.id');
+        bobTicketId = tktRes.rows[0].id;
+      });
+
+      // Staff moderator with tickets.edit = true can update Bob's ticket, but cannot edit Bob's profile (users.edit is not granted)
+      await asUser(db, staffAuth, async () => {
+        const updateTkt = await db.query(`
+          UPDATE public.tickets SET status = 'in_progress', assigned_to = '${staffAuth}'
+          WHERE id = '${bobTicketId}'
+          RETURNING id, assigned_to
+        `);
+        assert.equal(updateTkt.rows.length, 1, 'Staff with tickets.edit permission must be allowed to update ticket');
+        assert.equal(updateTkt.rows[0].assigned_to, staffProf, 'assigned_to must normalize to staff profile id');
+
+        const unauthorizedProfileUpdate = await db.query(`
+          UPDATE public.profiles SET bio = 'Tampered by staff without users permission'
+          WHERE id = '${bobProf}'
+          RETURNING id
+        `);
+        assert.equal(unauthorizedProfileUpdate.rows.length, 0, 'Staff without users.edit permission must not update another user profile');
+      });
+
+      // 5. R7-05: Blocked account server-side enforcement & self-unblock prevention
+      await asUser(db, blockAuth, async () => {
+        const activeCheck = await db.query(`SELECT public.is_caller_active() AS active`);
+        assert.equal(activeCheck.rows[0].active, false, 'Blocked user must fail is_caller_active()');
+
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.posts (author_id, content, is_published)
+              VALUES ('${blockProf}', 'Spam from blocked account', true)
+            `);
+          },
+          /row-level security policy/i,
+          'Blocked user must be denied inserting posts'
+        );
+
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.messages (sender_id, receiver_id, content)
+              VALUES ('${blockProf}', '${bobProf}', 'ENCRYPTED:iv:cipher')
+            `);
+          },
+          /row-level security policy/i,
+          'Blocked user must be denied sending messages'
+        );
+
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              UPDATE public.profiles SET account_status = 'active', role = 'user'
+              WHERE id = '${blockProf}'
+            `);
+          },
+          /Blocked accounts cannot modify|row-level security/i,
+          'Blocked user must not be able to self-unblock'
+        );
+      });
+
+      // 6. R7-06: Location & PII privacy enforcement across raw profiles vs public_profiles
+      await asUser(db, bobAuth, async () => {
+        // Alice has privacy_show_location = false, privacy_show_email = false, privacy_show_phone = false, privacy_show_dob = false
+        const rawAlice = await db.query(`SELECT id FROM public.profiles WHERE id = '${aliceProf}'`);
+        assert.equal(rawAlice.rows.length, 0, 'Non-owner must be blocked from selecting raw profiles row when privacy flags are disabled');
+
+        const viewAlice = await db.query(`
+          SELECT id, full_name, email, phone, date_of_birth,
+                 location, city, state, country,
+                 current_city, current_state, current_country,
+                 birth_city, birth_state, birth_country
+          FROM public.public_profiles
+          WHERE id = '${aliceProf}'
+        `);
+        assert.equal(viewAlice.rows.length, 1, 'public_profiles must still return Alice public identity');
+        const row = viewAlice.rows[0];
+        assert.equal(row.full_name, 'Alice Cinematographer');
+        assert.equal(row.email, null, 'email must be masked');
+        assert.equal(row.phone, null, 'phone must be masked');
+        assert.equal(row.date_of_birth, null, 'date_of_birth must be masked');
+        assert.equal(row.location, null, 'location must be masked');
+        assert.equal(row.city, null, 'city must be masked');
+        assert.equal(row.state, null, 'state must be masked');
+        assert.equal(row.country, null, 'country must be masked');
+        assert.equal(row.current_city, null, 'current_city must be masked');
+        assert.equal(row.current_state, null, 'current_state must be masked');
+        assert.equal(row.current_country, null, 'current_country must be masked');
+        assert.equal(row.birth_city, null, 'birth_city must be masked');
+        assert.equal(row.birth_state, null, 'birth_state must be masked');
+        assert.equal(row.birth_country, null, 'birth_country must be masked');
+      });
+
+      // Owner Alice sees her own unmasked fields in public_profiles
+      await asUser(db, aliceAuth, async () => {
+        const ownView = await db.query(`
+          SELECT email, phone, location, city, current_city, birth_city
+          FROM public.public_profiles
+          WHERE id = '${aliceProf}'
+        `);
+        assert.equal(ownView.rows[0].email, 'alice@filmcollab.io');
+        assert.equal(ownView.rows[0].location, 'Mumbai, MH');
+        assert.equal(ownView.rows[0].city, 'Mumbai');
+        assert.equal(ownView.rows[0].current_city, 'Mumbai');
+        assert.equal(ownView.rows[0].birth_city, 'Pune');
+      });
+
+      // 7. R7-07: Private directory_assets bucket & RLS enforcement on directory_files and storage.objects
+      await db.exec(`
+        INSERT INTO public.directory_files (
+          id, title, file_type, file_url, storage_bucket, storage_path, user_id, status, is_public
+        ) VALUES (
+          'dddd0000-0000-4000-8000-000000000001',
+          'Alice Confidential Reel',
+          'video',
+          'storage://directory_assets/${aliceAuth}/reel.mp4',
+          'directory_assets',
+          '${aliceAuth}/reel.mp4',
+          '${aliceProf}',
+          'approved',
+          true
+        );
+
+        INSERT INTO storage.objects (bucket_id, name, owner)
+        VALUES ('directory_assets', '${aliceAuth}/reel.mp4', '${aliceAuth}');
+      `);
+
+      // Because Alice has privacy_show_directory = false, Bob cannot read Alice's directory_files row or storage.objects row
+      await asUser(db, bobAuth, async () => {
+        const dirRows = await db.query(`SELECT id FROM public.directory_files WHERE id = 'dddd0000-0000-4000-8000-000000000001'`);
+        assert.equal(dirRows.rows.length, 0, 'Non-owner must not read directory_files when owner privacy_show_directory = false');
+
+        const objRows = await db.query(`SELECT id FROM storage.objects WHERE bucket_id = 'directory_assets' AND name = '${aliceAuth}/reel.mp4'`);
+        assert.equal(objRows.rows.length, 0, 'Non-owner must not read storage.objects when owner privacy_show_directory = false');
+      });
+
+      // Owner Alice CAN read her own directory_files and storage.objects
+      await asUser(db, aliceAuth, async () => {
+        const dirRows = await db.query(`SELECT id FROM public.directory_files WHERE id = 'dddd0000-0000-4000-8000-000000000001'`);
+        assert.equal(dirRows.rows.length, 1, 'Owner must read own directory_files row');
+
+        const objRows = await db.query(`SELECT id FROM storage.objects WHERE bucket_id = 'directory_assets' AND name = '${aliceAuth}/reel.mp4'`);
+        assert.equal(objRows.rows.length, 1, 'Owner must read own storage.objects row');
+      });
+
+      // 8. R7-08: Public key rotation history trigger on profiles
+      const key1 = JSON.stringify((await generateKeyPair()).publicKeyJwk);
+      const key2 = JSON.stringify((await generateKeyPair()).publicKeyJwk);
+      await asUser(db, aliceAuth, async () => {
+        await db.query(`UPDATE public.profiles SET public_key = $1 WHERE id = $2`, [key1, aliceProf]);
+        await db.query(`UPDATE public.profiles SET public_key = $1 WHERE id = $2`, [key2, aliceProf]);
+        const keyHistRes = await db.query(`SELECT public_key, public_key_history FROM public.profiles WHERE id = $1`, [aliceProf]);
+        assert.equal(keyHistRes.rows[0].public_key, key2);
+        const hist = keyHistRes.rows[0].public_key_history;
+        assert.ok(Array.isArray(hist) && hist.length === 1, 'Rotating public_key must archive previous key in public_key_history');
+        assert.equal(hist[0].publicKey, key1);
+      });
+
+      // 9. R7-09: send_authorized_notification relationship enforcement, canonical profile_view text, and deduplication
+      // Create a third user Charlie who has NO connection or like with Bob
+      const charlieAuth = 'aaaa0000-0000-4000-8000-000000000005';
+      const charlieProf = 'bbbb0000-0000-4000-8000-000000000005';
+      await db.exec(`
+        INSERT INTO auth.users (id, email) VALUES ('${charlieAuth}', 'charlie@filmcollab.io');
+        DELETE FROM public.profiles WHERE user_id = '${charlieAuth}';
+        INSERT INTO public.profiles (id, user_id, username, full_name, role, account_status)
+        VALUES ('${charlieProf}', '${charlieAuth}', 'charlie_ed', 'Charlie Editor', 'user', 'active');
+      `);
+
+      await asUser(db, charlieAuth, async () => {
+        // Charlie tries to forge a connection notification to Bob (who has privacy_allow_profile_views = true) without a connections row
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              SELECT public.send_authorized_notification(
+                p_recipient_id := '${bobProf}',
+                p_title := 'Fake Connection Request',
+                p_message := 'Forged alert',
+                p_type := 'connection'
+              )
+            `);
+          },
+          /Unauthorized notification/i,
+          'send_authorized_notification must reject forged connection notification when no connection row exists'
+        );
+
+        // Charlie tries to forge a like notification to Bob without any like row
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              SELECT public.send_authorized_notification(
+                p_recipient_id := '${bobProf}',
+                p_title := 'Fake Like',
+                p_message := 'Forged like',
+                p_type := 'like'
+              )
+            `);
+          },
+          /Unauthorized notification/i,
+          'send_authorized_notification must reject forged like notification when no like row exists'
+        );
+
+        // Charlie sends a profile_view notification with spoofed title/message -> server enforces canonical text and deduplicates repeats
+        const pv1 = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${bobProf}',
+            p_title := 'SPOOFED URGENT SYSTEM ALERT',
+            p_message := 'Click this phishing text',
+            p_type := 'profile_view'
+          ) AS id
+        `);
+        const pv2 = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${bobProf}',
+            p_title := 'SECOND SPOOFED ALERT',
+            p_message := 'Another spam text',
+            p_type := 'profile_view'
+          ) AS id
+        `);
+        assert.equal(pv1.rows[0].id, pv2.rows[0].id, 'Repeated unread profile_view notifications must be deduplicated');
+      });
+
+      const pvRow = await db.query(`SELECT title, description FROM public.notifications WHERE id = (SELECT id FROM public.notifications WHERE user_id = '${bobProf}' AND type = 'profile' LIMIT 1)`);
+      assert.equal(pvRow.rows[0].title, 'Profile View', 'profile_view notification must enforce canonical title');
+      assert.equal(pvRow.rows[0].description, 'Someone viewed your profile.', 'profile_view notification must enforce canonical description');
+
+      // 10. R7-10: Studio follows & reviews persistence and summary triggers
+      let studioId;
+      await asUser(db, aliceAuth, async () => {
+        const compRes = await db.query(`
+          INSERT INTO public.companies (name, category, description, user_id)
+          VALUES ('Noir Light Studios', 'Production House', 'Boutique cinematography house', '${aliceAuth}')
+          RETURNING id
+        `);
+        studioId = compRes.rows[0].id;
+      });
+
+      await asUser(db, bobAuth, async () => {
+        await db.query(`
+          INSERT INTO public.company_followers (company_id, user_id)
+          VALUES ('${studioId}', '${bobAuth}')
+        `);
+        await db.query(`
+          INSERT INTO public.company_reviews (company_id, user_id, author_name, rating, comment)
+          VALUES ('${studioId}', '${bobAuth}', 'Bob Director', 5, 'World-class anamorphic lenses and crew.')
+        `);
+
+        // Bob cannot forge a review under Charlie's user_id
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.company_reviews (company_id, user_id, author_name, rating, comment)
+              VALUES ('${studioId}', '${charlieAuth}', 'Charlie', 1, 'Forged review')
+            `);
+          },
+          /row-level security policy/i
+        );
+      });
+
+      const studioSummary = await db.query(
+        `SELECT followers_count, reviews_count, rating FROM public.companies WHERE id = '${studioId}'`
+      );
+      assert.equal(studioSummary.rows[0].followers_count, 1, 'company_followers trigger must update followers_count');
+      assert.equal(studioSummary.rows[0].reviews_count, 1, 'company_reviews trigger must update reviews_count');
+      assert.equal(Number(studioSummary.rows[0].rating), 5, 'company_reviews trigger must update rating');
+
+      await db.close();
+    });
+
+    test('R7-08: Authenticated E2EE key metadata rejects tampered header and decrypts across peer public_key_history', async () => {
+      const aliceOld = await generateKeyPair();
+      const aliceRotated = await generateKeyPair();
+      const bob = await generateKeyPair();
+
+      const aliceOldPriv = await importPrivateKey(aliceOld.privateKeyJwk);
+      const bobPriv = await importPrivateKey(bob.privateKeyJwk);
+
+      // 1. Alice sends an authenticated 4-part envelope to Bob using her OLD key before rotating
+      const envFromAliceOld = await encryptForRecipientOrThrow({
+        senderPrivateKey: aliceOldPriv,
+        recipientPublicKeyJwkOrStr: bob.publicKeyJwk,
+        plaintext: 'Scene 42 call sheet attached.',
+        includeKeyMetadata: true
+      });
+
+      const parts = envFromAliceOld.envelope.split(':');
+      assert.equal(parts.length, 4, 'includeKeyMetadata must emit 4-part ENCRYPTED:<keyId>:<iv>:<cipher> envelope');
+
+      // 2. Tamper with parts[1] (keyId header) and verify decryptEnvelopeWithKeyring rejects it with E2EE_AUTHENTICATION_FAILED
+      const tamperedEnvelope = `ENCRYPTED:tampered_key_id:${parts[2]}:${parts[3]}`;
+      await assert.rejects(
+        async () => {
+          await decryptEnvelopeWithKeyring({
+            envelope: tamperedEnvelope,
+            primaryPrivateKey: bobPriv,
+            primaryPublicKeyJwk: bob.publicKeyJwk,
+            senderPublicKeyJwkOrStr: aliceOld.publicKeyJwk
+          });
+        },
+        /E2EE_AUTHENTICATION_FAILED/,
+        'Tampered 4-part key metadata header must be rejected'
+      );
+
+      // 3. Alice rotates her public key to aliceRotated.publicKeyJwk; her old public key is in peerPublicKeyHistory.
+      // Bob decrypts Alice's historical message using Alice's current public_key + peerPublicKeyHistory!
+      const decryptedByBob = await decryptEnvelopeWithKeyring({
+        envelope: envFromAliceOld.envelope,
+        primaryPrivateKey: bobPriv,
+        primaryPublicKeyJwk: bob.publicKeyJwk,
+        senderPublicKeyJwkOrStr: aliceRotated.publicKeyJwk,
+        peerPublicKeyHistory: [{ publicKey: JSON.stringify(aliceOld.publicKeyJwk) }]
+      });
+      assert.equal(decryptedByBob, 'Scene 42 call sheet attached.');
+    });
+
+    test('R7-13: NewLocation replaces 8.55MB country-state-city with lightweight india-locations and Messages scopes polling', async () => {
+      const newLocSource = fs.readFileSync(path.join(rootDir, 'src/pages/locations/new.tsx'), 'utf8');
+      assert.ok(!newLocSource.includes('from "country-state-city"'), 'NewLocation must not import country-state-city');
+      assert.ok(newLocSource.includes('from "@/lib/india-locations"'), 'NewLocation must use lightweight india-locations module');
+
+      const messagesSource = fs.readFileSync(path.join(rootDir, 'src/pages/messages/page.tsx'), 'utf8');
+      assert.ok(messagesSource.includes('.in("id", peerIds)'), 'Messages loadChatData must scope public_profiles query to participant peerIds');
+      assert.ok(messagesSource.includes('document.visibilityState === "hidden"'), 'Messages polling must pause when tab is hidden');
     });
   });
 });

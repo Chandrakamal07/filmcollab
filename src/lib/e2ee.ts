@@ -80,14 +80,19 @@ export function base64ToBuffer(base64: string) {
   return bytes.buffer;
 }
 
-export async function encryptMessage(aesKey: CryptoKey, plaintext: string) {
+export async function encryptMessage(aesKey: CryptoKey, plaintext: string, additionalDataStr?: string) {
   const crypto = getCrypto();
   const enc = new TextEncoder();
   const encoded = enc.encode(plaintext);
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  const algorithm: AesGcmParams = {
+    name: "AES-GCM",
+    iv,
+    ...(additionalDataStr ? { additionalData: enc.encode(additionalDataStr) } : {})
+  };
 
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
+    algorithm,
     aesKey,
     encoded
   );
@@ -98,13 +103,24 @@ export async function encryptMessage(aesKey: CryptoKey, plaintext: string) {
   };
 }
 
-export async function decryptMessage(aesKey: CryptoKey, ivBase64: string, ciphertextBase64: string) {
+export async function decryptMessage(
+  aesKey: CryptoKey,
+  ivBase64: string,
+  ciphertextBase64: string,
+  additionalDataStr?: string
+) {
   const crypto = getCrypto();
+  const enc = new TextEncoder();
   const iv = base64ToBuffer(ivBase64);
   const ciphertext = base64ToBuffer(ciphertextBase64);
+  const algorithm: AesGcmParams = {
+    name: "AES-GCM",
+    iv,
+    ...(additionalDataStr ? { additionalData: enc.encode(additionalDataStr) } : {})
+  };
 
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: iv },
+    algorithm,
     aesKey,
     ciphertext
   );
@@ -122,8 +138,10 @@ export async function encryptForRecipientOrThrow(params: {
   senderPrivateKey: CryptoKey | null | undefined;
   recipientPublicKeyJwkOrStr: string | JsonWebKey | null | undefined;
   plaintext: string;
-}): Promise<{ iv: string; ciphertext: string; envelope: string }> {
-  const { senderPrivateKey, recipientPublicKeyJwkOrStr, plaintext } = params;
+  keyId?: string | null;
+  includeKeyMetadata?: boolean;
+}): Promise<{ iv: string; ciphertext: string; envelope: string; keyId: string }> {
+  const { senderPrivateKey, recipientPublicKeyJwkOrStr, plaintext, keyId, includeKeyMetadata } = params;
 
   if (!senderPrivateKey) {
     throw new Error("E2EE_KEY_UNAVAILABLE: Sender private key is missing or not yet initialized.");
@@ -148,15 +166,30 @@ export async function encryptForRecipientOrThrow(params: {
     throw new Error("E2EE_INVALID_RECIPIENT_KEY: Recipient key is not a valid ECDH P-256 key.");
   }
 
+  const resolvedKeyId = keyId || computeKeyId(jwk);
   const otherPubKey = await importPublicKey(jwk);
   const sharedKey = await deriveAESKey(senderPrivateKey, otherPubKey);
+
+  if (includeKeyMetadata || keyId) {
+    const aadHeader = `ENCRYPTED:${resolvedKeyId}`;
+    const encrypted = await encryptMessage(sharedKey, plaintext, aadHeader);
+    const envelope = `${aadHeader}:${encrypted.iv}:${encrypted.ciphertext}`;
+    return {
+      iv: encrypted.iv,
+      ciphertext: encrypted.ciphertext,
+      envelope,
+      keyId: resolvedKeyId
+    };
+  }
+
   const encrypted = await encryptMessage(sharedKey, plaintext);
   const envelope = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
 
   return {
     iv: encrypted.iv,
     ciphertext: encrypted.ciphertext,
-    envelope
+    envelope,
+    keyId: resolvedKeyId
   };
 }
 
@@ -209,59 +242,146 @@ export function registerKeyInRing(profileId: string, privateKeyJwk: JsonWebKey, 
   return keyId;
 }
 
+function parseCandidateJwk(raw: unknown): JsonWebKey | null {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && parsed.kty === "EC" ? (parsed as JsonWebKey) : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if (obj.kty === "EC") return obj as unknown as JsonWebKey;
+    if (obj.publicKey) return parseCandidateJwk(obj.publicKey);
+    if (obj.key) return parseCandidateJwk(obj.key);
+  }
+  return null;
+}
+
 /**
- * Decrypt an ENCRYPTED:... envelope using the active private key or any historical key in the profile's keyring.
+ * Decrypt an ENCRYPTED:... envelope using the active private key or any historical key in the profile's keyring,
+ * while also trying any rotated historical public keys of the peer (`peerPublicKeyHistory`) and authenticating
+ * any 4-part key metadata header (`ENCRYPTED:<keyId>:<iv>:<cipher>`).
  */
 export async function decryptEnvelopeWithKeyring(params: {
   envelope: string;
   recipientProfileId?: string;
   primaryPrivateKey?: CryptoKey | null;
+  primaryPublicKeyJwk?: JsonWebKey | string | null;
   senderPublicKeyJwkOrStr?: string | JsonWebKey | null | undefined;
   peerPublicKeyJwkOrStr?: string | JsonWebKey | null | undefined;
+  peerPublicKeyHistory?: Array<unknown> | null | undefined;
   keyring?: Array<{ keyId?: string; privateKeyJwk: JsonWebKey; publicKeyJwk?: JsonWebKey; createdAt?: number | string }>;
 }): Promise<string> {
   const {
     envelope,
     recipientProfileId,
     primaryPrivateKey,
+    primaryPublicKeyJwk,
     senderPublicKeyJwkOrStr,
     peerPublicKeyJwkOrStr,
+    peerPublicKeyHistory,
     keyring
   } = params;
   if (!envelope.startsWith("ENCRYPTED:")) return envelope;
-  const effectiveSenderPub = senderPublicKeyJwkOrStr ?? peerPublicKeyJwkOrStr;
-  if (!effectiveSenderPub) {
+
+  const candidatePeerJwks: JsonWebKey[] = [];
+  const seenPeerKeyIds = new Set<string>();
+  const addPeerCandidate = (raw: unknown) => {
+    const parsed = parseCandidateJwk(raw);
+    if (!parsed) return;
+    const id = computeKeyId(parsed);
+    if (!seenPeerKeyIds.has(id)) {
+      seenPeerKeyIds.add(id);
+      candidatePeerJwks.push(parsed);
+    }
+  };
+
+  addPeerCandidate(senderPublicKeyJwkOrStr ?? peerPublicKeyJwkOrStr);
+  if (Array.isArray(peerPublicKeyHistory)) {
+    for (const histItem of peerPublicKeyHistory) {
+      addPeerCandidate(histItem);
+    }
+  }
+
+  if (candidatePeerJwks.length === 0) {
     throw new Error("E2EE_SENDER_KEY_UNAVAILABLE: Sender public key is missing.");
   }
 
-  const jwk: JsonWebKey =
-    typeof effectiveSenderPub === "string"
-      ? JSON.parse(effectiveSenderPub)
-      : effectiveSenderPub;
-  const senderPubKey = await importPublicKey(jwk);
-
   const parts = envelope.split(":");
-  const iv = parts.length === 4 ? parts[2] : parts[1];
-  const cipher = parts.length === 4 ? parts[3] : parts[2];
+  if (parts.length !== 3 && parts.length !== 4) {
+    throw new Error("E2EE_MALFORMED_ENVELOPE: Envelope format is invalid.");
+  }
 
-  if (primaryPrivateKey) {
-    try {
-      const sharedKey = await deriveAESKey(primaryPrivateKey, senderPubKey);
-      return await decryptMessage(sharedKey, iv, cipher);
-    } catch {
-      // Fall through to historical keyring
-    }
+  const hasKeyHeader = parts.length === 4;
+  const headerKeyId = hasKeyHeader ? parts[1] : null;
+  const iv = hasKeyHeader ? parts[2] : parts[1];
+  const cipher = hasKeyHeader ? parts[3] : parts[2];
+
+  if (hasKeyHeader && (!headerKeyId || !headerKeyId.trim())) {
+    throw new Error("E2EE_AUTHENTICATION_FAILED: Envelope key metadata header is empty.");
   }
 
   const ring = keyring ?? (recipientProfileId ? getUserKeyring(recipientProfileId) : []);
+  const parsedPrimaryPub =
+    parseCandidateJwk(primaryPublicKeyJwk) ??
+    (recipientProfileId && typeof localStorage !== "undefined"
+      ? parseCandidateJwk(localStorage.getItem(`e2ee_pub_${recipientProfileId}`))
+      : null);
+  const primaryKeyId = parsedPrimaryPub ? computeKeyId(parsedPrimaryPub) : null;
+
+  // Build candidate recipient private keys paired with their known keyId
+  const recipientKeyCandidates: Array<{ keyId: string | null; getCryptoKey: () => Promise<CryptoKey> }> = [];
+  if (primaryPrivateKey) {
+    recipientKeyCandidates.push({
+      keyId: primaryKeyId,
+      getCryptoKey: async () => primaryPrivateKey
+    });
+  }
   for (const entry of ring) {
-    try {
-      const privKey = await importPrivateKey(entry.privateKeyJwk);
-      const sharedKey = await deriveAESKey(privKey, senderPubKey);
-      return await decryptMessage(sharedKey, iv, cipher);
-    } catch {
-      // Try next historical key
+    const entryKeyId = entry.keyId || (entry.publicKeyJwk ? computeKeyId(entry.publicKeyJwk) : null);
+    recipientKeyCandidates.push({
+      keyId: entryKeyId,
+      getCryptoKey: async () => importPrivateKey(entry.privateKeyJwk)
+    });
+  }
+
+  let headerMismatchDetected = false;
+
+  for (const peerJwk of candidatePeerJwks) {
+    const peerKeyId = computeKeyId(peerJwk);
+    const peerCryptoKey = await importPublicKey(peerJwk);
+
+    for (const recCandidate of recipientKeyCandidates) {
+      if (hasKeyHeader && headerKeyId) {
+        const matchesRecipientKey = Boolean(recCandidate.keyId && recCandidate.keyId === headerKeyId);
+        const matchesPeerKey = peerKeyId === headerKeyId;
+        if (!matchesRecipientKey && !matchesPeerKey) {
+          headerMismatchDetected = true;
+          continue;
+        }
+      }
+
+      try {
+        const privKey = await recCandidate.getCryptoKey();
+        const sharedKey = await deriveAESKey(privKey, peerCryptoKey);
+        if (hasKeyHeader && headerKeyId) {
+          // Authenticate the header against AES-GCM AAD first
+          const aadHeader = `ENCRYPTED:${headerKeyId}`;
+          return await decryptMessage(sharedKey, iv, cipher, aadHeader);
+        }
+        return await decryptMessage(sharedKey, iv, cipher);
+      } catch {
+        // Try next candidate pair
+      }
     }
+  }
+
+  if (hasKeyHeader && headerMismatchDetected) {
+    throw new Error("E2EE_AUTHENTICATION_FAILED: Envelope key metadata does not match cryptographic key.");
   }
 
   throw new Error("E2EE_DECRYPTION_FAILED: No matching key in keyring could decrypt the message.");
@@ -270,25 +390,41 @@ export async function decryptEnvelopeWithKeyring(params: {
 /**
  * Retrieve or generate a local ECDH P-256 keypair for a profile.
  * Stored safely in localStorage with profile ID namespace and non-destructive keyring history.
+ * If `existingRemotePublicKey` is provided and no local key exists in `localStorage`, sets
+ * `requiresExplicitKeyRotation = true` so callers do not silently overwrite the server key without rotation awareness.
  */
-export async function getOrInitUserE2EE(profileId: string) {
-  let privKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_priv_${profileId}`) : null;
-  let pubKeyStr = typeof localStorage !== 'undefined' ? localStorage.getItem(`e2ee_pub_${profileId}`) : null;
+export async function getOrInitUserE2EE(
+  profileId: string,
+  options?: { existingRemotePublicKey?: string | null; allowOverwriteRemoteKey?: boolean }
+) {
+  let privKeyStr = typeof localStorage !== "undefined" ? localStorage.getItem(`e2ee_priv_${profileId}`) : null;
+  let pubKeyStr = typeof localStorage !== "undefined" ? localStorage.getItem(`e2ee_pub_${profileId}`) : null;
   let privKey: CryptoKey;
   let pubKeyJwk: JsonWebKey;
   let privKeyJwk: JsonWebKey;
+  let requiresExplicitKeyRotation = false;
 
   if (privKeyStr && pubKeyStr) {
     privKeyJwk = JSON.parse(privKeyStr);
     pubKeyJwk = JSON.parse(pubKeyStr);
     privKey = await importPrivateKey(privKeyJwk);
+    if (
+      options?.existingRemotePublicKey &&
+      options.existingRemotePublicKey !== pubKeyStr &&
+      !options?.allowOverwriteRemoteKey
+    ) {
+      requiresExplicitKeyRotation = true;
+    }
   } else {
+    if (options?.existingRemotePublicKey && !options?.allowOverwriteRemoteKey) {
+      requiresExplicitKeyRotation = true;
+    }
     const keys = await generateKeyPair();
     privKeyJwk = keys.privateKeyJwk;
     pubKeyJwk = keys.publicKeyJwk;
     privKeyStr = JSON.stringify(privKeyJwk);
     pubKeyStr = JSON.stringify(pubKeyJwk);
-    if (typeof localStorage !== 'undefined') {
+    if (typeof localStorage !== "undefined") {
       localStorage.setItem(`e2ee_priv_${profileId}`, privKeyStr);
       localStorage.setItem(`e2ee_pub_${profileId}`, pubKeyStr);
     }
@@ -297,5 +433,5 @@ export async function getOrInitUserE2EE(profileId: string) {
 
   const keyId = registerKeyInRing(profileId, privKeyJwk, pubKeyJwk);
 
-  return { privKey, pubKeyStr, pubKeyJwk, keyId };
+  return { privKey, pubKeyStr, pubKeyJwk, keyId, requiresExplicitKeyRotation };
 }
