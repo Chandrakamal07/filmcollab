@@ -435,3 +435,135 @@ export async function getOrInitUserE2EE(
 
   return { privKey, pubKeyStr, pubKeyJwk, keyId, requiresExplicitKeyRotation };
 }
+
+export interface SenderE2EEPublicationResult {
+  ready: boolean;
+  privKey: CryptoKey | null;
+  pubKeyStr: string | null;
+  pubKeyJwk: JsonWebKey | null;
+  keyId: string | null;
+  requiresExplicitKeyRotation: boolean;
+  error?: string;
+}
+
+/**
+ * Ensures the caller's E2EE keypair is initialized and its public key is verified-published
+ * on `profiles.public_key` without silently rotating an existing remote device key.
+ *
+ * - If `existingRemotePublicKey` is present and differs from the local browser key, and
+ *   `allowExplicitKeyRotation` is false, returns `ready: false` and `requiresExplicitKeyRotation: true`
+ *   without overwriting `profiles.public_key`.
+ * - If `existingRemotePublicKey` is absent or `allowExplicitKeyRotation` is true, publishes `pubKeyStr`
+ *   to `profiles.public_key` and inspects `{ data, error }` so a PostgREST `42501` or 0-row update
+ *   fails closed (`ready: false`, `privKey: null`).
+ */
+export async function ensureSenderE2EEPublicationReady(params: {
+  supabaseClient: any;
+  profileId: string;
+  existingRemotePublicKey?: string | null;
+  allowExplicitKeyRotation?: boolean;
+}): Promise<SenderE2EEPublicationResult> {
+  const { supabaseClient, profileId, allowExplicitKeyRotation = false } = params;
+  if (!profileId) {
+    return {
+      ready: false,
+      privKey: null,
+      pubKeyStr: null,
+      pubKeyJwk: null,
+      keyId: null,
+      requiresExplicitKeyRotation: false,
+      error: "E2EE_SENDER_PROFILE_MISSING: Sender profile ID is required."
+    };
+  }
+
+  let remotePublicKey = params.existingRemotePublicKey;
+  if (remotePublicKey === undefined && supabaseClient?.from) {
+    try {
+      const { data: profData, error: profErr } = await supabaseClient
+        .from("profiles")
+        .select("id, public_key")
+        .eq("id", profileId)
+        .maybeSingle();
+      if (!profErr && profData) {
+        remotePublicKey = profData.public_key ?? null;
+      }
+    } catch {
+      // Proceed with local check; publication step below will still verify server acknowledgement
+    }
+  }
+
+  const { privKey, pubKeyStr, pubKeyJwk, keyId } = await getOrInitUserE2EE(profileId, {
+    existingRemotePublicKey: remotePublicKey,
+    allowOverwriteRemoteKey: allowExplicitKeyRotation
+  });
+
+  const remoteJwk = parseCandidateJwk(remotePublicKey);
+  const remoteKeyId = remoteJwk ? computeKeyId(remoteJwk) : null;
+  const keysMatch = Boolean(remoteKeyId && remoteKeyId === keyId) || remotePublicKey === pubKeyStr;
+
+  if (remotePublicKey && !keysMatch && !allowExplicitKeyRotation) {
+    return {
+      ready: false,
+      privKey,
+      pubKeyStr,
+      pubKeyJwk,
+      keyId,
+      requiresExplicitKeyRotation: true,
+      error: "E2EE_KEY_ROTATION_REQUIRED: New device detected; confirm encryption key rotation before sending."
+    };
+  }
+
+  if (!remotePublicKey || (!keysMatch && allowExplicitKeyRotation)) {
+    try {
+      const updateQuery = supabaseClient
+        .from("profiles")
+        .update({ public_key: pubKeyStr })
+        .eq("id", profileId);
+
+      const updateRes =
+        typeof updateQuery?.select === "function"
+          ? await updateQuery.select("id, public_key")
+          : await updateQuery;
+
+      const updateErr = updateRes?.error;
+      const updateData = updateRes?.data;
+      const zeroRowsUpdated = Array.isArray(updateData) && updateData.length === 0;
+
+      if (updateErr || zeroRowsUpdated) {
+        return {
+          ready: false,
+          privKey: null,
+          pubKeyStr: null,
+          pubKeyJwk: null,
+          keyId: null,
+          requiresExplicitKeyRotation: Boolean(remotePublicKey && !keysMatch),
+          error:
+            updateErr?.message ||
+            "E2EE_KEY_PUBLICATION_FAILED: Could not verify sender encryption key publication on server."
+        };
+      }
+    } catch (err: any) {
+      return {
+        ready: false,
+        privKey: null,
+        pubKeyStr: null,
+        pubKeyJwk: null,
+        keyId: null,
+        requiresExplicitKeyRotation: Boolean(remotePublicKey && !keysMatch),
+        error:
+          err?.message ||
+          "E2EE_KEY_PUBLICATION_FAILED: Could not publish sender encryption key to server."
+      };
+    }
+  }
+
+  return {
+    ready: true,
+    privKey,
+    pubKeyStr,
+    pubKeyJwk,
+    keyId,
+    requiresExplicitKeyRotation: false
+  };
+}
+

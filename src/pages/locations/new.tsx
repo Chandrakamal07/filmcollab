@@ -103,7 +103,7 @@ export default function NewLocation() {
           setIsEditing(true);
           setFormData({
             name: loc.name || "",
-            type: loc.type || loc.property_type || "",
+            type: loc.type || loc.property_type || loc.location_type || "",
             description: loc.description || "",
             country: loc.country || "India",
             state: loc.state || "",
@@ -116,8 +116,8 @@ export default function NewLocation() {
             timings: "", 
             instructions: loc.instructions || "",
             contactName: loc.owner_name || "",
-            phone: loc.phone || loc.owner_phone || "",
-            email: loc.email || loc.owner_email || "",
+            phone: loc.phone || loc.contact_phone || loc.owner_phone || "",
+            email: loc.email || loc.contact_email || loc.owner_email || "",
             securityDeposit: loc.security_deposit?.toString() || ""
           });
 
@@ -209,6 +209,9 @@ export default function NewLocation() {
       const locationData = {
           name: formData.name,
           type: formData.type,
+          property_type: formData.type,
+          location_type: formData.type,
+          category: formData.type,
           city: formData.city,
           state: formData.state,
           country: formData.country,
@@ -216,7 +219,9 @@ export default function NewLocation() {
           address: formData.address,
           map_url: formData.mapUrl,
           price: Number(formData.priceDay) || 0,
+          daily_rate: Number(formData.priceDay) || 0,
           price_hour: Number(formData.priceHour) || null,
+          hourly_rate: Number(formData.priceHour) || null,
           security_deposit: Number(formData.securityDeposit) || null,
           price_type: 'Per Day', 
           description: formData.description,
@@ -224,9 +229,12 @@ export default function NewLocation() {
           timings: JSON.stringify(timingList),
           image_url: finalMediaUrls.length > 0 ? finalMediaUrls[0] : (isEditing ? null : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=800'), 
           media_urls: finalMediaUrls.length > 0 ? finalMediaUrls : null,
+          images: finalMediaUrls.length > 0 ? finalMediaUrls : null,
           owner_name: formData.contactName || user.email?.split('@')[0] || 'Unknown Owner',
           phone: formData.phone,
+          contact_phone: formData.phone,
           email: formData.email,
+          contact_email: formData.email,
           created_by: user.id
         };
         

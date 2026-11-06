@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring, getOrInitUserE2EE } from "@/lib/e2ee";
+import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring, getOrInitUserE2EE, ensureSenderE2EEPublicationReady } from "@/lib/e2ee";
 
 type MessageType = "text" | "image" | "video" | "document" | "audio";
 
@@ -239,27 +239,44 @@ export default function MessagesPage() {
       if (isGuestSession) return;
 
       try {
-        const { privKey, pubKeyStr, requiresExplicitKeyRotation } = await getOrInitUserE2EE(profile.id, {
+        await getOrInitUserE2EE(profile.id, {
           existingRemotePublicKey: profile.public_key
         });
+        const pubResult = await ensureSenderE2EEPublicationReady({
+          supabaseClient: supabase,
+          profileId: profile.id,
+          existingRemotePublicKey: profile.public_key,
+          allowExplicitKeyRotation: false
+        });
 
-        if (!profile.public_key) {
-          await Promise.resolve(
-            supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id)
-          ).catch(() => {});
-          setKeyRotationRequired(false);
-        } else if (requiresExplicitKeyRotation) {
+        if (pubResult.requiresExplicitKeyRotation) {
           // Do not silently overwrite a server public_key from a new browser without explicit rotation;
           // the DB trigger `guard_profile_updates_and_key_history` preserves retired keys in `public_key_history`.
           setKeyRotationRequired(true);
-        } else {
-          setKeyRotationRequired(false);
+          setPrivateKey(pubResult.privKey);
+          setE2eeReady(false);
+          return;
         }
 
-        setPrivateKey(privKey);
+        if (!pubResult.ready || !pubResult.privKey) {
+          setKeyRotationRequired(false);
+          setPrivateKey(null);
+          setE2eeReady(false);
+          toast({
+            variant: "destructive",
+            title: "Encryption Key Setup Blocked",
+            description: pubResult.error || "Could not verify encryption key publication on server."
+          });
+          return;
+        }
+
+        setKeyRotationRequired(false);
+        setPrivateKey(pubResult.privKey);
         setE2eeReady(true);
       } catch (err) {
         console.error("E2EE Init failed:", err);
+        setPrivateKey(null);
+        setE2eeReady(false);
       }
     };
     initE2EE();
@@ -267,22 +284,24 @@ export default function MessagesPage() {
 
   const handleConfirmKeyRotation = async () => {
     if (!profile?.id) return;
-    const pubKeyStr = localStorage.getItem(`e2ee_pub_${profile.id}`);
-    if (!pubKeyStr) return;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ public_key: pubKeyStr })
-      .eq("id", profile.id)
-      .select("id");
-    if (error) {
+    const pubResult = await ensureSenderE2EEPublicationReady({
+      supabaseClient: supabase,
+      profileId: profile.id,
+      existingRemotePublicKey: profile.public_key,
+      allowExplicitKeyRotation: true
+    });
+    if (!pubResult.ready || !pubResult.privKey) {
+      setE2eeReady(false);
       toast({
         variant: "destructive",
         title: "Key Rotation Failed",
-        description: error.message || "Could not publish rotated encryption key."
+        description: pubResult.error || "Could not publish rotated encryption key."
       });
       return;
     }
     setKeyRotationRequired(false);
+    setPrivateKey(pubResult.privKey);
+    setE2eeReady(true);
     toast({
       title: "Encryption Key Rotated",
       description: "Your new browser key is active and your previous public key was archived in key history."
@@ -793,6 +812,24 @@ export default function MessagesPage() {
     const content = contentOverride ?? input.trim();
     if (!content) return;
 
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    const isValidSender = isUuid(currentUserId);
+    const isValidReceiver = isUuid(activeId);
+
+    // Mandatory sender E2EE readiness & key rotation gate before mutating input or sending (R8-03)
+    if (user && !isGuestSession && isValidSender && isValidReceiver) {
+      if (keyRotationRequired || !e2eeReady || !privateKey) {
+        toast({
+          variant: "destructive",
+          title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+          description: keyRotationRequired
+            ? "New browser detected. Please confirm key rotation in the banner before sending encrypted messages."
+            : "Your sender encryption key could not be verified on the server. Sending is disabled to prevent undecryptable messages."
+        });
+        return;
+      }
+    }
+
     const timestamp = Date.now();
     const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID 
       ? crypto.randomUUID() 
@@ -850,11 +887,6 @@ export default function MessagesPage() {
     setAttachMenuOpen(false);
 
     // 2. Persist in Supabase if logged in & not chatting with mock profiles
-    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
-    
-    const isValidSender = isUuid(currentUserId);
-    const isValidReceiver = isUuid(activeId);
-
     if (user && !isGuestSession && isValidSender && isValidReceiver) {
       let cachedEnvelope: string | undefined;
       try {
@@ -864,7 +896,8 @@ export default function MessagesPage() {
         const { envelope } = await encryptForRecipientOrThrow({
           senderPrivateKey: privateKey,
           recipientPublicKeyJwkOrStr: rxData?.public_key,
-          plaintext: content
+          plaintext: content,
+          includeKeyMetadata: true
         });
         cachedEnvelope = envelope;
 
@@ -948,6 +981,17 @@ export default function MessagesPage() {
     const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
     if (isGuestSession) return;
 
+    if (keyRotationRequired || !e2eeReady || !privateKey) {
+      toast({
+        variant: "destructive",
+        title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+        description: keyRotationRequired
+          ? "Please confirm encryption key rotation before retrying this message."
+          : "Your sender encryption key is not published on the server yet."
+      });
+      return;
+    }
+
     // Optimistically reset failed state to pending
     setConversations((prev) => {
       const updated = prev.map((c) =>
@@ -973,7 +1017,8 @@ export default function MessagesPage() {
         const { envelope } = await encryptForRecipientOrThrow({
           senderPrivateKey: privateKey,
           recipientPublicKeyJwkOrStr: rxData?.public_key,
-          plaintext: msgToRetry.content
+          plaintext: msgToRetry.content,
+          includeKeyMetadata: true
         });
         envelopeToSend = envelope;
       }
@@ -1069,6 +1114,17 @@ export default function MessagesPage() {
 
   // Handle local attachment real file upload & convert to base64
   const triggerAttachmentSelection = (type: MessageType) => {
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    if (user && !isGuestSession && isUuid(currentUserId) && isUuid(activeId) && (keyRotationRequired || !e2eeReady || !privateKey)) {
+      toast({
+        variant: "destructive",
+        title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+        description: keyRotationRequired
+          ? "Please confirm encryption key rotation before sending attachments."
+          : "Your sender encryption key is not published on the server yet."
+      });
+      return;
+    }
     setPendingFileType(type);
     fileInputRef.current?.click();
   };
@@ -1644,10 +1700,25 @@ export default function MessagesPage() {
                   </div>
                 )}
 
+                {keyRotationRequired && (
+                  <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+                    <span>New device detected. Confirm encryption key rotation before sending messages.</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleConfirmKeyRotation}
+                      className="h-7 px-2.5 text-[11px] border-amber-500/40 text-amber-100 hover:bg-amber-500/20"
+                    >
+                      Rotate Key
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
+                    disabled={keyRotationRequired || (!e2eeReady && isUuid(currentUserId) && isUuid(activeId))}
                     onClick={() => setAttachMenuOpen((s) => !s)}
                     className={`h-10 w-10 rounded-xl flex-shrink-0 transition-all ${
                       attachMenuOpen
@@ -1662,17 +1733,21 @@ export default function MessagesPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && input.trim()) {
+                      if (e.key === "Enter" && input.trim() && !keyRotationRequired && (e2eeReady || !isUuid(currentUserId) || !isUuid(activeId))) {
                         sendMessage();
                       }
                     }}
-                    placeholder={`Message ${activeConv.username}...`}
+                    placeholder={
+                      keyRotationRequired
+                        ? "Confirm encryption key rotation above to send messages..."
+                        : `Message ${activeConv.username}...`
+                    }
                     className="flex-1 h-10 border-border/80 bg-surface-elevated/60 text-foreground rounded-xl focus-visible:ring-primary text-sm px-4"
                   />
 
                   <Button
                     onClick={() => sendMessage()}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || keyRotationRequired || (!e2eeReady && isUuid(currentUserId) && isUuid(activeId))}
                     className="h-10 px-5 rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Send className="w-3.5 h-3.5" />

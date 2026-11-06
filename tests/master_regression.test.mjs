@@ -15,6 +15,7 @@ import {
   decryptMessage,
   encryptForRecipientOrThrow,
   getOrInitUserE2EE,
+  ensureSenderE2EEPublicationReady,
   computeKeyId,
   decryptEnvelopeWithKeyring
 } from '../src/lib/e2ee.ts';
@@ -1501,6 +1502,544 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       const messagesSource = fs.readFileSync(path.join(rootDir, 'src/pages/messages/page.tsx'), 'utf8');
       assert.ok(messagesSource.includes('.in("id", peerIds)'), 'Messages loadChatData must scope public_profiles query to participant peerIds');
       assert.ok(messagesSource.includes('document.visibilityState === "hidden"'), 'Messages polling must pause when tab is hidden');
+    });
+
+    test('R8-01..R8-08: Follow-up authorization, messaging, notifications, ticket authorship, location aliases, and project counters suite', async () => {
+      // 1. Test upgrade path: 20250108..20261108 -> seed -> 20261109
+      const upgDb = new PGlite();
+      await upgDb.exec(supabaseMockPreamble);
+      const preR8Files = migrationFiles.filter(f => f < '20261109000000');
+      for (const file of preR8Files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await upgDb.exec(sql);
+      }
+
+      const seedCreatorAuth = 'cccc0000-0000-4000-8000-000000000001';
+      const seedCreatorProf = 'dddd0000-0000-4000-8000-000000000091';
+      await upgDb.exec(`
+        INSERT INTO auth.users (id, email) VALUES ('${seedCreatorAuth}', 'seed@filmcollab.io');
+        DELETE FROM public.profiles WHERE user_id = '${seedCreatorAuth}';
+        INSERT INTO public.profiles (id, user_id, username, full_name, role, account_status)
+        VALUES ('${seedCreatorProf}', '${seedCreatorAuth}', 'seed_creator', 'Seed Creator', 'user', 'active');
+        INSERT INTO public.projects (id, title, category, project_type, status, visibility, created_by, team_size)
+        VALUES ('eeee0000-0000-4000-8000-000000000001', 'Pre-R8 Seed Project', 'Direction', 'Feature', 'planning', 'public', '${seedCreatorAuth}', 99);
+      `);
+
+      const r8Sql = fs.readFileSync(
+        path.join(migrationsDir, '20261109000000_r8_authorization_messaging_and_contract_remediation.sql'),
+        'utf8'
+      );
+      await upgDb.exec(r8Sql);
+
+      const recalculatedProj = await upgDb.query(
+        `SELECT likes_count, team_size FROM public.projects WHERE id = 'eeee0000-0000-4000-8000-000000000001'`
+      );
+      assert.equal(recalculatedProj.rows[0].likes_count, 0, 'R8 upgrade must backfill truthful likes_count from project_likes');
+      assert.equal(recalculatedProj.rows[0].team_size, 1, 'R8 upgrade must backfill truthful team_size (1 creator + accepted members)');
+      await upgDb.close();
+
+      // 2. Full clean-install R8 multi-role PostgreSQL 16 verification
+      const db = new PGlite();
+      await db.exec(supabaseMockPreamble);
+      for (const file of migrationFiles) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await db.exec(sql);
+      }
+
+      const aliceAuth   = 'aaaa1111-0000-4000-8000-000000000001';
+      const aliceProf   = 'bbbb1111-0000-4000-8000-000000000001';
+      const bobAuth     = 'aaaa1111-0000-4000-8000-000000000002';
+      const bobProf     = 'bbbb1111-0000-4000-8000-000000000002';
+      const adminAuth   = 'aaaa1111-0000-4000-8000-000000000003';
+      const adminProf   = 'bbbb1111-0000-4000-8000-000000000003';
+      const staffAuth   = 'aaaa1111-0000-4000-8000-000000000004';
+      const staffProf   = 'bbbb1111-0000-4000-8000-000000000004';
+      const blockedAuth = 'aaaa1111-0000-4000-8000-000000000005';
+      const blockedProf = 'bbbb1111-0000-4000-8000-000000000005';
+
+      await db.exec(`
+        INSERT INTO auth.users (id, email) VALUES
+          ('${aliceAuth}', 'alice@filmcollab.io'),
+          ('${bobAuth}', 'bob@filmcollab.io'),
+          ('${adminAuth}', 'admin@filmcollab.io'),
+          ('${staffAuth}', 'staff@filmcollab.io'),
+          ('${blockedAuth}', 'blocked@filmcollab.io');
+
+        DELETE FROM public.profiles WHERE user_id IN ('${aliceAuth}', '${bobAuth}', '${adminAuth}', '${staffAuth}', '${blockedAuth}');
+
+        -- Note: adminProf intentionally has profiles.role = 'user' while authorized via user_roles/admin_team_members (R8-02 scenario)
+        INSERT INTO public.profiles (
+          id, user_id, username, full_name, email, role, account_status,
+          privacy_show_directory, allow_profile_views
+        ) VALUES
+          ('${aliceProf}', '${aliceAuth}', 'alice_r8', 'Alice R8', 'alice@filmcollab.io', 'user', 'active', false, true),
+          ('${bobProf}', '${bobAuth}', 'bob_r8', 'Bob R8', 'bob@filmcollab.io', 'user', 'active', true, true),
+          ('${adminProf}', '${adminAuth}', 'admin_r8', 'Global Admin R8', 'admin@filmcollab.io', 'user', 'active', true, true),
+          ('${staffProf}', '${staffAuth}', 'staff_r8', 'Scoped Staff R8', 'staff@filmcollab.io', 'moderator', 'active', true, true),
+          ('${blockedProf}', '${blockedAuth}', 'blocked_r8', 'Blocked User R8', 'blocked@filmcollab.io', 'blocked', 'blocked', true, true);
+
+        INSERT INTO public.user_roles (user_id, role) VALUES
+          ('${adminAuth}', 'admin'),
+          ('${staffAuth}', 'moderator')
+        ON CONFLICT (user_id, role) DO NOTHING;
+
+        INSERT INTO public.admin_team_members (user_id, profile_id, role, status, permissions) VALUES
+          ('${adminAuth}', '${adminProf}', 'Admin', 'Active', '{"Users": {"view": true, "edit": true, "delete": true}, "Team": {"view": true, "edit": true}}'::jsonb),
+          ('${staffAuth}', '${staffProf}', 'Moderator', 'Active', '{"Users": {"view": true, "edit": true}, "Tickets": {"view": true, "edit": true}}'::jsonb);
+      `);
+
+      // ======================================================================
+      // R8-01: Cross-user storage object reference spoofing in directory_files
+      // ======================================================================
+      await db.exec(`
+        INSERT INTO storage.objects (bucket_id, name, owner)
+        VALUES
+          ('directory_assets', '${aliceAuth}/private_script.pdf', '${aliceAuth}'),
+          ('directory_assets', '${bobAuth}/own_headshot.jpg', '${bobAuth}');
+      `);
+
+      await asUser(db, bobAuth, async () => {
+        // Bob tries to insert a public approved directory_files row referencing Alice's private object path in file_url
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.directory_files (title, file_type, file_url, storage_bucket, storage_path, user_id, status, is_public)
+              VALUES (
+                'Spoofed Reference to Alice Script',
+                'document',
+                'storage://directory_assets/${aliceAuth}/private_script.pdf',
+                'directory_assets',
+                '${aliceAuth}/private_script.pdf',
+                '${bobProf}',
+                'approved',
+                true
+              )
+            `);
+          },
+          /Unauthorized .*reference/i,
+          'R8-01: Must reject directory_files INSERT referencing another user storage path'
+        );
+
+        // Bob tries to spoof Alice's object via cover_image_url
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.directory_files (title, file_type, file_url, cover_image_url, user_id, status, is_public)
+              VALUES (
+                'Spoofed Cover Reference',
+                'image',
+                'storage://directory_assets/${bobAuth}/own_headshot.jpg',
+                'storage://directory_assets/${aliceAuth}/private_script.pdf',
+                '${bobProf}',
+                'approved',
+                true
+              )
+            `);
+          },
+          /Unauthorized .*reference/i,
+          'R8-01: Must reject directory_files INSERT referencing another user cover_image_url'
+        );
+
+        // Bob tries to spoof Alice's object via additional_urls TEXT[]
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              INSERT INTO public.directory_files (title, file_type, file_url, additional_urls, user_id, status, is_public)
+              VALUES (
+                'Spoofed Additional URLs Reference',
+                'image',
+                'storage://directory_assets/${bobAuth}/own_headshot.jpg',
+                ARRAY['storage://directory_assets/${aliceAuth}/private_script.pdf'],
+                '${bobProf}',
+                'approved',
+                true
+              )
+            `);
+          },
+          /Unauthorized .*reference/i,
+          'R8-01: Must reject directory_files INSERT referencing another user in additional_urls'
+        );
+
+        // Even if Bob inserts his own valid directory_files row, he STILL cannot read Alice's storage.objects row
+        await db.query(`
+          INSERT INTO public.directory_files (title, file_type, file_url, user_id, status, is_public)
+          VALUES (
+            'Bob Legit Headshot',
+            'image',
+            'storage://directory_assets/${bobAuth}/own_headshot.jpg',
+            '${bobProf}',
+            'approved',
+            true
+          )
+        `);
+
+        const aliceObj = await db.query(
+          `SELECT id FROM storage.objects WHERE bucket_id = 'directory_assets' AND name = '${aliceAuth}/private_script.pdf'`
+        );
+        assert.equal(aliceObj.rows.length, 0, 'R8-01: Bob must not read Alice private storage object');
+      });
+
+      // ======================================================================
+      // R8-02: Admin protection, active-caller checks, and remaining write RLS
+      // ======================================================================
+      await asUser(db, staffAuth, async () => {
+        // Scoped staff with Users.edit = true tries to block Global Admin whose profiles.role = 'user' (admin via user_roles/admin_team_members)
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              UPDATE public.profiles SET account_status = 'blocked', role = 'blocked'
+              WHERE id = '${adminProf}'
+            `);
+          },
+          /Only global administrators can modify administrator|row-level security/i,
+          'R8-02: Scoped staff with Users.edit must not modify or block a global Admin whose profiles.role is user'
+        );
+
+        // Scoped staff tries to call provision_admin_team_member
+        await assert.rejects(
+          async () => {
+            await db.query(`
+              SELECT public.provision_admin_team_member(
+                p_profile_id := '${bobProf}',
+                p_role := 'Admin',
+                p_permissions := '{}'::jsonb
+              )
+            `);
+          },
+          /Only active global administrators/i,
+          'R8-02: Non-global-admin staff must not execute provision_admin_team_member'
+        );
+      });
+
+      // Blocked user tries to write to casting_applicants, casting_call_saves, company_applications, property_site_visits, project_members
+      let aliceCastingId, aliceCompanyId, aliceLocationId, aliceProjectId;
+      await asUser(db, aliceAuth, async () => {
+        const cc = await db.query(`
+          INSERT INTO public.casting_calls (
+            creator_id, title, project_name, category, role_name, role_description,
+            gender, age_min, age_max, experience, compensation, location
+          ) VALUES (
+            '${aliceProf}', 'Noir Lead Role', 'Noir Film', 'Acting', 'Lead',
+            'Audition open', 'Any', 20, 50, '1-3 years', 'Paid', 'Mumbai'
+          )
+          RETURNING id
+        `);
+        aliceCastingId = cc.rows[0].id;
+
+        const co = await db.query(`
+          INSERT INTO public.companies (name, category, description, user_id)
+          VALUES ('Alice Film Co', 'Production', 'Indie house', '${aliceAuth}')
+          RETURNING id
+        `);
+        aliceCompanyId = co.rows[0].id;
+
+        const loc = await db.query(`
+          INSERT INTO public.shooting_locations (name, city, state, property_type, price, status, created_by)
+          VALUES ('Alice Loft', 'Mumbai', 'Maharashtra', 'Apartment', 15000, 'active', '${aliceAuth}')
+          RETURNING id
+        `);
+        aliceLocationId = loc.rows[0].id;
+
+        const prj = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Alice R8 Project', 'Direction', 'Feature', 'planning', 'public', '${aliceAuth}')
+          RETURNING id
+        `);
+        aliceProjectId = prj.rows[0].id;
+      });
+
+      await asUser(db, blockedAuth, async () => {
+        await assert.rejects(
+          () => db.query(`INSERT INTO public.casting_applicants (casting_call_id, user_id, name) VALUES ('${aliceCastingId}', '${blockedProf}', 'Blocked Candidate')`),
+          /row-level security policy/i,
+          'R8-02: Blocked user must be denied inserting into casting_applicants'
+        );
+        await assert.rejects(
+          () => db.query(`INSERT INTO public.casting_call_saves (casting_call_id, user_id) VALUES ('${aliceCastingId}', '${blockedAuth}')`),
+          /row-level security policy/i,
+          'R8-02: Blocked user must be denied inserting into casting_call_saves'
+        );
+        await assert.rejects(
+          () => db.query(`INSERT INTO public.company_applications (company_id, user_id, name, email, role) VALUES ('${aliceCompanyId}', '${blockedAuth}', 'Blocked', 'blocked@filmcollab.io', 'Editor')`),
+          /row-level security policy/i,
+          'R8-02: Blocked user must be denied inserting into company_applications'
+        );
+        await assert.rejects(
+          () => db.query(`INSERT INTO public.property_site_visits (location_id, user_id, owner_id, selected_day, selected_time) VALUES ('${aliceLocationId}', '${blockedAuth}', '${aliceAuth}', 'Monday', '09:00 to 12:00')`),
+          /row-level security policy/i,
+          'R8-02: Blocked user must be denied inserting into property_site_visits'
+        );
+        await assert.rejects(
+          () => db.query(`INSERT INTO public.project_members (project_id, user_id, role) VALUES ('${aliceProjectId}', '${blockedAuth}', 'Applicant')`),
+          /row-level security policy/i,
+          'R8-02: Blocked user must be denied inserting into project_members'
+        );
+      });
+
+      // ======================================================================
+      // R8-04: Notification RPC contract alignment & anti-abuse validation
+      // ======================================================================
+      await asUser(db, bobAuth, async () => {
+        // 1. Bob creates a PENDING connection request to Alice -> cannot forge 'connection_accepted' while still pending
+        await db.query(`
+          INSERT INTO public.connections (user_id, connected_user_id, status)
+          VALUES ('${bobProf}', '${aliceProf}', 'pending')
+        `);
+
+        await assert.rejects(
+          () => db.query(`
+            SELECT public.send_authorized_notification(
+              p_recipient_id := '${aliceProf}',
+              p_title := 'Connection Accepted',
+              p_message := 'Forged acceptance while pending',
+              p_type := 'connection_accepted'
+            )
+          `),
+          /Unauthorized notification/i,
+          'R8-04: Pending connection must not authorize connection_accepted notification'
+        );
+
+        // 2. Bob tries to send a 'Profile Liked' notification with p_type = 'profile' without liking Alice -> rejected!
+        await assert.rejects(
+          () => db.query(`
+            SELECT public.send_authorized_notification(
+              p_recipient_id := '${aliceProf}',
+              p_title := 'Profile Liked',
+              p_message := 'Forged profile like via profile type',
+              p_type := 'profile'
+            )
+          `),
+          /Unauthorized notification/i,
+          'R8-04: p_type = profile with Like title must require an actual user_likes/post_likes row'
+        );
+
+        // 3. Deduplication across varying p_message strings within 60s
+        const connNotif1 = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${aliceProf}',
+            p_title := 'New Connection Request',
+            p_message := 'Variant message 1',
+            p_type := 'connection',
+            p_link := '/network'
+          ) AS id
+        `);
+        const connNotif2 = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${aliceProf}',
+            p_title := 'New Connection Request',
+            p_message := 'Variant message 2 with random timestamp',
+            p_type := 'connection',
+            p_link := '/network'
+          ) AS id
+        `);
+        assert.equal(
+          connNotif1.rows[0].id,
+          connNotif2.rows[0].id,
+          'R8-04: Repeated unread notifications within 60s must deduplicate even if p_message varies'
+        );
+
+        // 4. Site visit booking notification ('booking') succeeds after property_site_visits insert
+        await db.query(`
+          INSERT INTO public.property_site_visits (location_id, user_id, owner_id, selected_day, selected_time, status)
+          VALUES ('${aliceLocationId}', '${bobAuth}', '${aliceAuth}', 'Friday', '10:00 to 13:00', 'pending')
+        `);
+        const bookingNotif = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${aliceProf}',
+            p_title := 'New Site Visit Request',
+            p_message := 'Bob requested a site visit',
+            p_type := 'booking',
+            p_link := '/locations/${aliceLocationId}'
+          ) AS id
+        `);
+        assert.ok(bookingNotif.rows[0].id, 'R8-04: p_type = booking must succeed when property_site_visits row exists');
+
+        // 5. Bob applies to Alice's project
+        await db.query(`
+          INSERT INTO public.project_members (project_id, user_id, role)
+          VALUES ('${aliceProjectId}', '${bobAuth}', 'Applicant')
+        `);
+      });
+
+      // Alice rejects Bob's application (deletes project_members row first, then calls send_authorized_notification with 'application_update')
+      await asUser(db, aliceAuth, async () => {
+        await db.query(`
+          DELETE FROM public.project_members
+          WHERE project_id = '${aliceProjectId}' AND user_id = '${bobAuth}' AND role = 'Applicant'
+        `);
+
+        const rejectNotif = await db.query(`
+          SELECT public.send_authorized_notification(
+            p_recipient_id := '${bobAuth}',
+            p_title := 'Application Status Update',
+            p_message := 'Your application to join Alice R8 Project was not accepted at this time.',
+            p_type := 'application_update',
+            p_link := '/projects'
+          ) AS id
+        `);
+        assert.ok(rejectNotif.rows[0].id, 'R8-04: Project owner must be able to send application_update after deleting rejected Applicant row');
+      });
+
+      // ======================================================================
+      // R8-05: Ticket author spoofing prevention on ticket_updates & ticket_messages
+      // ======================================================================
+      let bobR8TicketId;
+      await asUser(db, bobAuth, async () => {
+        const tRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, category, priority)
+          VALUES ('${bobAuth}', 'R8 Support Ticket', 'Testing author binding', 'Technical', 'medium')
+          RETURNING id
+        `);
+        bobR8TicketId = tRes.rows[0].id;
+      });
+
+      await asUser(db, staffAuth, async () => {
+        // Staff inserts into ticket_updates attempting to spoof author_id = adminProf -> trigger binds author_id to staffProf
+        const tuRes = await db.query(`
+          INSERT INTO public.ticket_updates (ticket_id, author_id, message)
+          VALUES ('${bobR8TicketId}', '${adminProf}', 'Staff note attempting to spoof Admin author')
+          RETURNING id, author_id
+        `);
+        assert.equal(tuRes.rows[0].author_id, staffProf, 'R8-05: ticket_updates INSERT must bind author_id to authenticated caller profile ID');
+
+        // Staff tries to UPDATE ticket_updates.author_id to adminProf -> rejected!
+        await assert.rejects(
+          () => db.query(`
+            UPDATE public.ticket_updates SET author_id = '${adminProf}'
+            WHERE id = '${tuRes.rows[0].id}'
+          `),
+          /author_id cannot be reassigned/i,
+          'R8-05: ticket_updates UPDATE must forbid reassigning author_id'
+        );
+      });
+
+      // ======================================================================
+      // R8-06: Shooting location UPDATE alias synchronization
+      // ======================================================================
+      await asUser(db, aliceAuth, async () => {
+        const updatedLoc = await db.query(`
+          UPDATE public.shooting_locations
+          SET type = 'Heritage Villa',
+              phone = '+919999988888',
+              email = 'villa@filmcollab.io',
+              price = 45000,
+              price_hour = 5500,
+              media_urls = ARRAY['https://example.com/villa1.jpg', 'https://example.com/villa2.jpg']
+          WHERE id = '${aliceLocationId}'
+          RETURNING type, property_type, location_type, category,
+                    phone, contact_phone, email, contact_email,
+                    price, daily_rate, price_hour, hourly_rate,
+                    media_urls, images, image_url
+        `);
+        const row = updatedLoc.rows[0];
+        assert.equal(row.property_type, 'Heritage Villa', 'R8-06: Updating type must sync property_type');
+        assert.equal(row.location_type, 'Heritage Villa', 'R8-06: Updating type must sync location_type');
+        assert.equal(row.category, 'Heritage Villa', 'R8-06: Updating type must sync category');
+        assert.equal(row.contact_phone, '+919999988888', 'R8-06: Updating phone must sync contact_phone');
+        assert.equal(row.contact_email, 'villa@filmcollab.io', 'R8-06: Updating email must sync contact_email');
+        assert.equal(Number(row.daily_rate), 45000, 'R8-06: Updating price must sync daily_rate');
+        assert.equal(Number(row.hourly_rate), 5500, 'R8-06: Updating price_hour must sync hourly_rate');
+        assert.deepEqual(row.images, ['https://example.com/villa1.jpg', 'https://example.com/villa2.jpg'], 'R8-06: Updating media_urls must sync images');
+      });
+
+      // ======================================================================
+      // R8-07: Truthful project likes_count & team_size triggers
+      // ======================================================================
+      await asUser(db, bobAuth, async () => {
+        await db.query(`
+          INSERT INTO public.project_likes (project_id, user_id)
+          VALUES ('${aliceProjectId}', '${bobAuth}')
+        `);
+        await db.query(`
+          INSERT INTO public.project_members (project_id, user_id, role)
+          VALUES ('${aliceProjectId}', '${bobAuth}', 'Applicant')
+        `);
+      });
+
+      let projCounts = await db.query(`SELECT likes_count, team_size FROM public.projects WHERE id = '${aliceProjectId}'`);
+      assert.equal(projCounts.rows[0].likes_count, 1, 'R8-07: project_likes INSERT must increment projects.likes_count to 1');
+      assert.equal(projCounts.rows[0].team_size, 1, 'R8-07: Applicant role must NOT increment projects.team_size');
+
+      await asUser(db, aliceAuth, async () => {
+        await db.query(`
+          UPDATE public.project_members SET role = 'Member'
+          WHERE project_id = '${aliceProjectId}' AND user_id = '${bobAuth}'
+        `);
+      });
+
+      projCounts = await db.query(`SELECT likes_count, team_size FROM public.projects WHERE id = '${aliceProjectId}'`);
+      assert.equal(projCounts.rows[0].team_size, 2, 'R8-07: Accepting member must increment projects.team_size to 2 (creator + 1 accepted member)');
+
+      await db.close();
+
+      // ======================================================================
+      // R8-03: Unified sender E2EE readiness & key publication verification
+      // ======================================================================
+      // Case 1: New browser when remote public_key already exists -> must NOT overwrite remote key and must return ready: false, requiresExplicitKeyRotation: true
+      const existingServerKeyPair = await generateKeyPair();
+      const existingServerPubStr = JSON.stringify(existingServerKeyPair.publicKeyJwk);
+      let updateCalledCount = 0;
+      const mockSupabaseNoOverwrite = {
+        from: () => ({
+          update: () => {
+            updateCalledCount += 1;
+            return {
+              eq: () => ({
+                select: async () => ({ data: [{ id: 'prof-r8-1' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const rotationGateRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseNoOverwrite,
+        profileId: 'prof-r8-rotation-test',
+        existingRemotePublicKey: existingServerPubStr,
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(rotationGateRes.ready, false, 'R8-03: Must not mark E2EE ready when new browser key differs from server public_key without confirmation');
+      assert.equal(rotationGateRes.requiresExplicitKeyRotation, true, 'R8-03: Must signal requiresExplicitKeyRotation = true');
+      assert.equal(updateCalledCount, 0, 'R8-03: Must NOT overwrite server public_key before explicit user rotation confirmation');
+
+      // Case 2: PostgREST 42501 error on initial public_key publication -> must return ready: false, privKey: null
+      const mockSupabase42501 = {
+        from: () => ({
+          update: () => ({
+            eq: () => ({
+              select: async () => ({
+                data: null,
+                error: { code: '42501', message: 'new row violates row-level security policy for table "profiles"' }
+              })
+            })
+          })
+        })
+      };
+
+      const failedPubRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabase42501,
+        profileId: 'prof-r8-42501-test',
+        existingRemotePublicKey: null,
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(failedPubRes.ready, false, 'R8-03: Resolved PostgREST { error: 42501 } must leave ready = false');
+      assert.equal(failedPubRes.privKey, null, 'R8-03: Failed key publication must not expose active sending privateKey');
+      assert.match(failedPubRes.error || '', /row-level security policy/i);
+
+      // Case 3: Explicit rotation confirmed and server acknowledges -> ready: true
+      const confirmedPubRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseNoOverwrite,
+        profileId: 'prof-r8-rotation-test',
+        existingRemotePublicKey: existingServerPubStr,
+        allowExplicitKeyRotation: true
+      });
+      assert.equal(confirmedPubRes.ready, true, 'R8-03: Explicit key rotation with server acknowledgement must mark ready = true');
+      assert.equal(confirmedPubRes.requiresExplicitKeyRotation, false);
+      assert.equal(updateCalledCount, 1, 'R8-03: Explicit key rotation must publish new key to server');
+
+      // Verify Projects page source has no Math.random() fabrications for likes_count or team_size
+      const projectsPageSrc = fs.readFileSync(path.join(rootDir, 'src/pages/projects/page.tsx'), 'utf8');
+      assert.ok(!projectsPageSrc.includes('Math.random()'), 'R8-07: src/pages/projects/page.tsx must not fabricate likes_count or team_size with Math.random()');
     });
   });
 });

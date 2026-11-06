@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { encryptForRecipientOrThrow, getOrInitUserE2EE } from "@/lib/e2ee";
+import { encryptForRecipientOrThrow, getOrInitUserE2EE, ensureSenderE2EEPublicationReady } from "@/lib/e2ee";
 
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ export default function LocationDetails() {
   // Modals state
   const [isEnquireOpen, setIsEnquireOpen] = useState(false);
   const [enquiryMessage, setEnquiryMessage] = useState('');
+  const [enquiryKeyRotationRequired, setEnquiryKeyRotationRequired] = useState(false);
   
   const [isBookVisitOpen, setIsBookVisitOpen] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
@@ -77,7 +78,7 @@ export default function LocationDetails() {
     }
   };
 
-  const handleEnquire = async () => {
+  const handleEnquire = async (confirmKeyRotation = false) => {
     if (!user) return toast.error("Please login to send an enquiry");
     if (!enquiryMessage.trim()) return toast.error("Message is required");
     setIsSubmitting(true);
@@ -117,23 +118,36 @@ export default function LocationDetails() {
       }
       senderProfileId = senderProfileId || user.id;
 
-      // Mandatory E2EE key initialization and sender public key publication (M14, M15)
-      const { privKey, pubKeyStr } = await getOrInitUserE2EE(senderProfileId);
-      if (!senderPublishedKey || senderPublishedKey !== pubKeyStr) {
-        const { error: pubKeyErr } = await supabase
-          .from('profiles')
-          .update({ public_key: pubKeyStr })
-          .eq('id', senderProfileId);
-        if (pubKeyErr) {
-          throw new Error(`Failed to publish sender encryption key: ${pubKeyErr.message}`);
-        }
+      // Mandatory E2EE key initialization and sender public key publication without silent rotation (M14, M15, R8-03)
+      await getOrInitUserE2EE(senderProfileId, {
+        existingRemotePublicKey: senderPublishedKey,
+        allowOverwriteRemoteKey: confirmKeyRotation
+      });
+      const pubResult = await ensureSenderE2EEPublicationReady({
+        supabaseClient: supabase,
+        profileId: senderProfileId,
+        existingRemotePublicKey: senderPublishedKey,
+        allowExplicitKeyRotation: confirmKeyRotation
+      });
+
+      if (pubResult.requiresExplicitKeyRotation && !confirmKeyRotation) {
+        setEnquiryKeyRotationRequired(true);
+        toast.error("New browser detected. Please confirm encryption key rotation before sending your enquiry.");
+        return;
       }
+
+      if (!pubResult.ready || !pubResult.privKey) {
+        throw new Error(pubResult.error || "Failed to publish sender encryption key.");
+      }
+
+      setEnquiryKeyRotationRequired(false);
 
       // Mandatory fail-closed encryption: never fall back to plaintext on missing or malformed key (M14, M15)
       const { envelope: messageContent } = await encryptForRecipientOrThrow({
-        senderPrivateKey: privKey,
+        senderPrivateKey: pubResult.privKey,
         recipientPublicKeyJwkOrStr: receiverPublicKey,
-        plaintext: enquiryMessage.trim()
+        plaintext: enquiryMessage.trim(),
+        includeKeyMetadata: true
       });
 
       const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -673,6 +687,20 @@ export default function LocationDetails() {
             <DialogDescription>Send a message directly to the owner of this property.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
+            {enquiryKeyRotationRequired && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200 flex items-center justify-between gap-2">
+                <span>New browser detected. Confirm encryption key rotation to send this encrypted enquiry.</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEnquire(true)}
+                  disabled={isSubmitting}
+                  className="h-7 px-2.5 text-[11px] border-amber-500/40 text-amber-100 hover:bg-amber-500/20"
+                >
+                  Rotate & Send
+                </Button>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Message</Label>
               <Textarea 
@@ -686,7 +714,7 @@ export default function LocationDetails() {
           </div>
           <DialogFooter>
             <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setIsEnquireOpen(false)}>Cancel</Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleEnquire} disabled={isSubmitting}>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={() => handleEnquire(false)} disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
             </Button>
           </DialogFooter>
