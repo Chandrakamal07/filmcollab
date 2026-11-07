@@ -90,16 +90,16 @@ const Support = () => {
   ];
 
   const priorities = [
-    { value: 'low', label: 'Low', color: 'bg-green-100 text-green-800' },
-    { value: 'medium', label: 'Medium', color: 'bg-yellow-100 text-yellow-800' },
-    { value: 'high', label: 'High', color: 'bg-red-100 text-red-800' }
+    { value: 'low', label: 'Low', color: 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' },
+    { value: 'medium', label: 'Medium', color: 'bg-amber-500/15 text-amber-500 border border-amber-500/30' },
+    { value: 'high', label: 'High', color: 'bg-destructive/15 text-destructive border border-destructive/30' }
   ];
 
   const statuses = [
-    { value: 'open', label: 'Open', color: 'bg-blue-100 text-blue-800' },
-    { value: 'in-progress', label: 'In Progress', color: 'bg-yellow-100 text-yellow-800' },
-    { value: 'resolved', label: 'Resolved', color: 'bg-green-100 text-green-800' },
-    { value: 'closed', label: 'Closed', color: 'bg-muted text-muted-foreground' }
+    { value: 'open', label: 'Open', color: 'bg-primary/15 text-primary border border-primary/30' },
+    { value: 'in-progress', label: 'In Progress', color: 'bg-amber-500/15 text-amber-500 border border-amber-500/30' },
+    { value: 'resolved', label: 'Resolved', color: 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' },
+    { value: 'closed', label: 'Closed', color: 'bg-surface-elevated text-muted-foreground border border-border/80' }
   ];
 
   const handleFormChange = (field: string, value: string) => {
@@ -171,7 +171,7 @@ const Support = () => {
   const getPriorityBadge = (priority: string) => {
     const priorityConfig = priorities.find(p => p.value === priority);
     return (
-      <Badge className={priorityConfig?.color || 'bg-muted text-muted-foreground'}>
+      <Badge className={priorityConfig?.color || 'bg-surface-elevated text-muted-foreground'}>
         {priorityConfig?.label || priority}
       </Badge>
     );
@@ -180,7 +180,7 @@ const Support = () => {
   const getStatusBadge = (status: string) => {
     const statusConfig = statuses.find(s => s.value === status);
     return (
-      <Badge className={statusConfig?.color || 'bg-muted text-muted-foreground'}>
+      <Badge className={statusConfig?.color || 'bg-surface-elevated text-muted-foreground'}>
         {statusConfig?.label || status}
       </Badge>
     );
@@ -195,37 +195,36 @@ const Support = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Support Center</h1>
+            <p className="noir-eyebrow mb-1">Concierge & Assistance</p>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground tracking-tight">Support Center</h1>
             <p className="text-muted-foreground text-sm mt-1">Get help and submit support tickets</p>
           </div>
-          <Badge variant="outline" className="text-xs">
-            <HelpCircle className="w-3 h-3 mr-1" />
+          <Badge variant="outline" className="w-fit text-xs border-primary/30 bg-primary/10 text-primary px-3 py-1 font-mono">
+            <HelpCircle className="w-3.5 h-3.5 mr-1.5" />
             Support Available 24/7
           </Badge>
         </div>
 
-
-
         {/* Tabs */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Tabs */}
-          <div className="flex space-x-1 bg-muted border border-border p-1 rounded-lg w-fit">
+          <div className="flex space-x-1 bg-surface-elevated border border-border/80 p-1 rounded-xl w-fit">
             <button
               onClick={() => setActiveTab('create')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'create' ? 'bg-card text-yellow-600 dark:text-yellow-400 shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'create' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Create Ticket
             </button>
             <button
               onClick={() => setActiveTab('tickets')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'tickets' ? 'bg-card text-yellow-600 dark:text-yellow-400 shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === 'tickets' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               My Tickets ({tickets.length})
@@ -234,19 +233,19 @@ const Support = () => {
 
           {/* Search and Filter */}
           {activeTab === 'tickets' && (
-            <div className="flex flex-row gap-2 w-full">
+            <div className="flex flex-row gap-2 w-full md:w-auto">
               <div className="relative w-full sm:w-64 flex-shrink-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search tickets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-10 w-full"
+                  className="pl-9 h-10 w-full bg-surface-elevated border-border/80"
                 />
               </div>
               <div className="flex-shrink-0 flex gap-2">
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-[140px] h-10">
+                  <SelectTrigger className="w-[140px] h-10 bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -265,17 +264,17 @@ const Support = () => {
 
         {/* Create Ticket Tab */}
         {activeTab === 'create' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="w-5 h-5" />
+          <Card className="noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="flex items-center gap-2 font-display text-xl">
+                <Plus className="w-5 h-5 text-primary" />
                 Create Support Ticket
               </CardTitle>
               <CardDescription>
                 Describe your issue and we'll get back to you as soon as possible
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="subject">Subject *</Label>
@@ -284,6 +283,7 @@ const Support = () => {
                     value={ticketForm.subject}
                     onChange={(e) => handleFormChange('subject', e.target.value)}
                     placeholder="Brief description of your issue"
+                    className="bg-surface-elevated border-border/80"
                   />
                 </div>
                 <div className="space-y-2">
@@ -292,7 +292,7 @@ const Support = () => {
                     value={ticketForm.category} 
                     onValueChange={(value) => handleFormChange('category', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-surface-elevated border-border/80">
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -312,7 +312,7 @@ const Support = () => {
                   value={ticketForm.priority} 
                   onValueChange={(value) => handleFormChange('priority', value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -333,22 +333,23 @@ const Support = () => {
                   onChange={(e) => handleFormChange('description', e.target.value)}
                   placeholder="Please provide detailed information about your issue..."
                   rows={6}
+                  className="bg-surface-elevated border-border/80"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label>Attachments (Optional)</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center bg-muted/20">
+                <div className="border-2 border-dashed border-border/80 rounded-xl p-6 text-center bg-surface-elevated/40">
                   <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">Drag and drop files here, or click to browse</p>
-                  <p className="text-xs text-muted-foreground mt-1">Max file size: 10MB</p>
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">Max file size: 10MB</p>
                 </div>
               </div>
 
               <Button 
                 onClick={handleSubmitTicket}
                 disabled={isLoading}
-                className="w-full md:w-auto bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                className="w-full md:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Send className="w-4 h-4 mr-2" />
                 {isLoading ? 'Creating Ticket...' : 'Submit Ticket'}
@@ -363,27 +364,27 @@ const Support = () => {
             {/* Tickets List */}
             <div className="space-y-4">
               {filteredTickets.map((ticket) => (
-                <Card key={ticket.id} className="hover:shadow-md transition-shadow">
+                <Card key={ticket.id} className="noir-card-interactive border-border/80 bg-card transition-all">
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 
-                            className="font-semibold text-lg cursor-pointer hover:text-yellow-600 transition-colors"
+                            className="font-semibold text-lg text-foreground cursor-pointer hover:text-primary transition-colors"
                             onClick={() => navigate(`/support/${ticket.id}`)}
                           >
                             {ticket.subject}
                           </h3>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className="text-xs font-mono border-border/80">
                             {ticket.ticket_number}
                           </Badge>
                         </div>
                         <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
                           {ticket.description}
                         </p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                           <div className="flex items-center gap-1">
-                            <Tag className="w-3 h-3" />
+                            <Tag className="w-3 h-3 text-primary" />
                             {ticket.category}
                           </div>
                           <div className="flex items-center gap-1">
@@ -407,7 +408,7 @@ const Support = () => {
             </div>
 
             {filteredTickets.length === 0 && (
-              <Card>
+              <Card className="noir-card border-border/80 bg-card">
                 <CardContent className="p-8 text-center">
                   <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-foreground mb-2">No tickets found</h3>
@@ -418,7 +419,7 @@ const Support = () => {
                     }
                   </p>
                   {!searchQuery && filterStatus === 'all' && (
-                    <Button onClick={() => setActiveTab('create')} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                    <Button onClick={() => setActiveTab('create')} className="bg-primary text-primary-foreground hover:bg-primary/90">
                       <Plus className="w-4 h-4 mr-2" />
                       Create Your First Ticket
                     </Button>

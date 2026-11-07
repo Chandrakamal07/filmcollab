@@ -1,22 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Film, 
-  Users, 
-  Search, 
-  Network, 
-  TrendingUp, 
-  UserPlus, 
-  FileText, 
-  MessageSquare, 
+import {
+  Film,
+  Users,
+  Search,
+  Network,
+  TrendingUp,
   Star,
   ArrowRight,
   Play,
-  Camera,
-  Mic,
-  Edit3,
-  Lightbulb,
   Quote,
   CheckCircle,
   Sparkles,
@@ -24,21 +16,71 @@ import {
   Trophy,
   Zap,
   Heart,
-  Eye,
   Award,
-  Clock,
-  MapPin,
-  ChevronRight,
-  Briefcase,
-  Target,
   Shield,
-  Rocket,
-  Crown,
-  Diamond
+  Clapperboard,
+  Camera,
+  MapPin,
+  Layers,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { LandingTopbar } from "@/components/layout/landing-topbar";
 import { LandingFooter } from "@/components/layout/landing-footer";
+import {
+  DimensionalCard,
+  DimensionalLayer,
+  FadeInSection,
+  ImageReveal,
+  StaggerItem,
+} from "@/components/ui/motion-primitives";
+import { GoldenReelMedia } from "@/components/three/golden-reel/GoldenReelMedia";
+
+
+
+const craftDisciplines = [
+  {
+    title: "Actors",
+    role: "Lead & Character Talent",
+    image:
+      "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Actor",
+  },
+  {
+    title: "Directors",
+    role: "Vision & Narrative",
+    image:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Director",
+  },
+  {
+    title: "Screenwriters",
+    role: "Original & Adapted Scripts",
+    image:
+      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Screenwriter",
+  },
+  {
+    title: "Cinematographers",
+    role: "Anamorphic & Digital Optics",
+    image:
+      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Cinematographer",
+  },
+  {
+    title: "Editors",
+    role: "Assembly, Color & Rhythm",
+    image:
+      "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Editor",
+  },
+  {
+    title: "Production Crew",
+    role: "Sound, Gaffer & Art Dept",
+    image:
+      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&auto=format&fit=crop&q=80",
+    href: "/discover?craft=Producer",
+  },
+];
 
 const Index = () => {
   const navigate = useNavigate();
@@ -46,387 +88,448 @@ const Index = () => {
   const features = [
     {
       icon: Search,
-      title: "Discover Opportunities",
-      description: "Find casting calls, crew positions, and collaboration opportunities worldwide",
-      color: "bg-yellow-500"
+      tag: "CASTING & CREW",
+      title: "Precision Talent & Showreel Discovery",
+      description:
+        "Inspect verified showreels, credits, availability windows, and craft specializations in a split-screen studio dossier.",
+      image:
+        "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=800&auto=format&fit=crop&q=80",
+      span: "lg:col-span-7",
+    },
+    {
+      icon: Clapperboard,
+      tag: "PRODUCTION WORKSPACE",
+      title: "Widescreen Project Slates & Kanban Boards",
+      description:
+        "Run pre-production, script locks, call sheets, and real-time crew chat from one unified production room.",
+      image:
+        "https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=800&auto=format&fit=crop&q=80",
+      span: "lg:col-span-5",
+    },
+    {
+      icon: MapPin,
+      tag: "SCOUTING & STUDIOS",
+      title: "Architectural Locations & Soundstages",
+      description:
+        "Book verified filming locations, soundstages, and post-production houses with transparent day/hour rates.",
+      image:
+        "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80",
+      span: "lg:col-span-5",
     },
     {
       icon: Network,
-      title: "Professional Network",
-      description: "Connect with directors, producers, actors, and industry professionals",
-      color: "bg-yellow-600"
+      tag: "GLOBAL GUILDS",
+      title: "Direct Studio-to-Creator Collaboration",
+      description:
+        "Connect across 150+ territories with directors, cinematographers, editors, and producers without agency friction.",
+      image:
+        "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800&auto=format&fit=crop&q=80",
+      span: "lg:col-span-7",
     },
-    {
-      icon: TrendingUp,
-      title: "Career Growth",
-      description: "Build your portfolio, gain exposure, and advance your film career",
-      color: "bg-yellow-500"
-    },
-    {
-      icon: Globe,
-      title: "Global Community",
-      description: "Access international projects and collaborate across borders",
-      color: "bg-yellow-600"
-    },
-    {
-      icon: Trophy,
-      title: "Project Management",
-      description: "Organize shoots, manage timelines, and track project progress",
-      color: "bg-yellow-500"
-    },
-    {
-      icon: Zap,
-      title: "Real-time Collaboration",
-      description: "Chat, share files, and coordinate with your team instantly",
-      color: "bg-yellow-600"
-    }
   ];
 
   const testimonials = [
     {
-      quote: "FilmCollab completely transformed how I find and manage film projects. I've connected with amazing talent and my career has skyrocketed!",
+      quote:
+        "FilmCollab completely transformed how I package and crew independent features. We locked our DP, editor, and sound designer in 72 hours.",
       author: "Sarah Chen",
-      role: "Independent Director",
-      avatar: "SC",
+      role: "Independent Director • Mumbai & London",
+      avatar:
+        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
       rating: 5,
-      project: "Award-winning Short Film 'Moments'"
+      project: "Director — 'After the Rain'",
     },
     {
-      quote: "The platform's networking features helped me land my biggest role yet. The industry connections I've made here are invaluable.",
-      author: "Marcus Rodriguez", 
-      role: "Professional Actor",
-      avatar: "MR",
+      quote:
+        "The showreel dossier and availability indicators meant producers could review my anamorphic reel and book me directly for a 6-week shoot.",
+      author: "Marcus Rodriguez",
+      role: "Director of Photography • Los Angeles",
+      avatar:
+        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
       rating: 5,
-      project: "Lead in 'City Lights' Feature Film"
+      project: "Cinematographer — 'Monsoon Letters'",
     },
     {
-      quote: "As a screenwriter, FilmCollab gave my scripts the exposure they needed. Three of my projects are now in production!",
+      quote:
+        "Having casting calls, location scouting, task boards, and unit chat in one dark-room workspace keeps our entire production unit aligned.",
       author: "Emma Thompson",
-      role: "Screenwriter", 
-      avatar: "ET",
+      role: "Executive Producer • Berlin",
+      avatar:
+        "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80",
       rating: 5,
-      project: "Netflix Original Series Writer"
-    }
+      project: "Producer — 'The Waiting Room'",
+    },
   ];
 
   const stats = [
-    { number: "50K+", label: "Active Creators", icon: Users },
-    { number: "10K+", label: "Projects Completed", icon: Film },
-    { number: "25K+", label: "Connections Made", icon: Heart },
-    { number: "150+", label: "Countries Reached", icon: Globe }
-  ];
-
-  const benefits = [
-    {
-      icon: Crown,
-      title: "Premium Access",
-      description: "Get priority access to exclusive projects and casting calls"
-    },
-    {
-      icon: Shield,
-      title: "Secure Platform",
-      description: "Your work and personal information are protected with enterprise-grade security"
-    },
-    {
-      icon: Rocket,
-      title: "Fast Growth",
-      description: "Accelerate your career with our AI-powered matching system"
-    },
-    {
-      icon: Diamond,
-      title: "Quality Assurance",
-      description: "Verified professionals and curated opportunities only"
-    }
+    { number: "50K+", label: "Verified Filmmakers", icon: Users },
+    { number: "10K+", label: "Productions Wrapped", icon: Film },
+    { number: "25K+", label: "Crew Collaborations", icon: Heart },
+    { number: "150+", label: "Production Hubs", icon: Globe },
   ];
 
   return (
-    <div className="min-h-screen bg-white relative overflow-hidden">
-      
+    <div className="min-h-screen bg-[#0D0E10] text-foreground relative overflow-x-hidden">
       <LandingTopbar />
-      
-      {/* Hero Section - Professional Yellow & White */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-yellow-50 via-white to-yellow-100">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-20 left-20 w-32 h-32 bg-yellow-400 rounded-full blur-3xl"></div>
-          <div className="absolute top-40 right-32 w-24 h-24 bg-yellow-500 rounded-full blur-2xl"></div>
-          <div className="absolute bottom-32 left-1/3 w-28 h-28 bg-yellow-300 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-20 w-20 h-20 bg-yellow-600 rounded-full blur-2xl"></div>
-        </div>
 
-        {/* Geometric Shapes */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/4 left-1/4 w-4 h-4 bg-yellow-400 rotate-45 animate-pulse"></div>
-          <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-yellow-500 rotate-45 animate-pulse delay-1000"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-yellow-600 rotate-45 animate-pulse delay-2000"></div>
-          <div className="absolute bottom-1/3 right-1/4 w-5 h-5 bg-yellow-300 rotate-45 animate-pulse delay-500"></div>
-        </div>
+      {/* 01 / LANDING — STUDIO NOIR CINEMATIC STAGE + 3D WEBGL FILM SCULPTURE */}
+      <section
+        className="relative pt-16 pb-12 px-0"
+      >
+        <div className="w-full mx-auto">
+          <div className="relative bg-[#090A0D] overflow-hidden isolate">
+            {/* Hero Main Stage with Full-Hero 3D Cinematic World Background */}
+            <div
+              className="relative min-h-[580px] lg:min-h-[680px] flex flex-col justify-between overflow-hidden isolate select-none"
+            >
+              {/* Layer 1: Rebalanced Cinematic Copy Scrim (Protects text on left, 100% transparent on right) */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[1] hidden md:block"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(9, 10, 13, 0.94) 0%, rgba(9, 10, 13, 0.82) 30%, rgba(9, 10, 13, 0.28) 52%, rgba(9, 10, 13, 0.04) 72%, transparent 100%)",
+                }}
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-[#090A0D]/70 via-transparent to-[#090A0D]/20"
+              />
 
-        <div className="container mx-auto px-6 relative z-10">
-          <div className="text-center max-w-6xl mx-auto">
-            
-            {/* Logo & Brand */}
-            <div className="flex items-center justify-center gap-4 mb-8 animate-fade-in">
-              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-2xl animate-glow">
-                <Film className="h-8 w-8 text-white" />
+              {/* Upper-Right Editorial Callout */}
+              <div className="hidden flex-col items-end gap-2 absolute top-8 right-10 z-20 pointer-events-none">
+                <p className="font-display italic text-lg text-foreground/80 -rotate-3 pr-2 drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
+                  “Different Stories,
+                  <br />
+                  <span className="text-primary font-normal">Brighter People”</span>
+                </p>
               </div>
-              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
-                FilmCollab
-              </h1>
-            </div>
 
-            {/* Main Headlines */}
-            <h2 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight animate-fade-in delay-300">
-              Where Stories
-              <span className="block bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
-                Come to Life
-              </span>
-            </h2>
-            
-            <p className="text-xl md:text-2xl text-gray-600 mb-12 max-w-4xl mx-auto leading-relaxed animate-fade-in delay-500">
-              The premier platform connecting film industry professionals worldwide. 
-              Collaborate, create, and showcase your talent in cinema's next chapter.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16 animate-fade-in delay-700">
-              <Button 
-                size="lg" 
-                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-2xl hover:shadow-yellow-500/25 transition-all duration-500 min-w-[250px] h-14 text-lg font-semibold group"
-                onClick={() => navigate("/auth/signup")}
-              >
-                Start Your Journey
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="lg"
-                className="min-w-[250px] h-14 text-lg border-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 group"
-                onClick={() => navigate("/auth/signin")}
-              >
-                <Play className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
-                Watch Demo
-              </Button>
-            </div>
-
-            {/* Trust Indicators */}
-            <div className="flex items-center justify-center gap-8 text-gray-500 animate-fade-in delay-1000">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                <span>Trusted by 50K+ creators</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                <span>4.9/5 rating</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-blue-500" />
-                <span>150+ countries</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-          <div className="w-6 h-10 border-2 border-yellow-400 rounded-full flex justify-center">
-            <div className="w-1 h-3 bg-yellow-500 rounded-full mt-2 animate-pulse"></div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-20 bg-gradient-to-r from-yellow-50 to-white border-y border-yellow-200">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center group">
-                <div className="h-16 w-16 bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <stat.icon className="h-8 w-8 text-yellow-600" />
+              {/* Main Grid: Left copy, Right open negative space where the uploaded reel animation appears */}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:aspect-[16/9] lg:min-h-0 items-center relative z-20">
+                {/* Layer 0: Uploaded reel media fills the hero without stretching or cropping */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 aspect-video lg:aspect-auto lg:inset-0 lg:h-auto z-0"
+                  style={{ background: "radial-gradient(ellipse at 77% 49%, rgba(159, 93, 25, 0.29), transparent 50%)" }}
+                >
+                  <GoldenReelMedia />
+                  <div className="absolute inset-0 hidden lg:block" style={{ background: "linear-gradient(90deg, rgba(9,10,13,.96) 0%, rgba(9,10,13,.8) 22%, rgba(9,10,13,.22) 40%, transparent 60%)" }} />
                 </div>
-                <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{stat.number}</div>
-                <div className="text-gray-600">{stat.label}</div>
+
+                {/* Left: Editorial Hero Content (Matches 01 / Landing) */}
+                <div className="relative z-20 px-6 sm:px-12 lg:px-[4vw] pt-12 sm:pt-16 pb-6 lg:pb-8 min-w-0">
+                  <FadeInSection variant="marketing">
+                    <div className="flex items-center gap-2.5 mb-5">
+                      <span className="h-[1px] w-7 bg-primary/80" />
+                      <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.26em] text-primary">
+                        FOR FILMMAKERS, BY FILMMAKERS
+                      </span>
+                    </div>
+
+                    <h1 className="font-display text-4xl sm:text-6xl lg:text-[clamp(64px,5.7vw,108px)] font-normal tracking-tight text-[#F4F0E8] leading-[1.03] mb-6 drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
+                      Your next
+                      <span className="block">film starts here.</span>
+                    </h1>
+
+                    <p className="text-base sm:text-lg text-[#C7C5BE] mb-9 max-w-xl leading-relaxed">
+                      Find collaborators, join exciting projects and bring your ideas to life
+                      with a global community of filmmakers.
+                    </p>
+
+                    {/* Primary & Secondary CTAs (Matches 01 / Landing) */}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <Button
+                        size="lg"
+                        onClick={() => navigate("/discover")}
+                        className="h-12 px-7 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-[0_8px_28px_rgba(233,180,87,0.32)] group"
+                      >
+                        Find talent
+                        <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => navigate("/jobs")}
+                        className="h-12 px-7 rounded-xl text-sm font-medium border-white/20 bg-black/45 backdrop-blur-md text-foreground hover:border-primary/55 hover:bg-white/[0.08]"
+                      >
+                        Explore opportunities
+                      </Button>
+                    </div>
+                  </FadeInSection>
+                </div>
+
+                {/* Right: Open negative space allowing the cinematic background to breathe */}
+                <div className="relative min-w-0 w-full aspect-video lg:aspect-auto lg:h-full pointer-events-none" />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Features Section - Clean Grid */}
-      <section id="features" className="py-32 px-6 relative bg-white">
-        <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-20">
-            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 mb-6">
-              <Sparkles className="h-4 w-4 mr-2" />
-              Why FilmCollab
-            </Badge>
-            <h2 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Everything You Need to
-              <span className="block bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
-                Create Amazing Films
-              </span>
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Powerful tools and global network to bring your creative vision to life
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <Card 
-                key={index} 
-                className="bg-white border-yellow-200 hover:border-yellow-400 transition-all duration-500 hover:shadow-2xl hover:shadow-yellow-500/10 group"
-              >
-                <CardHeader>
-                  <div className={`h-12 w-12 rounded-xl ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                    <feature.icon className="h-6 w-6 text-white" />
-                  </div>
-                  <CardTitle className="text-xl text-gray-900 group-hover:text-yellow-700 transition-colors">
-                    {feature.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600 leading-relaxed">
-                    {feature.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-32 px-6 bg-gradient-to-br from-yellow-50 to-white">
-        <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-20">
-            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 mb-6">
-              <Target className="h-4 w-4 mr-2" />
-              Premium Benefits
-            </Badge>
-            <h2 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Why Choose
-              <span className="block bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
-                FilmCollab Pro
-              </span>
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {benefits.map((benefit, index) => (
-              <Card 
-                key={index} 
-                className="bg-white border-yellow-200 hover:border-yellow-400 transition-all duration-500 hover:shadow-xl group text-center"
-              >
-                <CardHeader>
-                  <div className="h-16 w-16 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <benefit.icon className="h-8 w-8 text-white" />
-                  </div>
-                  <CardTitle className="text-xl text-gray-900">
-                    {benefit.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-gray-600">
-                    {benefit.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section - Professional Style */}
-      <section className="py-32 px-6 bg-white">
-        <div className="container mx-auto max-w-7xl">
-          <div className="text-center mb-20">
-            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 mb-6">
-              <Quote className="h-4 w-4 mr-2" />
-              Success Stories
-            </Badge>
-            <h2 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              What Creators Are
-              <span className="block bg-gradient-to-r from-yellow-600 to-yellow-800 bg-clip-text text-transparent">
-                Saying About Us
-              </span>
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card 
-                key={index} 
-                className="bg-white border-yellow-200 hover:border-yellow-400 transition-all duration-500 group"
-              >
-                <CardHeader>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-12 w-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold">
-                      {testimonial.avatar}
-                    </div>
-                    <div>
-                      <h4 className="text-gray-900 font-semibold">{testimonial.author}</h4>
-                      <p className="text-gray-600 text-sm">{testimonial.role}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 text-yellow-500 fill-current" />
+              {/* Bottom of Hero Stage: 6-Column Craft Portrait Strip + Manifesto (Matches 01 / Landing) */}
+              <div className="relative z-20 px-6 sm:px-12 lg:px-[4vw] pb-8 pt-4 border-t border-white/[0.07] bg-gradient-to-t from-[#0E0F12] via-[#090A0D]/95 to-transparent">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-12 gap-4 items-end">
+                  <div className="col-span-2 sm:col-span-3 lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5">
+                    {craftDisciplines.map((craft, idx) => (
+                      <StaggerItem key={craft.title} index={idx}>
+                        <DimensionalCard
+                          maxTilt={8}
+                          onClick={() => navigate(craft.href)}
+                          className="cursor-pointer overflow-hidden rounded-xl border-white/[0.1] bg-[#181A1E] group"
+                        >
+                          <DimensionalLayer depth={14}>
+                            <div className="aspect-[4/4.6] w-full overflow-hidden relative">
+                              <img
+                                src={craft.image}
+                                alt={craft.title}
+                                className="w-full h-full object-cover object-center transition-transform duration-500 ease-noir group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                              <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ArrowRight className="h-3 w-3 text-primary" />
+                              </div>
+                            </div>
+                          </DimensionalLayer>
+                          <DimensionalLayer depth={24} className="p-2.5 bg-[#16181C] border-t border-white/[0.06]">
+                            <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                              {craft.title}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {craft.role}
+                            </p>
+                          </DimensionalLayer>
+                        </DimensionalCard>
+                      </StaggerItem>
                     ))}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <blockquote className="text-gray-700 mb-4 leading-relaxed">
-                    "{testimonial.quote}"
-                  </blockquote>
-                  <Badge variant="outline" className="text-yellow-700 border-yellow-400">
-                    <Award className="h-3 w-3 mr-1" />
-                    {testimonial.project}
-                  </Badge>
-                </CardContent>
-              </Card>
+
+                  {/* Right Architectural Tagline */}
+                  <div className="col-span-2 sm:col-span-3 lg:col-span-3 flex flex-col justify-end lg:pl-4 pb-2">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground leading-relaxed">
+                      A PLATFORM
+                      <br />
+                      FOR BOLDER
+                      <br />
+                      <span className="text-foreground font-semibold">COLLABORATION</span>
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="h-[1px] flex-1 bg-primary/50" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Studio Telemetry & Scale Strip */}
+      <section className="py-10 px-4 sm:px-8">
+        <div className="container mx-auto max-w-[1400px]">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((stat, index) => (
+              <StaggerItem key={stat.label} index={index}>
+                <DimensionalCard maxTilt={5} className="p-5 bg-[#15171B] border-white/[0.08]">
+                  <DimensionalLayer depth={16} className="flex items-center justify-between">
+                    <div>
+                      <div className="font-display text-3xl sm:text-4xl font-semibold text-foreground tracking-tight">
+                        {stat.number}
+                      </div>
+                      <div className="text-xs font-mono uppercase tracking-[0.14em] text-muted-foreground mt-1">
+                        {stat.label}
+                      </div>
+                    </div>
+                    <div className="h-11 w-11 rounded-xl border border-primary/30 bg-primary/10 flex items-center justify-center text-primary">
+                      <stat.icon className="h-5 w-5" />
+                    </div>
+                  </DimensionalLayer>
+                </DimensionalCard>
+              </StaggerItem>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section - Professional & Compelling */}
-      <section className="py-32 px-6 relative overflow-hidden bg-gradient-to-r from-yellow-500 to-yellow-600">
-        <div className="container mx-auto max-w-4xl text-center relative z-10">
-          <h2 className="text-5xl md:text-7xl font-bold text-white mb-8 leading-tight">
-            Ready to Create
-            <span className="block text-yellow-100">
-              Your Masterpiece?
-            </span>
-          </h2>
-          
-          <p className="text-xl md:text-2xl text-yellow-100 mb-12 max-w-3xl mx-auto">
-            Join thousands of filmmakers, actors, and creatives who are already building the future of cinema.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-            <Button 
-              size="lg" 
-              className="bg-white text-yellow-600 hover:bg-yellow-50 shadow-2xl hover:shadow-white/25 transition-all duration-500 min-w-[300px] h-16 text-xl font-semibold group"
-              onClick={() => navigate("/auth/signup")}
-            >
-              Join FilmCollab Now
-              <Sparkles className="ml-2 h-6 w-6 group-hover:rotate-12 transition-transform" />
-            </Button>
-            
-            <div className="text-center">
-              <p className="text-yellow-100 text-sm">Free to join • No credit card required</p>
-              <p className="text-white text-sm font-semibold">Start collaborating in under 2 minutes</p>
+      {/* Asymmetric Dimensional Bento Grid — Platform Architecture */}
+      <section id="features" className="py-20 px-4 sm:px-8 relative">
+        <div className="container mx-auto max-w-[1400px]">
+          <FadeInSection variant="marketing" className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+            <div>
+              <div className="noir-eyebrow mb-4">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>STUDIO ARCHITECTURE</span>
+              </div>
+              <h2 className="font-display text-3xl sm:text-5xl font-normal tracking-tight text-foreground leading-[1.08]">
+                Engineered for Every Stage of{" "}
+                <span className="italic text-primary">Cinema Production</span>
+              </h2>
             </div>
+            <p className="text-sm sm:text-base text-muted-foreground max-w-md">
+              From initial script breakdown and casting calls to location scouting and daily unit task boards.
+            </p>
+          </FadeInSection>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {features.map((feature, index) => (
+              <StaggerItem key={feature.title} index={index} className={feature.span}>
+                <DimensionalCard
+                  maxTilt={5.5}
+                  className="h-full overflow-hidden bg-[#15171B] border-white/[0.08] flex flex-col justify-between group"
+                >
+                  <DimensionalLayer depth={12} className="relative h-56 sm:h-64 w-full overflow-hidden">
+                    <ImageReveal
+                      src={feature.image}
+                      alt={feature.title}
+                      wrapperClassName="w-full h-full"
+                      className="transition-transform duration-700 ease-noir group-hover:scale-105"
+                    />
+                    <div className="absolute top-4 left-4 z-10">
+                      <Badge className="bg-black/70 backdrop-blur-md text-primary border border-primary/35 font-mono text-[10px] tracking-[0.16em] uppercase">
+                        {feature.tag}
+                      </Badge>
+                    </div>
+                  </DimensionalLayer>
+
+                  <DimensionalLayer depth={24} className="p-6 sm:p-7 bg-[#15171B]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-display text-xl sm:text-2xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {feature.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                          {feature.description}
+                        </p>
+                      </div>
+                      <div className="h-10 w-10 rounded-xl border border-primary/30 bg-primary/10 flex items-center justify-center text-primary flex-shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <feature.icon className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </DimensionalLayer>
+                </DimensionalCard>
+              </StaggerItem>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* Testimonials — Voices from the Set */}
+      <section id="community" className="py-20 px-4 sm:px-8 bg-[#111215] border-y border-white/[0.07]">
+        <div className="container mx-auto max-w-[1400px]">
+          <FadeInSection variant="marketing" className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+            <div>
+              <div className="noir-eyebrow mb-4">
+                <Quote className="h-3.5 w-3.5" />
+                <span>VOICES FROM THE SET</span>
+              </div>
+              <h2 className="font-display text-3xl sm:text-5xl font-normal tracking-tight text-foreground">
+                Trusted by Directors, DPs &{" "}
+                <span className="italic text-primary">Showrunners</span>
+              </h2>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/discover")}
+              className="border-white/15 bg-surface-elevated hover:border-primary/45"
+            >
+              Browse Verified Talent
+              <ArrowRight className="ml-2 h-4 w-4 text-primary" />
+            </Button>
+          </FadeInSection>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {testimonials.map((testimonial, index) => (
+              <StaggerItem key={testimonial.author} index={index}>
+                <DimensionalCard
+                  maxTilt={6}
+                  className="h-full p-6 sm:p-7 bg-[#16181C] border-white/[0.08] flex flex-col justify-between"
+                >
+                  <DimensionalLayer depth={18}>
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-1">
+                        {[...Array(testimonial.rating)].map((_, i) => (
+                          <Star key={i} className="h-3.5 w-3.5 text-primary fill-primary" />
+                        ))}
+                      </div>
+                      <Quote className="h-5 w-5 text-primary/35" />
+                    </div>
+                    <blockquote className="text-foreground/90 text-sm sm:text-base leading-relaxed font-normal mb-6">
+                      “{testimonial.quote}”
+                    </blockquote>
+                  </DimensionalLayer>
+
+                  <DimensionalLayer depth={26} className="pt-4 border-t border-white/[0.07] flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={testimonial.avatar}
+                        alt={testimonial.author}
+                        className="h-10 w-10 rounded-full object-cover border border-primary/40"
+                      />
+                      <div>
+                        <h4 className="text-foreground font-semibold text-sm">
+                          {testimonial.author}
+                        </h4>
+                        <p className="text-muted-foreground text-xs">{testimonial.role}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 text-[10px] font-mono">
+                      {testimonial.project}
+                    </Badge>
+                  </DimensionalLayer>
+                </DimensionalCard>
+              </StaggerItem>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Final Screening Room CTA */}
+      <section className="py-20 px-4 sm:px-8">
+        <div className="container mx-auto max-w-[1400px]">
+          <DimensionalCard
+            maxTilt={4}
+            className="p-8 sm:p-14 bg-gradient-to-br from-[#1A1C21] via-[#14161A] to-[#0F1013] border-primary/30 overflow-hidden relative"
+          >
+            <div className="pointer-events-none absolute -right-24 -top-24 w-96 h-96 rounded-full bg-primary/15 blur-[110px]" />
+            <DimensionalLayer depth={22} className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+              <div className="max-w-2xl">
+                <div className="noir-eyebrow mb-4">
+                  <Film className="h-3.5 w-3.5" />
+                  <span>READY TO ROLL CAMERA</span>
+                </div>
+                <h2 className="font-display text-3xl sm:text-5xl text-foreground leading-tight mb-4">
+                  Assemble your crew and launch your{" "}
+                  <span className="italic text-primary">next production.</span>
+                </h2>
+                <p className="text-base text-muted-foreground">
+                  Join 50,000+ actors, directors, writers, cinematographers, and studios building cinema together.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <Button
+                  size="lg"
+                  onClick={() => navigate("/auth/signup")}
+                  className="h-12 px-7 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-noir"
+                >
+                  Create Studio Account
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => navigate("/projects")}
+                  className="h-12 px-7 text-sm border-white/15 bg-white/[0.04] hover:border-primary/45"
+                >
+                  Browse Active Slates
+                </Button>
+              </div>
+            </DimensionalLayer>
+          </DimensionalCard>
         </div>
       </section>
 
       <LandingFooter />
-
     </div>
   );
 };
 
 export default Index;
+

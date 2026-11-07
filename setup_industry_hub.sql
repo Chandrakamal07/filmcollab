@@ -19,7 +19,10 @@ CREATE POLICY "Allow public read access for industry_news" ON public.industry_ne
 
 DROP POLICY IF EXISTS "Allow authenticated users to insert industry_news" ON public.industry_news;
 CREATE POLICY "Allow authenticated users to insert industry_news" ON public.industry_news
-    FOR INSERT TO authenticated WITH CHECK (true);
+    FOR INSERT TO authenticated WITH CHECK (
+        auth.uid() = user_id
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
 
 DROP POLICY IF EXISTS "Allow users to update their own industry_news" ON public.industry_news;
 CREATE POLICY "Allow users to update their own industry_news" ON public.industry_news
@@ -62,7 +65,10 @@ CREATE POLICY "Allow public read access for industry_events" ON public.industry_
 
 DROP POLICY IF EXISTS "Allow authenticated users to insert industry_events" ON public.industry_events;
 CREATE POLICY "Allow authenticated users to insert industry_events" ON public.industry_events
-    FOR INSERT TO authenticated WITH CHECK (true);
+    FOR INSERT TO authenticated WITH CHECK (
+        auth.uid() = user_id
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
 
 DROP POLICY IF EXISTS "Allow users to update their own industry_events" ON public.industry_events;
 CREATE POLICY "Allow users to update their own industry_events" ON public.industry_events
@@ -98,7 +104,10 @@ CREATE POLICY "Allow public read access for industry_courses" ON public.industry
 
 DROP POLICY IF EXISTS "Allow authenticated users to insert industry_courses" ON public.industry_courses;
 CREATE POLICY "Allow authenticated users to insert industry_courses" ON public.industry_courses
-    FOR INSERT TO authenticated WITH CHECK (true);
+    FOR INSERT TO authenticated WITH CHECK (
+        auth.uid() = user_id
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    );
 
 DROP POLICY IF EXISTS "Allow users to update their own industry_courses" ON public.industry_courses;
 CREATE POLICY "Allow users to update their own industry_courses" ON public.industry_courses

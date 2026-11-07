@@ -55,6 +55,7 @@ interface Post {
   author?: {
     id: string;
     full_name?: string;
+    avatar_url?: string | null;
   };
   is_liked?: boolean;
   is_saved?: boolean;
@@ -71,14 +72,15 @@ interface PostComment {
   author?: {
     id: string;
     full_name?: string;
+    avatar_url?: string | null;
   };
   replies?: PostComment[];
 }
 
 const PostsPage = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
-  
+
   // Hardcoded posts data
   const hardcodedPosts: Post[] = [
     {
@@ -255,7 +257,7 @@ const PostsPage = () => {
       is_saved: true
     }
   ];
-  
+
   // State management
   const [posts, setPosts] = useState<Post[]>(hardcodedPosts);
   const [loading, setLoading] = useState(false);
@@ -267,7 +269,7 @@ const PostsPage = () => {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
   const [newComment, setNewComment] = useState("");
-  
+
   // Create post form state
   const [newPost, setNewPost] = useState({
     title: "",
@@ -277,9 +279,9 @@ const PostsPage = () => {
     mediaUrls: [] as string[],
   });
   const [isUploading, setIsUploading] = useState(false);
-  
+
   // Loading states for actions
-  const [loadingActions, setLoadingActions] = useState<{[key: string]: boolean}>({});
+  const [loadingActions, setLoadingActions] = useState<{ [key: string]: boolean }>({});
 
   // Helper function to get or create user profile
   const getOrCreateProfile = async () => {
@@ -324,12 +326,76 @@ const PostsPage = () => {
     }
   };
 
-  // Fetch posts from hardcoded data
+  // Fetch posts from database (falling back gracefully to sample feed if empty)
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      
-      let filteredPosts = [...hardcodedPosts];
+
+      const { data: dbPosts, error: dbError } = await supabase
+        .from('posts')
+        .select(`
+          id,
+          title,
+          content,
+          author_id,
+          media_urls,
+          media_types,
+          hashtags,
+          is_published,
+          is_featured,
+          likes_count,
+          comments_count,
+          shares_count,
+          created_at,
+          updated_at,
+          profiles:author_id (id, full_name, avatar_url, username)
+        `)
+        .order('created_at', { ascending: false });
+
+      const activeProfileId = profile?.id;
+      const userLikedIds = new Set<string>();
+      const userSavedIds = new Set<string>();
+
+      if (activeProfileId) {
+        const [likesRes, savesRes] = await Promise.all([
+          supabase.from('post_likes').select('post_id').eq('user_id', activeProfileId),
+          supabase.from('post_saves').select('post_id').eq('user_id', activeProfileId)
+        ]);
+        if (likesRes.data) (likesRes.data as any[]).forEach((r: any) => userLikedIds.add(r.post_id));
+        if (savesRes.data) (savesRes.data as any[]).forEach((r: any) => userSavedIds.add(r.post_id));
+      }
+
+      let loadedPosts: Post[] = [];
+
+      if (!dbError && dbPosts && dbPosts.length > 0) {
+        loadedPosts = dbPosts.map((p: any) => ({
+          id: p.id,
+          title: p.title || undefined,
+          content: p.content,
+          author_id: p.author_id,
+          media_urls: p.media_urls || undefined,
+          media_types: p.media_types || undefined,
+          hashtags: p.hashtags || undefined,
+          is_published: p.is_published ?? true,
+          is_featured: p.is_featured ?? false,
+          likes_count: p.likes_count || 0,
+          comments_count: p.comments_count || 0,
+          shares_count: p.shares_count || 0,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          author: {
+            id: p.profiles?.id || p.author_id,
+            full_name: p.profiles?.full_name || p.profiles?.username || 'Creator',
+            avatar_url: p.profiles?.avatar_url
+          },
+          is_liked: userLikedIds.has(p.id),
+          is_saved: userSavedIds.has(p.id)
+        }));
+      } else {
+        loadedPosts = [];
+      }
+
+      let filteredPosts = loadedPosts;
 
       // Apply filters based on active tab
       if (activeTab === "trending") {
@@ -337,7 +403,6 @@ const PostsPage = () => {
       } else if (activeTab === "published") {
         filteredPosts = filteredPosts.filter(post => post.is_published);
       } else if (activeTab === "saved") {
-        // Filter for saved posts (posts where is_saved is true)
         filteredPosts = filteredPosts.filter(post => post.is_saved);
       }
 
@@ -347,7 +412,6 @@ const PostsPage = () => {
       } else if (sortBy === "trending") {
         filteredPosts = filteredPosts.sort((a, b) => (b.likes_count + b.comments_count + b.shares_count) - (a.likes_count + a.comments_count + a.shares_count));
       } else {
-        // Most recent (default)
         filteredPosts = filteredPosts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       }
 
@@ -463,41 +527,100 @@ const PostsPage = () => {
     try {
       setIsUploading(true);
 
+      // Resolve author profile ID (M04 / M10: bind author_id to profile.id)
+      let authorProfileId = profile?.id;
+      if (!authorProfileId) {
+        const p = await getOrCreateProfile();
+        authorProfileId = p?.id;
+      }
+      if (!authorProfileId) {
+        throw new Error("User profile not found. Please set up your profile first.");
+      }
+
       // Extract hashtags from content
       const hashtagMatches = newPost.content.match(/#\w+/g);
       const hashtags = hashtagMatches ? hashtagMatches.map(tag => tag.substring(1)) : [];
 
-      // Create new post object
-      const newPostData: Post = {
-        id: Date.now().toString(),
-        title: newPost.title || undefined,
-        content: newPost.content,
-        author_id: user.id,
-        media_urls: newPost.mediaUrls.length > 0 ? newPost.mediaUrls : undefined,
-        media_types: newPost.mediaFiles.length > 0 ? newPost.mediaFiles.map(file => 
-          file.type.startsWith('video/') ? 'video' : 'image'
-        ) : undefined,
-        hashtags: hashtags.length > 0 ? hashtags : undefined,
-        is_published: true,
-        is_featured: false,
-        likes_count: 0,
-        comments_count: 0,
-        shares_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      // Upload media files if any
+      const uploadedUrls: string[] = [...newPost.mediaUrls];
+      const uploadedTypes: string[] = [];
+
+      for (const file of newPost.mediaFiles) {
+        const fileExt = file.name.split('.').pop();
+        const filePath = `${authorProfileId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('post-media')
+          .upload(filePath, file);
+
+        if (uploadErr) {
+          throw new Error(`Media upload failed: ${uploadErr.message || 'Storage error'}`);
+        }
+        if (uploadData) {
+          const { data: { publicUrl } } = supabase.storage.from('post-media').getPublicUrl(uploadData.path);
+          uploadedUrls.push(publicUrl);
+          uploadedTypes.push(file.type.startsWith('video/') ? 'video' : 'image');
+        }
+      }
+
+      // Real database insert
+      const { data: createdPost, error: insertError } = await supabase
+        .from('posts')
+        .insert({
+          title: newPost.title || null,
+          content: newPost.content.trim(),
+          author_id: authorProfileId,
+          media_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
+          media_types: uploadedTypes.length > 0 ? uploadedTypes : null,
+          hashtags: hashtags.length > 0 ? hashtags : null,
+          is_published: true,
+          is_featured: false
+        })
+        .select(`
+          id,
+          title,
+          content,
+          author_id,
+          media_urls,
+          media_types,
+          hashtags,
+          is_published,
+          is_featured,
+          likes_count,
+          comments_count,
+          shares_count,
+          created_at,
+          updated_at,
+          profiles:author_id (id, full_name, avatar_url, username)
+        `)
+        .single();
+
+      if (insertError) throw insertError;
+
+      const formattedPost: Post = {
+        id: createdPost.id,
+        title: createdPost.title || undefined,
+        content: createdPost.content,
+        author_id: createdPost.author_id,
+        media_urls: createdPost.media_urls || undefined,
+        media_types: createdPost.media_types || undefined,
+        hashtags: createdPost.hashtags || undefined,
+        is_published: createdPost.is_published ?? true,
+        is_featured: createdPost.is_featured ?? false,
+        likes_count: createdPost.likes_count || 0,
+        comments_count: createdPost.comments_count || 0,
+        shares_count: createdPost.shares_count || 0,
+        created_at: createdPost.created_at,
+        updated_at: createdPost.updated_at,
         author: {
-          id: user.id,
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'
+          id: (createdPost as any).profiles?.id || authorProfileId,
+          full_name: (createdPost as any).profiles?.full_name || profile?.full_name || user.user_metadata?.full_name || 'Creator',
+          avatar_url: (createdPost as any).profiles?.avatar_url || profile?.avatar_url
         },
         is_liked: false,
         is_saved: false
       };
 
-      // Add to hardcoded posts array
-      hardcodedPosts.unshift(newPostData);
-      
-      // Update state
-      setPosts(prev => [newPostData, ...prev]);
+      setPosts(prev => [formattedPost, ...prev]);
 
       toast({
         title: "Success",
@@ -513,13 +636,13 @@ const PostsPage = () => {
         mediaUrls: [],
       });
       setIsCreateDialogOpen(false);
-      
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Error creating post:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create post"
+        description: error.message || "Failed to create post"
       });
     } finally {
       setIsUploading(false);
@@ -541,33 +664,45 @@ const PostsPage = () => {
     setLoadingActions(prev => ({ ...prev, [actionKey]: true }));
 
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId);
+      const authorProfileId = profile?.id;
+
+      if (isUuid && authorProfileId) {
+        if (!isLiked) {
+          const { error: likeErr } = await supabase.from('post_likes').insert({
+            post_id: postId,
+            user_id: authorProfileId
+          });
+          if (likeErr && likeErr.code !== '23505') throw likeErr;
+        } else {
+          const { data: delData, error: unlikeErr } = await supabase
+            .from('post_likes')
+            .delete()
+            .match({ post_id: postId, user_id: authorProfileId })
+            .select("id");
+          if (unlikeErr) throw unlikeErr;
+          if (!delData || delData.length === 0) {
+            throw new Error("Like record not found or permission denied.");
+          }
+        }
+      }
+
       // Update local state
-      setPosts(prev => prev.map(post => 
-        post.id === postId 
-          ? { 
-              ...post, 
-              is_liked: !isLiked,
-              likes_count: isLiked ? post.likes_count - 1 : post.likes_count + 1
-            }
+      setPosts(prev => prev.map(post =>
+        post.id === postId
+          ? {
+            ...post,
+            is_liked: !isLiked,
+            likes_count: isLiked ? Math.max(0, post.likes_count - 1) : post.likes_count + 1
+          }
           : post
       ));
 
-      // Update hardcoded posts array
-      const postIndex = hardcodedPosts.findIndex(post => post.id === postId);
-      if (postIndex !== -1) {
-        hardcodedPosts[postIndex] = {
-          ...hardcodedPosts[postIndex],
-          is_liked: !isLiked,
-          likes_count: isLiked ? hardcodedPosts[postIndex].likes_count - 1 : hardcodedPosts[postIndex].likes_count + 1
-        };
-      }
-
-      // Show success feedback
       toast({
         title: isLiked ? "Post unliked" : "Post liked",
         description: isLiked ? "You've unliked this post" : "You've liked this post"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling like:', error);
       toast({
         variant: "destructive",
@@ -594,28 +729,41 @@ const PostsPage = () => {
     setLoadingActions(prev => ({ ...prev, [actionKey]: true }));
 
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(postId);
+      const authorProfileId = profile?.id;
+
+      if (isUuid && authorProfileId) {
+        if (!isSaved) {
+          const { error: saveErr } = await supabase.from('post_saves').insert({
+            post_id: postId,
+            user_id: authorProfileId
+          });
+          if (saveErr && saveErr.code !== '23505') throw saveErr;
+        } else {
+          const { data: delData, error: unsaveErr } = await supabase
+            .from('post_saves')
+            .delete()
+            .match({ post_id: postId, user_id: authorProfileId })
+            .select("id");
+          if (unsaveErr) throw unsaveErr;
+          if (!delData || delData.length === 0) {
+            throw new Error("Saved post record not found or permission denied.");
+          }
+        }
+      }
+
       // Update local state
-      setPosts(prev => prev.map(post => 
-        post.id === postId 
+      setPosts(prev => prev.map(post =>
+        post.id === postId
           ? { ...post, is_saved: !isSaved }
           : post
       ));
 
-      // Update hardcoded posts array
-      const postIndex = hardcodedPosts.findIndex(post => post.id === postId);
-      if (postIndex !== -1) {
-        hardcodedPosts[postIndex] = {
-          ...hardcodedPosts[postIndex],
-          is_saved: !isSaved
-        };
-      }
-
-      // Show success feedback
       toast({
         title: isSaved ? "Post unsaved" : "Post saved",
         description: isSaved ? "Post removed from your saved posts" : "Post saved to your collection"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling save:', error);
       toast({
         variant: "destructive",
@@ -685,10 +833,10 @@ const PostsPage = () => {
 
       setNewComment("");
       fetchComments(selectedPost.id);
-      
+
       // Update comments count
-      setPosts(prev => prev.map(post => 
-        post.id === selectedPost.id 
+      setPosts(prev => prev.map(post =>
+        post.id === selectedPost.id
           ? { ...post, comments_count: post.comments_count + 1 }
           : post
       ));
@@ -741,7 +889,7 @@ const PostsPage = () => {
   const filteredPosts = useMemo(() => {
     if (!searchTerm.trim()) return posts;
 
-    return posts.filter(post => 
+    return posts.filter(post =>
       post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       post.hashtags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -757,7 +905,7 @@ const PostsPage = () => {
 
     try {
       console.log('Testing post creation with user ID:', user.id);
-      
+
       // First, get the profile ID for the current user
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -776,7 +924,7 @@ const PostsPage = () => {
       }
 
       console.log('Found profile ID:', profile.id);
-      
+
       const testData = {
         content: 'Test post from debug function',
         author_id: profile.id, // Use profile ID, not user ID
@@ -817,36 +965,37 @@ const PostsPage = () => {
   // Load posts on component mount and when dependencies change
   useEffect(() => {
     fetchPosts();
-  }, [activeTab, sortBy]);
+  }, [activeTab, sortBy, profile?.id]);
 
   return (
     <AppLayout pageTitle="Posts">
-      <div className="w-full py-4 px-4">
+      <div className="w-full py-4 px-4 md:px-6 space-y-6">
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="border-b border-border/60 pb-5">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Posts</h1>
-              <p className="text-gray-600 mt-1">
+              <p className="noir-eyebrow text-primary mb-1">Creator Feed</p>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-foreground">Posts</h1>
+              <p className="text-muted-foreground text-sm mt-1">
                 Share updates, work-in-progress, and ideas with the community
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-4 w-4" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
                     placeholder="Search posts or #hashtag"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-64 border-yellow-200 focus:border-yellow-500"
+                    className="pl-10 w-64 bg-surface-elevated border-border/80"
                   />
                 </div>
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32 border-yellow-200 focus:border-yellow-500">
+                  <SelectTrigger className="w-36 bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border/80">
                     <SelectItem value="recent">Most Recent</SelectItem>
                     <SelectItem value="popular">Most Popular</SelectItem>
                     <SelectItem value="trending">Trending</SelectItem>
@@ -854,111 +1003,111 @@ const PostsPage = () => {
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={testPostCreation}
-                  className="text-xs"
+                  className="text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover"
                 >
                   Debug Test
                 </Button>
                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                    <Button className="bg-primary text-primary-foreground hover:bg-primary-hover shadow-noir font-medium">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Post
                     </Button>
                   </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Create New Post</DialogTitle>
-                    <DialogDescription>
-                      Share your thoughts, updates, or work-in-progress with the community.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Input
-                        placeholder="Post title (optional)"
-                        className="border-yellow-200 focus:border-yellow-500"
-                        value={newPost.title}
-                        onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Textarea
-                        placeholder="What's on your mind? Use #hashtags to categorize your post..."
-                        value={newPost.content}
-                        onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
-                        className="min-h-32 border-yellow-200 focus:border-yellow-500"
-                      />
-                    </div>
-                    
-                    {/* Media Upload */}
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Add Media (Optional)</label>
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4">
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*,video/*"
-                          onChange={handleMediaSelect}
-                          className="hidden"
-                          id="media-upload"
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border/80 shadow-noir">
+                    <DialogHeader>
+                      <DialogTitle className="font-display text-xl text-foreground">Create New Post</DialogTitle>
+                      <DialogDescription>
+                        Share your thoughts, updates, or work-in-progress with the community.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Input
+                          placeholder="Post title (optional)"
+                          className="bg-surface-elevated border-border/80"
+                          value={newPost.title}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))}
                         />
-                        <label
-                          htmlFor="media-upload"
-                          className="flex flex-col items-center justify-center cursor-pointer"
-                        >
-                          <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Click to upload images or videos
-                          </p>
-                        </label>
                       </div>
-                      
-                      {/* Selected Media Preview */}
-                      {newPost.mediaFiles.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                          {newPost.mediaFiles.map((file, index) => (
-                            <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded">
-                              {file.type.startsWith('image/') ? (
-                                <ImageIcon className="h-4 w-4" />
-                              ) : (
-                                <VideoIcon className="h-4 w-4" />
-                              )}
-                              <span className="text-sm flex-1 truncate">{file.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeMediaFile(index)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                      <div>
+                        <Textarea
+                          placeholder="What's on your mind? Use #hashtags to categorize your post..."
+                          value={newPost.content}
+                          onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))}
+                          className="min-h-32 bg-surface-elevated border-border/80"
+                        />
+                      </div>
 
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50"
-                        onClick={() => setIsCreateDialogOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                        onClick={handleCreatePost}
-                        disabled={isUploading || !newPost.content.trim()}
-                      >
-                        {isUploading ? "Creating..." : "Create Post"}
-                      </Button>
+                      {/* Media Upload */}
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Add Media (Optional)</label>
+                        <div className="border-2 border-dashed border-border/80 bg-surface-elevated/50 hover:border-primary/40 rounded-xl p-6 transition-colors">
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,video/*"
+                            onChange={handleMediaSelect}
+                            className="hidden"
+                            id="media-upload"
+                          />
+                          <label
+                            htmlFor="media-upload"
+                            className="flex flex-col items-center justify-center cursor-pointer"
+                          >
+                            <Upload className="h-8 w-8 text-primary mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              Click to upload images or videos
+                            </p>
+                          </label>
+                        </div>
+
+                        {/* Selected Media Preview */}
+                        {newPost.mediaFiles.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            {newPost.mediaFiles.map((file, index) => (
+                              <div key={index} className="flex items-center gap-2 p-2.5 bg-surface-elevated border border-border/80 rounded-lg">
+                                {file.type.startsWith('image/') ? (
+                                  <ImageIcon className="h-4 w-4 text-primary" />
+                                ) : (
+                                  <VideoIcon className="h-4 w-4 text-primary" />
+                                )}
+                                <span className="text-sm flex-1 truncate text-foreground">{file.name}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeMediaFile(index)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                          onClick={() => setIsCreateDialogOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          className="bg-primary text-primary-foreground hover:bg-primary-hover"
+                          onClick={handleCreatePost}
+                          disabled={isUploading || !newPost.content.trim()}
+                        >
+                          {isUploading ? "Creating..." : "Create Post"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </div>
@@ -966,11 +1115,11 @@ const PostsPage = () => {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-          <TabsList className="grid w-full grid-cols-4 bg-yellow-50 border-yellow-200">
-            <TabsTrigger value="all" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">All Posts</TabsTrigger>
-            <TabsTrigger value="trending" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Trending Posts</TabsTrigger>
-            <TabsTrigger value="published" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Published Posts</TabsTrigger>
-            <TabsTrigger value="saved" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Saved Posts</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 bg-surface-elevated border border-border/80">
+            <TabsTrigger value="all" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">All Posts</TabsTrigger>
+            <TabsTrigger value="trending" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Trending Posts</TabsTrigger>
+            <TabsTrigger value="published" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Published Posts</TabsTrigger>
+            <TabsTrigger value="saved" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Saved Posts</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -979,56 +1128,56 @@ const PostsPage = () => {
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-muted-foreground mt-2">Loading posts...</p>
+              <p className="text-muted-foreground mt-2 font-mono text-xs uppercase tracking-widest">Loading posts...</p>
             </div>
           ) : filteredPosts.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <div className="text-center py-12 rounded-xl border border-border/80 bg-card/60">
+              <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
               <p className="text-muted-foreground">No posts found</p>
             </div>
           ) : (
             filteredPosts.map((post) => (
-              <Card key={post.id} className="overflow-hidden border-yellow-200">
+              <Card key={post.id} className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-noir">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
+                      <Avatar className="h-10 w-10 border border-border/80">
+                        <AvatarFallback className="bg-primary/15 text-primary font-mono font-semibold">
                           {post.author?.full_name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <h3 className="font-semibold text-sm text-gray-900">
+                        <h3 className="font-semibold text-sm text-foreground">
                           {post.author?.full_name || "Unknown User"}
                         </h3>
-                        <p className="text-xs text-gray-600 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                        <p className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-primary/80" />
                           {formatTimeAgo(post.created_at)}
                         </p>
                       </div>
                     </div>
                     {post.is_featured && (
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                      <Badge variant="secondary" className="bg-primary/15 text-primary border border-primary/30 font-mono text-[11px] uppercase">
                         <Flame className="h-3 w-3 mr-1" />
                         Featured
                       </Badge>
                     )}
                   </div>
                 </CardHeader>
-                
+
                 <CardContent className="space-y-4">
                   {/* Post Content */}
                   <div>
                     {post.title && (
-                      <h4 className="font-semibold text-base mb-2">{post.title}</h4>
+                      <h4 className="font-display font-semibold text-lg text-foreground mb-2">{post.title}</h4>
                     )}
-                    <p className="text-sm whitespace-pre-wrap">{post.content}</p>
-                    
+                    <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{post.content}</p>
+
                     {/* Hashtags */}
                     {post.hashtags && post.hashtags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1.5 mt-3">
                         {post.hashtags.map((tag, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
+                          <Badge key={index} variant="outline" className="text-xs bg-surface-elevated border-border/80 text-muted-foreground font-mono">
                             #{tag}
                           </Badge>
                         ))}
@@ -1040,7 +1189,7 @@ const PostsPage = () => {
                   {post.media_urls && post.media_urls.length > 0 && (
                     <div className="space-y-2">
                       {post.media_urls.map((url, index) => (
-                        <div key={index} className="relative">
+                        <div key={index} className="relative rounded-xl overflow-hidden border border-border/80 bg-surface-elevated">
                           {post.media_types?.[index] === 'video' ? (
                             <video
                               src={url}
@@ -1060,17 +1209,17 @@ const PostsPage = () => {
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
                     <div className="flex items-center gap-4">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleLikePost(post.id, post.is_liked || false)}
                         disabled={loadingActions[`like-${post.id}`]}
-                        className={`flex items-center gap-2 transition-colors ${post.is_liked ? 'text-red-500 hover:text-red-600' : 'text-muted-foreground hover:text-yellow-600'}`}
+                        className={`flex items-center gap-2 transition-colors ${post.is_liked ? 'text-destructive hover:text-destructive' : 'text-muted-foreground hover:text-primary'}`}
                       >
                         <Heart className={`h-4 w-4 transition-all ${post.is_liked ? 'fill-current scale-110' : 'hover:scale-110'}`} />
-                        <span className="font-medium">{post.likes_count}</span>
+                        <span className="font-mono font-medium">{post.likes_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -1080,31 +1229,31 @@ const PostsPage = () => {
                           setIsCommentsDialogOpen(true);
                           fetchComments(post.id);
                         }}
-                        className="flex items-center gap-2 text-muted-foreground hover:text-yellow-600 transition-colors"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
                       >
                         <MessageCircle className="h-4 w-4 hover:scale-110 transition-transform" />
-                        <span className="font-medium">{post.comments_count}</span>
+                        <span className="font-mono font-medium">{post.comments_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSharePost(post)}
-                        className="flex items-center gap-2 text-muted-foreground hover:text-yellow-600 transition-colors"
+                        className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
                       >
                         <Share2 className="h-4 w-4 hover:scale-110 transition-transform" />
-                        <span className="font-medium">{post.shares_count}</span>
+                        <span className="font-mono font-medium">{post.shares_count}</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSavePost(post.id, post.is_saved || false)}
                         disabled={loadingActions[`save-${post.id}`]}
-                        className={`flex items-center gap-2 transition-colors ${post.is_saved ? 'text-yellow-600 hover:text-yellow-700' : 'text-muted-foreground hover:text-yellow-600'}`}
+                        className={`flex items-center gap-2 transition-colors ${post.is_saved ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-primary'}`}
                       >
                         <Bookmark className={`h-4 w-4 transition-all ${post.is_saved ? 'fill-current scale-110' : 'hover:scale-110'}`} />
                       </Button>
                     </div>
-                    
+
                     {post.comments_count > 0 && (
                       <Button
                         variant="ghost"
@@ -1114,7 +1263,7 @@ const PostsPage = () => {
                           setIsCommentsDialogOpen(true);
                           fetchComments(post.id);
                         }}
-                        className="text-muted-foreground text-xs"
+                        className="text-muted-foreground hover:text-primary text-xs"
                       >
                         View comments
                         <ChevronRight className="h-3 w-3 ml-1" />
@@ -1129,14 +1278,14 @@ const PostsPage = () => {
 
         {/* Comments Dialog */}
         <Dialog open={isCommentsDialogOpen} onOpenChange={setIsCommentsDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-card border-border/80 shadow-noir">
             <DialogHeader>
-              <DialogTitle>Comments</DialogTitle>
+              <DialogTitle className="font-display text-xl text-foreground">Comments</DialogTitle>
               <DialogDescription>
                 Join the conversation and share your thoughts on this post.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-4">
               {/* Add Comment */}
               <div className="flex gap-2">
@@ -1144,9 +1293,9 @@ const PostsPage = () => {
                   placeholder="Write a comment..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 bg-surface-elevated border-border/80"
                 />
-                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleAddComment} disabled={!newComment.trim()}>
                   Post
                 </Button>
               </div>
@@ -1154,46 +1303,46 @@ const PostsPage = () => {
               {/* Comments List */}
               <div className="space-y-4">
                 {comments.map((comment) => (
-                  <div key={comment.id} className="space-y-2">
+                  <div key={comment.id} className="space-y-2 p-3 rounded-xl bg-surface-elevated border border-border/80">
                     <div className="flex items-start gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>
+                      <Avatar className="h-8 w-8 border border-border/80">
+                        <AvatarFallback className="bg-primary/15 text-primary font-mono text-xs">
                           {comment.author?.full_name?.charAt(0) || "U"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-semibold text-sm">
+                          <h4 className="font-semibold text-sm text-foreground">
                             {comment.author?.full_name || "Unknown User"}
                           </h4>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs font-mono text-muted-foreground">
                             {formatTimeAgo(comment.created_at)}
                           </span>
                         </div>
-                        <p className="text-sm mt-1">{comment.content}</p>
+                        <p className="text-sm text-foreground/90 mt-1">{comment.content}</p>
                       </div>
                     </div>
-                    
+
                     {/* Replies */}
                     {comment.replies && comment.replies.length > 0 && (
-                      <div className="ml-11 space-y-2">
+                      <div className="ml-11 space-y-2 pt-2 border-t border-border/50">
                         {comment.replies.map((reply) => (
                           <div key={reply.id} className="flex items-start gap-3">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback>
+                            <Avatar className="h-6 w-6 border border-border/80">
+                              <AvatarFallback className="bg-primary/15 text-primary font-mono text-[10px]">
                                 {reply.author?.full_name?.charAt(0) || "U"}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <h5 className="font-medium text-xs">
+                                <h5 className="font-medium text-xs text-foreground">
                                   {reply.author?.full_name || "Unknown User"}
                                 </h5>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs font-mono text-muted-foreground">
                                   {formatTimeAgo(reply.created_at)}
                                 </span>
                               </div>
-                              <p className="text-xs mt-1">{reply.content}</p>
+                              <p className="text-xs text-foreground/90 mt-1">{reply.content}</p>
                             </div>
                           </div>
                         ))}

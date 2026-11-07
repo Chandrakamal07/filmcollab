@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
+import { DimensionalCard } from "@/components/ui/motion-primitives";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -63,7 +65,11 @@ import {
   Instagram,
   Mail,
   Phone,
-  Lock
+  Lock,
+  LayoutGrid,
+  List as ListIcon,
+  FolderOpen,
+  MoreHorizontal
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -150,7 +156,7 @@ interface Applicant {
 }
 
 export default function ProjectDetails() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -160,7 +166,22 @@ export default function ProjectDetails() {
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(() => {
+    const initialView = searchParams.get("view") || searchParams.get("tab");
+    if (initialView && ["overview", "tasks", "chat", "team", "applicants"].includes(initialView)) {
+      return initialView;
+    }
+    return "overview";
+  });
+
+  // Synchronize active workspace view whenever query parameters change
+  useEffect(() => {
+    const viewParam = searchParams.get("view") || searchParams.get("tab");
+    if (viewParam && ["overview", "tasks", "chat", "team", "applicants"].includes(viewParam)) {
+      setActiveTab(viewParam);
+    }
+  }, [searchParams]);
+  const [taskViewMode, setTaskViewMode] = useState<"board" | "list">("board");
   const [currentUser, setCurrentUser] = useState<{ id: string; email?: string } | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isHireConfirmOpen, setIsHireConfirmOpen] = useState(false);
@@ -204,7 +225,7 @@ export default function ProjectDetails() {
     if (!projectId) return;
     
     const subscription = supabase.channel("project_messages_channel")
-      .on("postgres", { event: "INSERT", schema: "public", table: "project_messages", filter: `project_id=eq.${projectId}` }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "project_messages", filter: `project_id=eq.${projectId}` }, (payload) => {
         const newData = payload.new;
         
         setChatMessages(prev => {
@@ -237,8 +258,8 @@ export default function ProjectDetails() {
         const formattedMessages = data.map(m => ({
           id: m.id,
           user_id: m.sender_id,
-          user_name: m.profiles?.full_name || m.profiles?.username || "Unknown",
-          user_avatar: (m.profiles?.full_name || m.profiles?.username || "U").substring(0, 2).toUpperCase(),
+          user_name: (m.profiles as any)?.full_name || (m.profiles as any)?.username || "Unknown",
+          user_avatar: ((m.profiles as any)?.full_name || (m.profiles as any)?.username || "U").substring(0, 2).toUpperCase(),
           message: m.content,
           timestamp: m.created_at
         }));
@@ -263,7 +284,7 @@ export default function ProjectDetails() {
     if (!projectId) return;
 
     const subscription = supabase.channel("project_tasks_channel")
-      .on("postgres", { event: "*", schema: "public", table: "project_tasks", filter: `project_id=eq.${projectId}` }, (payload) => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_tasks", filter: `project_id=eq.${projectId}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newTask = payload.new as Task;
           setTasks(prev => {
@@ -309,7 +330,7 @@ export default function ProjectDetails() {
     title: "",
     description: "",
     assigned_to: "",
-    priority: "medium" as const,
+    priority: "medium" as "low" | "medium" | "high",
     due_date: ""
   });
 
@@ -323,7 +344,7 @@ export default function ProjectDetails() {
     (currentUser && project?.created_by === currentUser.id) || 
     project?.is_creator
   );
-  const isProjectAdmin = profile?.role === 'admin' || profile?.role === 'ADMIN';
+  const isProjectAdmin = isAdmin();
   const currentUserRole = (
     dbMembers.find(m => m.user_id === currentUser?.id)?.role || ''
   ).toLowerCase();
@@ -777,12 +798,13 @@ export default function ProjectDetails() {
       if (error) throw error;
 
       if (project && project.created_by && project.created_by !== currentUser.id) {
-        supabase.from("notifications").insert({
-          user_id: project.created_by,
-          title: "New Project Application",
-          description: `Someone applied to join your project: ${project.title}`,
-          type: "project",
-          action_url: `/projects?projectId=${project.id}`
+        supabase.rpc("send_authorized_notification", {
+          p_recipient_id: project.created_by,
+          p_title: "New Project Application",
+          p_description: `Someone applied to join your project: ${project.title}`,
+          p_type: "project",
+          p_priority: "medium",
+          p_action_url: `/projects?projectId=${project.id}`
         }).then(({ error: notifError }) => {
           if (notifError) console.error("Notification error:", notifError);
         });
@@ -898,24 +920,28 @@ export default function ProjectDetails() {
   const handleDeleteProject = async () => {
     if (!projectId) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("projects")
         .delete()
-        .eq("id", projectId);
+        .eq("id", projectId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No project was deleted. Permission denied.");
+      }
 
       toast({
         title: "Project Deleted",
         description: "The project has been successfully deleted.",
       });
       navigate("/projects");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting project:", err);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete project.",
+        description: err?.message || "Failed to delete project.",
       });
     }
   };
@@ -923,7 +949,8 @@ export default function ProjectDetails() {
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { error } = await supabase
+      const normalizedVisibility = (editForm.project_status || "Public").toLowerCase() === "public" ? "public" : "private";
+      const { data, error } = await supabase
         .from("projects")
         .update({
           title: editForm.title,
@@ -932,6 +959,7 @@ export default function ProjectDetails() {
           category: editForm.category,
           status: editForm.status,
           project_status: editForm.project_status,
+          visibility: normalizedVisibility,
           team_size: projectMembers.length,
           budget_min: editForm.budget_min ? Number(editForm.budget_min) : null,
           budget_max: editForm.budget_max ? Number(editForm.budget_max) : null,
@@ -939,9 +967,13 @@ export default function ProjectDetails() {
           duration_minutes: editForm.duration_minutes ? Number(editForm.duration_minutes) : null,
           episodes: editForm.episodes ? Number(editForm.episodes) : null,
         })
-        .eq("id", projectId);
+        .eq("id", projectId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No project was updated. Permission denied.");
+      }
 
       setProject(prev => prev ? {
         ...prev,
@@ -1018,7 +1050,7 @@ export default function ProjectDetails() {
     try {
       const { error } = await supabase
         .from("projects")
-        .update({ [dbColumn]: newValue })
+        .update({ [dbColumn]: newValue } as any)
         .eq("id", projectId);
 
       if (error) throw error;
@@ -1135,27 +1167,40 @@ export default function ProjectDetails() {
   };
 
   const handleUpdateTaskStatus = async (taskId: string, status: Task['status']) => {
+    const previousStatus = tasks.find(t => t.id === taskId)?.status;
     // Optimistic UI update
     setTasks(prev => prev.map(task => 
       task.id === taskId ? { ...task, status } : task
     ));
     
     try {
-      const { error } = await supabase.from("project_tasks").update({ status }).eq("id", taskId);
+      const { data, error } = await supabase
+        .from("project_tasks")
+        .update({ status })
+        .eq("id", taskId)
+        .select("id");
       
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Task not found or access denied.");
+      }
       
       toast({
         title: "Task updated",
         description: `Task status updated to ${status}.`
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error updating task status:", err);
-      // Revert on error could be implemented here
+      // Revert optimistic update
+      if (previousStatus) {
+        setTasks(prev => prev.map(task => 
+          task.id === taskId ? { ...task, status: previousStatus } : task
+        ));
+      }
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to update task status."
+        description: err?.message || "Failed to update task status."
       });
     }
   };
@@ -1182,7 +1227,7 @@ export default function ProjectDetails() {
     try {
       const { data, error } = await supabase.from("project_messages").insert({
         project_id: project.id,
-        sender_id: currentUser.id,
+        sender_id: profile?.id || currentUser.id,
         content: content
       }).select().single();
 
@@ -1194,16 +1239,16 @@ export default function ProjectDetails() {
       
       const mentionedUsers = [...dbMembers];
       if (project.created_by && project.created_by !== currentUser.id) {
-        mentionedUsers.push({ user_id: project.created_by, role: 'Creator', full_name: project.creator_name || "", username: project.creator_username || "", id: '', name: '', avatar: '', joined_date: '' } as any);
+        mentionedUsers.push({ user_id: project.created_by, role: 'Creator', full_name: (project as any)?.creator_name || "", username: (project as any)?.creator_username || "", id: '', name: '', avatar: '', joined_date: '' } as any);
       }
 
       const notificationsToInsert = [];
       
       for (const u of mentionedUsers) {
-        const name = u.name?.toLowerCase() || "";
-        const fullName = u.full_name?.toLowerCase() || "";
-        const username = u.username?.toLowerCase() || "";
-        const role = u.role?.toLowerCase() || "";
+        const name = (u as any).name?.toLowerCase() || "";
+        const fullName = (u as any).full_name?.toLowerCase() || "";
+        const username = (u as any).username?.toLowerCase() || "";
+        const role = (u as any).role?.toLowerCase() || "";
         
         let isMentioned = false;
         if (mentions.some(m => name.includes(m.toLowerCase()) || fullName.includes(m.toLowerCase()) || username.includes(m.toLowerCase()) || role.includes(m.toLowerCase()))) {
@@ -1229,8 +1274,18 @@ export default function ProjectDetails() {
         }
       }
       
-      if (notificationsToInsert.length > 0) {
-        await supabase.from("notifications").insert(notificationsToInsert);
+      for (const notif of notificationsToInsert) {
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: notif.user_id,
+          p_title: notif.title,
+          p_description: notif.description,
+          p_type: notif.type,
+          p_priority: "medium",
+          p_action_url: notif.action_url
+        });
+        if (notifErr) {
+          console.warn("Could not send mention notification:", notifErr);
+        }
       }
     } catch (err) {
       console.error("Error sending message:", err);
@@ -1308,14 +1363,17 @@ export default function ProjectDetails() {
         }]);
 
         // Send notification to the user
-        await supabase.from("notifications").insert({
-          user_id: memberData.user_id,
-          title: "Application Accepted",
-          description: `Your application to join ${project?.title || 'the project'} has been accepted!`,
-          type: "application_update",
-          status: "unread",
-          action_url: `/projects/${projectId}`
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: memberData.user_id,
+          p_title: "Application Accepted",
+          p_description: `Your application to join ${project?.title || 'the project'} has been accepted!`,
+          p_type: "application_update",
+          p_priority: "medium",
+          p_action_url: `/projects/${projectId}`
         });
+        if (notifErr) {
+          console.warn("Could not send application accepted notification:", notifErr);
+        }
       }
       
       toast({
@@ -1352,13 +1410,17 @@ export default function ProjectDetails() {
       
       if (memberData?.user_id) {
         // Send notification to the user
-        await supabase.from("notifications").insert({
-          user_id: memberData.user_id,
-          title: "Application Status Update",
-          description: `Your application to join ${project?.title || 'the project'} was not accepted at this time.`,
-          type: "application_update",
-          status: "unread"
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: memberData.user_id,
+          p_title: "Application Status Update",
+          p_description: `Your application to join ${project?.title || 'the project'} was not accepted at this time.`,
+          p_type: "application_update",
+          p_priority: "medium",
+          p_action_url: `/projects/${projectId}`
         });
+        if (notifErr) {
+          console.warn("Could not send application rejection notification:", notifErr);
+        }
       }
       
       toast({
@@ -1508,7 +1570,7 @@ export default function ProjectDetails() {
                 const userIds = (membersData as Array<{ user_id: string }>).map((m) => m.user_id).filter(Boolean);
                 if (userIds.length > 0) {
                   const { data: profilesData } = await supabase
-                    .from("profiles")
+                    .from("public_profiles")
                     .select("id, full_name, username, category")
                     .in("id", userIds);
 
@@ -1634,8 +1696,8 @@ export default function ProjectDetails() {
               const formattedMessages = messagesData.map(data => ({
                 id: data.id,
                 user_id: data.sender_id,
-                user_name: data.profiles?.full_name || data.profiles?.username || "Unknown",
-                user_avatar: (data.profiles?.full_name || data.profiles?.username || "U").substring(0, 2).toUpperCase(),
+                user_name: (data.profiles as any)?.full_name || (data.profiles as any)?.username || "Unknown",
+                user_avatar: ((data.profiles as any)?.full_name || (data.profiles as any)?.username || "U").substring(0, 2).toUpperCase(),
                 message: data.content,
                 timestamp: data.created_at
               }));
@@ -1680,7 +1742,7 @@ export default function ProjectDetails() {
     const editedValue = sectionValues[sectionKey] !== undefined ? sectionValues[sectionKey] : currentValue;
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
             {icon}
@@ -1691,7 +1753,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, currentValue)}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -1703,7 +1765,7 @@ export default function ProjectDetails() {
               <Textarea
                 value={editedValue}
                 onChange={(e) => setSectionValues(prev => ({ ...prev, [sectionKey]: e.target.value }))}
-                className="min-h-[120px] border-yellow-200 dark:border-yellow-900/40 focus-visible:ring-yellow-500"
+                className="min-h-[120px] border-border/80 bg-surface-elevated/50 focus-visible:ring-primary"
                 placeholder={`Enter ${title.toLowerCase()}...`}
               />
               <div className="flex gap-2 justify-end">
@@ -1716,7 +1778,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={async () => {
                     if (dbColumn === "skills_required") {
                       try {
@@ -1762,7 +1824,7 @@ export default function ProjectDetails() {
                       <Badge 
                         key={idx} 
                         variant="secondary" 
-                        className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50 hover:bg-yellow-100 dark:hover:bg-yellow-950/50"
+                        className="bg-primary/10 text-primary border border-primary/25 hover:bg-primary/15"
                       >
                         {trimmed}
                       </Badge>
@@ -1813,10 +1875,10 @@ export default function ProjectDetails() {
     }
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
-            <Users className="h-5 w-5 text-yellow-600" />
+            <Users className="h-5 w-5 text-primary" />
             Contact Information
           </CardTitle>
           {project?.is_creator && !isEditing && (
@@ -1824,7 +1886,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, JSON.stringify(contactData))}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -1843,7 +1905,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="Contact Name"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1856,7 +1918,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="contact@example.com"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1868,7 +1930,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="+91 XXXXX XXXXX"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1880,7 +1942,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="https://example.com"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1892,7 +1954,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="https://instagram.com/profile"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1904,7 +1966,7 @@ export default function ProjectDetails() {
                       setSectionValues(prev => ({ ...prev, [sectionKey]: JSON.stringify(updated) }));
                     }}
                     placeholder="WhatsApp link or phone number"
-                    className="border-yellow-100 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -1918,7 +1980,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={() => saveSection(sectionKey, "contact_info")}
                 >
                   Save
@@ -1935,7 +1997,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Email:</span>
                 <span className="text-foreground">
                   {contactData.email ? (
-                    <a href={`mailto:${contactData.email}`} className="text-yellow-600 hover:underline">{contactData.email}</a>
+                    <a href={`mailto:${contactData.email}`} className="text-primary hover:underline">{contactData.email}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1949,7 +2011,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Website:</span>
                 <span className="text-foreground">
                   {contactData.website ? (
-                    <a href={contactData.website.startsWith('http') ? contactData.website : `https://${contactData.website}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.website}</a>
+                    <a href={contactData.website.startsWith('http') ? contactData.website : `https://${contactData.website}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.website}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1959,7 +2021,7 @@ export default function ProjectDetails() {
                 <span className="font-semibold text-muted-foreground w-24">Instagram:</span>
                 <span className="text-foreground">
                   {contactData.instagram ? (
-                    <a href={contactData.instagram.startsWith('http') ? contactData.instagram : `https://instagram.com/${contactData.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.instagram}</a>
+                    <a href={contactData.instagram.startsWith('http') ? contactData.instagram : `https://instagram.com/${contactData.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.instagram}</a>
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
                   )}
@@ -1970,9 +2032,9 @@ export default function ProjectDetails() {
                 <span className="text-foreground">
                   {contactData.whatsapp ? (
                     contactData.whatsapp.startsWith('http') || contactData.whatsapp.startsWith('https') ? (
-                      <a href={contactData.whatsapp} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">Chat on WhatsApp</a>
+                      <a href={contactData.whatsapp} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Chat on WhatsApp</a>
                     ) : (
-                      <a href={`https://wa.me/${contactData.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-yellow-600 hover:underline">{contactData.whatsapp}</a>
+                      <a href={`https://wa.me/${contactData.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{contactData.whatsapp}</a>
                     )
                   ) : (
                     <span className="text-muted-foreground/70 italic">Not specified</span>
@@ -2040,10 +2102,10 @@ export default function ProjectDetails() {
     };
 
     return (
-      <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+      <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-foreground text-lg">
-            <Calendar className="h-5 w-5 text-yellow-600" />
+            <Calendar className="h-5 w-5 text-primary" />
             Timeline
           </CardTitle>
           {project?.is_creator && !isEditing && (
@@ -2051,7 +2113,7 @@ export default function ProjectDetails() {
               variant="ghost"
               size="sm"
               onClick={() => startEditingSection(sectionKey, JSON.stringify(timelineEvents))}
-              className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+              className="text-primary hover:text-primary-hover hover:bg-primary/10"
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -2061,14 +2123,14 @@ export default function ProjectDetails() {
           {isEditing ? (
             <div className="space-y-4">
               {draftEvents.map((event, index) => (
-                <div key={index} className="flex gap-4 items-start border-b border-yellow-50 pb-4 last:border-0 last:pb-0">
+                <div key={index} className="flex gap-4 items-start border-b border-border/60 pb-4 last:border-0 last:pb-0">
                   <div className="w-1/3 space-y-1">
                     <label className="text-xs font-semibold text-muted-foreground">Date</label>
                     <Input
                       type="date"
                       value={event.date}
                       onChange={(e) => handleUpdateEvent(index, "date", e.target.value)}
-                      className="border-yellow-100 focus:border-yellow-500"
+                      className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                     />
                   </div>
                   <div className="flex-1 space-y-1">
@@ -2077,7 +2139,7 @@ export default function ProjectDetails() {
                       value={event.notes}
                       onChange={(e) => handleUpdateEvent(index, "notes", e.target.value)}
                       placeholder="Enter notes for this day..."
-                      className="min-h-[60px] border-yellow-100 focus:border-yellow-500"
+                      className="min-h-[60px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                     />
                   </div>
                   <Button
@@ -2097,7 +2159,7 @@ export default function ProjectDetails() {
                 variant="outline"
                 size="sm"
                 onClick={handleAddEvent}
-                className="w-full border-dashed border-yellow-300 hover:border-yellow-500 text-yellow-600 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
+                className="w-full border-dashed border-primary/40 hover:border-primary text-primary hover:bg-primary/10"
               >
                 <Plus className="h-4 w-4 mr-1" /> Add Timeline Milestone
               </Button>
@@ -2112,7 +2174,7 @@ export default function ProjectDetails() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   onClick={() => saveSection(sectionKey, "timeline")}
                 >
                   Save
@@ -2122,12 +2184,12 @@ export default function ProjectDetails() {
           ) : (
             <div className="space-y-4">
               {timelineEvents.length > 0 ? (
-                <div className="relative pl-6 border-l-2 border-yellow-200 dark:border-yellow-900/40 ml-3 space-y-6">
+                <div className="relative pl-6 border-l-2 border-primary/35 ml-3 space-y-6">
                   {timelineEvents.map((event, index) => (
                     <div key={index} className="relative">
-                      <span className="absolute -left-[31px] top-1.5 bg-yellow-500 border-4 border-white rounded-full w-4 h-4 shadow-sm"></span>
+                      <span className="absolute -left-[31px] top-1.5 bg-primary border-4 border-card rounded-full w-4 h-4 shadow-sm"></span>
                       <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4">
-                        <span className="text-xs font-bold text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/30 px-2 py-0.5 rounded border border-yellow-100 dark:border-yellow-900/40 w-fit shrink-0">
+                        <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded border border-primary/25 w-fit shrink-0">
                           {event.date ? new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : "Date TBD"}
                         </span>
                         <p className="text-sm text-foreground/90 flex-1 whitespace-pre-wrap leading-relaxed mt-0.5">
@@ -2169,7 +2231,7 @@ export default function ProjectDetails() {
             <p className="text-muted-foreground mb-6">The requested project could not be found.</p>
             <Button 
               onClick={() => navigate("/projects")}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white dark:bg-yellow-600 dark:hover:bg-yellow-700"
+              className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Projects
@@ -2186,107 +2248,294 @@ export default function ProjectDetails() {
 
   return (
     <AppLayout pageTitle={`${project.title} - Project Details`}>
-      <div className="w-full space-y-6">
-        {/* Header with Back Button and Actions */}
-        <div className="flex justify-between items-center gap-4 w-full">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/projects")}
-            className="flex items-center gap-2 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Projects
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleShare} 
-              className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
+      <div className="max-w-[1440px] mx-auto pb-8">
+        <div className="flex flex-col xl:flex-row gap-6 items-start">
+          {/* LEFT ZONE: Contextual Project Sub-Sidebar matching 04 / Project workspace */}
+          <aside className="hidden xl:flex xl:w-56 flex-col shrink-0 gap-4 sticky top-20">
+            <button
+              type="button"
+              onClick={() => navigate("/projects")}
+              className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-1"
             >
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            {project.is_creator && (
-              <Button 
-                variant="outline" 
-                onClick={() => setIsEditDialogOpen(true)} 
-                className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground bg-background transition-colors"
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to projects
+            </button>
+
+            {/* Mini Project Identity Card */}
+            <div className="rounded-xl border border-border/80 bg-card/90 p-3 flex items-center gap-3 shadow-soft">
+              <div className="h-11 w-14 rounded-lg overflow-hidden bg-surface-elevated border border-border/70 shrink-0">
+                <img
+                  src="https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=400&q=80"
+                  alt={project.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-serif font-bold text-foreground truncate">
+                  {project.title}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate mt-0.5 capitalize">
+                  {project.project_type} • {project.status}
+                </div>
+              </div>
+            </div>
+
+            {/* Vertical Workspace Navigation Pills */}
+            <nav className="flex flex-col gap-1">
+              {[
+                { id: "overview", label: "Overview", icon: LayoutGrid, locked: false },
+                { id: "tasks", label: "Tasks", icon: CheckSquare, locked: !isTeamMember },
+                { id: "team", label: "Team", icon: Users, locked: !isTeamMember },
+                { id: "chat", label: "Chat", icon: MessageCircle, locked: !isTeamMember },
+                ...(sourceTab === "created"
+                  ? [{ id: "applicants", label: "Applicants", icon: UserPlus, locked: false }]
+                  : []),
+              ].map((navItem) => {
+                const Icon = navItem.icon;
+                const active = activeTab === navItem.id;
+                return (
+                  <button
+                    key={navItem.id}
+                    type="button"
+                    onClick={() => {
+                      if (navItem.locked) {
+                        toast({
+                          variant: "destructive",
+                          title: "Member Only Access",
+                          description:
+                            "You must be an accepted team member of this project to access this section.",
+                        });
+                        return;
+                      }
+                      setActiveTab(navItem.id);
+                    }}
+                    className={cn(
+                      "relative flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-colors text-left",
+                      active
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-surface-hover/50",
+                      navItem.locked && "opacity-50"
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="project-workspace-side-pill"
+                        className="absolute inset-0 rounded-lg bg-primary/12 border border-primary/30"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2.5">
+                      <Icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />
+                      <span>{navItem.label}</span>
+                    </span>
+                    {navItem.locked && <Lock className="relative z-10 h-3 w-3 opacity-70" />}
+                  </button>
+                );
+              })}
+
+              {project.is_creator && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditDialogOpen(true)}
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-surface-hover/50 transition-colors text-left mt-2 border-t border-border/50 pt-3"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <span>Settings</span>
+                </button>
+              )}
+            </nav>
+          </aside>
+
+          {/* CENTER + RIGHT PRODUCTION WORKSPACE STAGE */}
+          <div className="flex-1 min-w-0 w-full space-y-5">
+            {/* Mobile Back Button */}
+            <div className="flex xl:hidden justify-between items-center gap-4 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/projects")}
+                className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 text-xs"
               >
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Projects
               </Button>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Project Details with Tabs */}
-        <Tabs 
-          value={activeTab} 
-          onValueChange={(val) => {
-            if (!isTeamMember && ["tasks", "chat", "team"].includes(val)) {
-              toast({
-                variant: "destructive",
-                title: "Member Only Access",
-                description: "You must be an accepted team member of this project to access this section."
-              });
-              return;
-            }
-            setActiveTab(val);
-          }} 
-          className="w-full"
-        >
-          <TabsList className={`grid w-full ${sourceTab === 'created' ? 'grid-cols-5' : 'grid-cols-4'} bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl h-auto`}>
-            <TabsTrigger value="overview" className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all">Overview</TabsTrigger>
-            <TabsTrigger 
-              value="tasks" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            {/* Widescreen 21:9 Cinema Project Banner matching 04 / Project workspace */}
+            <DimensionalCard
+              tiltStrength={2}
+              className="relative rounded-2xl overflow-hidden border border-border/80 bg-card shadow-noir"
             >
-              <span>Tasks</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            <TabsTrigger 
-              value="chat" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <span>Chat</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            <TabsTrigger 
-              value="team" 
-              disabled={!isTeamMember}
-              className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              <span className="hidden sm:inline">Team Members</span>
-              <span className="sm:hidden">Members</span>
-              {!isTeamMember && <Lock className="h-3.5 w-3.5 opacity-70 shrink-0" />}
-            </TabsTrigger>
-            {sourceTab === 'created' && (
-              <TabsTrigger value="applicants" className="text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 py-2.5 rounded-lg font-medium transition-all">Applicants</TabsTrigger>
-            )}
-          </TabsList>
+              <div className="relative min-h-[200px] sm:min-h-[230px] w-full overflow-hidden flex flex-col justify-end p-6 sm:p-7">
+                <img
+                  src="https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=1600&q=85"
+                  alt={project.title}
+                  className="absolute inset-0 w-full h-full object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#111317] via-[#111317]/65 to-black/30" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#111317]/90 via-[#111317]/40 to-transparent" />
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                  <div className="space-y-2.5 max-w-2xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/40 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
+                        {project.project_type} • {project.status}
+                      </span>
+                      {project.location && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-[10px] text-white/80 flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          {project.location}
+                        </span>
+                      )}
+                    </div>
+
+                    <h1 className="font-serif text-2xl sm:text-4xl font-bold text-white tracking-tight">
+                      {project.title}
+                    </h1>
+
+                    <p className="text-xs sm:text-sm text-white/80 line-clamp-2 leading-relaxed">
+                      {project.description ||
+                        "A cinematic collaboration exploring character, atmosphere, and visual storytelling."}
+                    </p>
+
+                    {/* Crew Avatar Stack + Invite / Join CTA */}
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex -space-x-2">
+                        {[
+                          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120&q=80",
+                          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80",
+                        ].map((av, i) => (
+                          <img
+                            key={i}
+                            src={av}
+                            alt="Crew member"
+                            className="h-7 w-7 rounded-full object-cover ring-2 ring-[#121417]"
+                          />
+                        ))}
+                        <span className="h-7 px-2 rounded-full bg-surface-elevated/90 ring-2 ring-[#121417] text-[10px] font-mono text-white/90 flex items-center justify-center">
+                          +{Math.max(1, (project.team_size || 5) - 4)}
+                        </span>
+                      </div>
+
+                      {project.allow_applicants && !project.is_creator && !isMember && isCategoryMatched ? (
+                        <Button
+                          size="sm"
+                          onClick={handleJoinProject}
+                          className="h-7 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-semibold"
+                        >
+                          <UserPlus className="h-3 w-3 mr-1" />
+                          Join Project
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleShare}
+                          className="h-7 px-3 text-xs rounded-lg bg-black/55 backdrop-blur-md border-white/20 text-white hover:bg-white/10"
+                        >
+                          Invite
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Banner Actions: Edit Project & Share */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {project.is_creator && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditDialogOpen(true)}
+                        className="h-9 px-3.5 rounded-lg bg-black/60 backdrop-blur-md border-white/20 text-white hover:bg-white/15 text-xs font-medium"
+                      >
+                        Edit project
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShare}
+                      title="Share project"
+                      className="h-9 w-9 p-0 rounded-lg bg-black/60 backdrop-blur-md border-white/20 text-white hover:bg-white/15"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </DimensionalCard>
+
+            {/* Project Details with Tabs */}
+            <Tabs
+              value={activeTab}
+              onValueChange={(val) => {
+                if (!isTeamMember && ["tasks", "chat", "team"].includes(val)) {
+                  toast({
+                    variant: "destructive",
+                    title: "Member Only Access",
+                    description:
+                      "You must be an accepted team member of this project to access this section.",
+                  });
+                  return;
+                }
+                setActiveTab(val);
+              }}
+              className="w-full"
+            >
+              {/* Studio Noir V2 Underline Tab Bar */}
+              <div className="flex items-center justify-between border-b border-border/70 px-1">
+                <TabsList className="bg-transparent border-0 p-0 h-auto gap-6 justify-start">
+                  {[
+                    { id: "overview", label: "Overview", locked: false },
+                    { id: "tasks", label: "Tasks", locked: !isTeamMember },
+                    { id: "team", label: "Team", locked: !isTeamMember },
+                    { id: "chat", label: "Chat", locked: !isTeamMember },
+                    ...(sourceTab === "created"
+                      ? [{ id: "applicants", label: "Applicants", locked: false }]
+                      : []),
+                  ].map((t) => (
+                    <TabsTrigger
+                      key={t.id}
+                      value={t.id}
+                      disabled={t.locked}
+                      className="relative bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary text-muted-foreground hover:text-foreground rounded-none px-1 py-3 text-xs font-medium transition-colors flex items-center gap-1.5 border-b-2 border-transparent data-[state=active]:border-primary"
+                    >
+                      <span>{t.label}</span>
+                      {t.locked && <Lock className="h-3 w-3 opacity-70 shrink-0" />}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+
+              <div className="grid grid-cols-1 2xl:grid-cols-12 gap-5 items-start pt-4">
+                <div
+                  className={cn(
+                    "space-y-6 min-w-0",
+                    isTeamMember && activeTab !== "chat" ? "2xl:col-span-8" : "2xl:col-span-12"
+                  )}
+                >
+                  {/* Overview Tab */}
+                  <TabsContent value="overview" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <div className="lg:col-span-2 space-y-6">
                 {/* Project Header Info in Overview */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex flex-wrap justify-between items-start gap-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-2xl font-bold text-foreground">{project?.title}</h2>
+                          <div className="w-full mb-1"><span className="noir-eyebrow">Production Overview</span></div>
+                          <h2 className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground">{project?.title}</h2>
                           {project?.featured && (
-                            <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                            <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                               <Star className="h-3 w-3 mr-1" />
                               Featured
                             </Badge>
                           )}
                           {project?.popular && (
-                            <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                            <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary">
                               <Star className="h-3 w-3 mr-1" />
                               Popular
                             </Badge>
@@ -2315,7 +2564,7 @@ export default function ProjectDetails() {
                   "full_description",
                   "description",
                   project?.full_description || project?.description || "",
-                  <Briefcase className="h-5 w-5 text-yellow-600" />
+                  <Briefcase className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Production Notes */}
@@ -2324,7 +2573,7 @@ export default function ProjectDetails() {
                   "production_notes",
                   "production_notes",
                   project?.production_notes || "",
-                  <FileText className="h-5 w-5 text-yellow-600" />
+                  <FileText className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Target Audience */}
@@ -2333,7 +2582,7 @@ export default function ProjectDetails() {
                   "target_audience",
                   "target_audience",
                   project?.target_audience || "",
-                  <Users className="h-5 w-5 text-yellow-600" />
+                  <Users className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Distribution Plan */}
@@ -2342,7 +2591,7 @@ export default function ProjectDetails() {
                   "distribution_plan",
                   "distribution_plan",
                   project?.distribution_plan || "",
-                  <Globe className="h-5 w-5 text-yellow-600" />
+                  <Globe className="h-5 w-5 text-primary" />
                 )}
 
                 {/* Timeline */}
@@ -2354,13 +2603,13 @@ export default function ProjectDetails() {
                   "requirements",
                   "skills_required",
                   project?.requirements || "",
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <AlertCircle className="h-5 w-5 text-primary" />
                 )}
               </div>
 
               <div className="space-y-6">
                 {/* Project Info */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardHeader>
                     <CardTitle className="text-foreground">Project Information</CardTitle>
                   </CardHeader>
@@ -2438,7 +2687,7 @@ export default function ProjectDetails() {
 
                     {/* Category Multiselect and Selected Chips */}
                     {project?.allow_applicants && (
-                      <div className="pt-4 border-t border-yellow-100 space-y-3 animate-fade-in">
+                      <div className="pt-4 border-t border-border/60 space-y-3 animate-fade-in">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Required Crew Roles</p>
                         {project?.is_creator ? (
                           <div className="space-y-2">
@@ -2447,14 +2696,14 @@ export default function ProjectDetails() {
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="w-full justify-between border-yellow-200 dark:border-yellow-900/40 text-xs text-foreground bg-background hover:bg-muted"
+                                  className="w-full justify-between border-border/80 text-xs text-foreground bg-surface-elevated/50 hover:bg-surface-hover"
                                 >
                                   <span>
                                     {project?.hiring_categories && project.hiring_categories.length > 0 
                                       ? `Select Roles (${project.hiring_categories.length} selected)`
                                       : "Select Roles..."}
                                   </span>
-                                  <Plus className="h-3 w-3 text-yellow-600 ml-2" />
+                                  <Plus className="h-3 w-3 text-primary ml-2" />
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-56 p-2 bg-popover text-popover-foreground border border-border shadow-md rounded-md z-50">
@@ -2476,13 +2725,13 @@ export default function ProjectDetails() {
                                     return (
                                       <div 
                                         key={cat} 
-                                        className="flex items-center gap-2 p-1.5 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 rounded cursor-pointer transition-colors"
+                                        className="flex items-center gap-2 p-1.5 hover:bg-surface-hover rounded cursor-pointer transition-colors"
                                         onClick={() => handleToggleHiringCategory(cat)}
                                       >
                                         <Checkbox 
                                           checked={isSelected} 
                                           onCheckedChange={() => handleToggleHiringCategory(cat)}
-                                          className="border-yellow-400 text-yellow-600 focus:ring-yellow-500"
+                                          className="border-primary/50 text-primary focus:ring-primary"
                                         />
                                         <span className="text-xs font-medium text-foreground/90 select-none">{cat}</span>
                                       </div>
@@ -2501,7 +2750,7 @@ export default function ProjectDetails() {
                               <Badge 
                                 key={idx} 
                                 variant="secondary" 
-                                className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50 text-[11px] font-medium flex items-center gap-1"
+                                className="bg-primary/10 text-primary border border-primary/25 text-[11px] font-medium flex items-center gap-1"
                               >
                                 {cat}
                                 {project?.is_creator && (
@@ -2510,7 +2759,7 @@ export default function ProjectDetails() {
                                       e.stopPropagation();
                                       handleToggleHiringCategory(cat);
                                     }}
-                                    className="ml-1 text-yellow-600 hover:text-yellow-800 font-bold"
+                                    className="ml-1 text-primary hover:text-primary-hover font-bold"
                                   >
                                     ×
                                   </button>
@@ -2530,7 +2779,7 @@ export default function ProjectDetails() {
                 {renderContactSection()}
 
                 {/* Action Buttons */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                   <CardContent className="pt-6">
                     {project?.is_creator ? (
                       <Dialog>
@@ -2589,7 +2838,7 @@ export default function ProjectDetails() {
                       </Dialog>
                     ) : (project?.allow_applicants && !project?.is_creator && isCategoryMatched) ? (
                       <Button 
-                        className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white animate-fade-in" 
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary-hover font-medium animate-fade-in" 
                         onClick={handleJoinProject}
                       >
                         <UserPlus className="h-4 w-4 mr-2" />
@@ -2605,8 +2854,8 @@ export default function ProjectDetails() {
           {/* Tasks Tab */}
           <TabsContent value="tasks" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -2616,14 +2865,49 @@ export default function ProjectDetails() {
               </Card>
             ) : (
               <>
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Project Tasks</h3>
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                  {/* Board / List View Switcher matching 04 / Project workspace */}
+                  <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-surface-base border border-border/80">
+                    {(
+                      [
+                        { id: "board", label: "Board", icon: LayoutGrid },
+                        { id: "list", label: "List", icon: ListIcon },
+                      ] as const
+                    ).map((mode) => {
+                      const Icon = mode.icon;
+                      const active = taskViewMode === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => setTaskViewMode(mode.id)}
+                          className={cn(
+                            "relative px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors",
+                            active
+                              ? "text-primary-foreground"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId="task-view-pill"
+                              className="absolute inset-0 rounded-md bg-primary shadow-sm"
+                              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                            />
+                          )}
+                          <Icon className="relative z-10 h-3.5 w-3.5" />
+                          <span className="relative z-10">{mode.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   {canCreateTasks && (
                     <Dialog open={showCreateTask} onOpenChange={setShowCreateTask}>
                       <DialogTrigger asChild>
-                        <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create Task
+                        <Button className="h-9 px-4 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold rounded-lg shadow-amber-glow">
+                          <Plus className="h-3.5 w-3.5 mr-1.5" />
+                          Add task
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -2637,7 +2921,7 @@ export default function ProjectDetails() {
                               value={newTask.title}
                               onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
                               placeholder="Enter task title"
-                              className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                              className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             />
                           </div>
                           <div>
@@ -2646,13 +2930,13 @@ export default function ProjectDetails() {
                               value={newTask.description}
                               onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
                               placeholder="Enter task description"
-                              className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                              className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-medium text-foreground">Assign To</label>
                             <Select value={newTask.assigned_to} onValueChange={(value) => setNewTask(prev => ({ ...prev, assigned_to: value }))}>
-                              <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                              <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                                 <SelectValue placeholder="Select team member" />
                               </SelectTrigger>
                               <SelectContent>
@@ -2667,7 +2951,7 @@ export default function ProjectDetails() {
                     <div>
                       <label className="text-sm font-medium text-foreground">Priority</label>
                       <Select value={newTask.priority} onValueChange={(value: "low" | "medium" | "high") => setNewTask(prev => ({ ...prev, priority: value }))}>
-                        <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                        <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -2683,14 +2967,14 @@ export default function ProjectDetails() {
                         type="date"
                         value={newTask.due_date}
                         onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
-                        className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                        className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                       />
                     </div>
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setShowCreateTask(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                      <Button variant="outline" onClick={() => setShowCreateTask(false)} className="border-border/80 hover:border-primary/40 hover:bg-surface-hover">
                         Cancel
                       </Button>
-                      <Button onClick={handleCreateTask} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                      <Button onClick={handleCreateTask} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                         Create Task
                       </Button>
                     </div>
@@ -2700,19 +2984,172 @@ export default function ProjectDetails() {
             )}
           </div>
 
+          {taskViewMode === "board" ? (
+            /* 3-Column Production Kanban Board matching 04 / Project workspace */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              {(
+                [
+                  {
+                    status: "pending" as const,
+                    title: "To do",
+                    dotColor: "bg-amber-400",
+                  },
+                  {
+                    status: "in-progress" as const,
+                    title: "In progress",
+                    dotColor: "bg-sky-400",
+                  },
+                  {
+                    status: "completed" as const,
+                    title: "Done",
+                    dotColor: "bg-emerald-400",
+                  },
+                ] as const
+              ).map((col) => {
+                const colTasks = tasks.filter((t) => t.status === col.status);
+                return (
+                  <div
+                    key={col.status}
+                    className="rounded-2xl border border-border/80 bg-card/85 p-3.5 space-y-3 min-h-[340px]"
+                  >
+                    <div className="flex items-center justify-between px-1 pb-1 border-b border-border/60">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("h-2 w-2 rounded-full", col.dotColor)} />
+                        <h4 className="text-xs font-semibold text-foreground">{col.title}</h4>
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {colTasks.length}
+                        </span>
+                      </div>
+                      <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {colTasks.map((task) => {
+                        const assigneeName =
+                          task.assigned_to_profile?.full_name ||
+                          task.assigned_to_profile?.username ||
+                          (typeof task.assigned_to === "string" && task.assigned_to.length < 24
+                            ? task.assigned_to
+                            : "Crew");
+                        return (
+                          <DimensionalCard
+                            key={task.id}
+                            tiltStrength={4}
+                            className="rounded-xl border border-border/80 bg-surface-elevated/85 p-3.5 space-y-2.5 hover:border-primary/40 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-start gap-2 min-w-0">
+                                {col.status === "completed" && (
+                                  <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                )}
+                                <h5
+                                  className={cn(
+                                    "text-xs font-semibold text-foreground leading-snug",
+                                    col.status === "completed" &&
+                                      "line-through text-muted-foreground"
+                                  )}
+                                >
+                                  {task.title}
+                                </h5>
+                              </div>
+                            </div>
+
+                            {task.description && (
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                {task.description}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-[10px] font-medium capitalize border",
+                                    task.priority === "high"
+                                      ? "bg-red-500/15 text-red-400 border-red-500/30"
+                                      : task.priority === "medium"
+                                        ? "bg-primary/15 text-primary border-primary/30"
+                                        : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                  )}
+                                >
+                                  {task.priority}
+                                </span>
+
+                                {task.due_date && (
+                                  <span className="text-[10px] font-mono text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-2.5 w-2.5" />
+                                    {new Date(task.due_date).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                <Select
+                                  value={task.status}
+                                  onValueChange={(
+                                    value: "pending" | "in-progress" | "completed"
+                                  ) => handleUpdateTaskStatus(task.id, value)}
+                                >
+                                  <SelectTrigger className="h-6 px-2 text-[10px] border-border/70 bg-card/80 w-auto gap-1">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending" className="text-xs">
+                                      To do
+                                    </SelectItem>
+                                    <SelectItem value="in-progress" className="text-xs">
+                                      In progress
+                                    </SelectItem>
+                                    <SelectItem value="completed" className="text-xs">
+                                      Done
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <div
+                                  title={assigneeName}
+                                  className="h-6 w-6 rounded-full bg-primary/15 border border-primary/30 text-[10px] font-bold text-primary flex items-center justify-center shrink-0"
+                                >
+                                  {assigneeName
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </div>
+                              </div>
+                            </div>
+                          </DimensionalCard>
+                        );
+                      })}
+
+                      {colTasks.length === 0 && (
+                        <div className="text-center py-8 rounded-xl border border-dashed border-border/60 text-xs text-muted-foreground">
+                          No tasks in {col.title.toLowerCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
             <Accordion type="multiple" defaultValue={["in-progress", "pending"]} className="w-full space-y-4">
                 {/* In Progress Section */}
                 <AccordionItem value="in-progress" className="border-none">
-                  <AccordionTrigger className="hover:no-underline bg-yellow-50/60 dark:bg-yellow-950/20 px-4 py-3 rounded-lg border border-yellow-200/60 dark:border-yellow-900/40 text-foreground">
+                  <AccordionTrigger className="hover:no-underline bg-primary/10 px-4 py-3 rounded-xl border border-primary/30 text-foreground">
                     <div className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5 text-yellow-600" />
-                      <h4 className="font-semibold text-yellow-900">In Progress ({tasks.filter(t => t.status === 'in-progress').length})</h4>
+                      <AlertCircle className="h-5 w-5 text-primary" />
+                      <h4 className="font-semibold text-foreground">In Progress ({tasks.filter(t => t.status === 'in-progress').length})</h4>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
                     <div className="space-y-4">
                       {tasks.filter(t => t.status === 'in-progress').map((task) => (
-                        <Card key={task.id} className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                        <Card key={task.id} className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -2722,8 +3159,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2736,7 +3173,7 @@ export default function ProjectDetails() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Select value={task.status} onValueChange={(value: "pending" | "in-progress" | "completed") => handleUpdateTaskStatus(task.id, value)}>
-                                  <SelectTrigger className="w-36 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
+                                  <SelectTrigger className="w-36 border-border/80 bg-surface-elevated/50 focus:border-primary whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2793,8 +3230,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2845,16 +3282,16 @@ export default function ProjectDetails() {
 
                 {/* Completed Section */}
                 <AccordionItem value="completed" className="border-none">
-                  <AccordionTrigger className="hover:no-underline bg-green-50 px-4 py-3 rounded-lg border border-green-200">
+                  <AccordionTrigger className="hover:no-underline bg-emerald-500/10 px-4 py-3 rounded-xl border border-emerald-500/30">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <h4 className="font-semibold text-green-900">Completed ({tasks.filter(t => t.status === 'completed').length})</h4>
+                      <CheckCircle className="h-5 w-5 text-emerald-500" />
+                      <h4 className="font-semibold text-foreground">Completed ({tasks.filter(t => t.status === 'completed').length})</h4>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4">
                     <div className="space-y-4">
                       {tasks.filter(t => t.status === 'completed').map((task) => (
-                        <Card key={task.id} className="border-green-200 opacity-75">
+                        <Card key={task.id} className="border-emerald-500/30 bg-card/80 opacity-85 rounded-xl">
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -2864,8 +3301,8 @@ export default function ProjectDetails() {
                                     task.priority === 'high' ? 'destructive' :
                                     task.priority === 'medium' ? 'default' : 'secondary'
                                   } className={
-                                    task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                                    task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400' : 'bg-muted text-foreground'
+                                    task.priority === 'high' ? 'bg-destructive/15 text-destructive border border-destructive/30' :
+                                    task.priority === 'medium' ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-surface-elevated text-foreground border border-border/80'
                                   }>
                                     {task.priority}
                                   </Badge>
@@ -2878,7 +3315,7 @@ export default function ProjectDetails() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Select value={task.status} onValueChange={(value: "pending" | "in-progress" | "completed") => handleUpdateTaskStatus(task.id, value)}>
-                                  <SelectTrigger className="w-36 border-green-200 focus:border-green-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
+                                  <SelectTrigger className="w-36 border-emerald-500/30 bg-surface-elevated/50 focus:border-emerald-500 whitespace-nowrap [&>span]:flex [&>span]:items-center [&>span]:gap-2">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -2914,6 +3351,7 @@ export default function ProjectDetails() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+          )}
             </>
           )}
         </TabsContent>
@@ -2921,8 +3359,8 @@ export default function ProjectDetails() {
           {/* Chat Tab */}
           <TabsContent value="chat" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -2931,11 +3369,11 @@ export default function ProjectDetails() {
                 </p>
               </Card>
             ) : (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground overflow-hidden shadow-sm rounded-xl">
+              <Card className="border-border/80 bg-card text-card-foreground overflow-hidden shadow-noir rounded-xl">
               <CardHeader className="border-b border-border bg-muted/20 py-4">
                 <CardTitle className="flex items-center justify-between text-foreground">
                   <div className="flex items-center gap-2 text-base font-semibold">
-                    <MessageCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
+                    <MessageCircle className="h-5 w-5 text-primary" />
                     Team Chat
                   </div>
                   <span className="text-xs text-muted-foreground font-normal">
@@ -2975,17 +3413,17 @@ export default function ProjectDetails() {
                         <div key={message.id} className="w-full flex flex-col">
                           {showDateHeader && (
                             <div className="flex justify-center my-4">
-                              <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                              <span className="bg-surface-elevated border border-border/80 text-muted-foreground font-mono text-[11px] font-semibold px-3 py-1 rounded-full shadow-sm">
                                 {formatDateHeader(message.timestamp)}
                               </span>
                             </div>
                           )}
                           <div className={cn("flex gap-3 max-w-[85%] w-full", isMe ? "ml-auto flex-row-reverse" : "mr-auto")}>
                           {/* Avatar */}
-                          <Avatar className="h-8 w-8 shrink-0 border border-yellow-200/50 dark:border-yellow-900/30">
+                          <Avatar className="h-8 w-8 shrink-0 border border-border/80">
                             <AvatarFallback className={cn(
                               "text-[10px] font-bold text-white",
-                              isMe ? "bg-gradient-to-br from-yellow-500 to-yellow-600" : "bg-gradient-to-br from-gray-500 to-gray-600"
+                              isMe ? "bg-primary text-primary-foreground" : "bg-surface-elevated text-foreground"
                             )}>
                               {initials}
                             </AvatarFallback>
@@ -3000,13 +3438,13 @@ export default function ProjectDetails() {
                             <div className={cn(
                               "p-3 rounded-2xl text-sm shadow-sm inline-block text-left",
                               isMe 
-                                ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-tr-none" 
-                                : "bg-card text-card-foreground border border-border rounded-tl-none"
+                                ? "bg-primary text-primary-foreground rounded-tr-none" 
+                                : "bg-surface-elevated text-foreground border border-border/70 rounded-tl-none"
                             )}>
                                 <p className="whitespace-pre-wrap break-words leading-relaxed">
                                   {message.message.split(/(@\S+)/g).map((part: string, i: number) => {
                                     if (part.startsWith('@')) {
-                                      return <span key={i} className={cn("font-bold px-1 rounded-sm", isMe ? "bg-white/20 text-white" : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400")}>{part}</span>;
+                                      return <span key={i} className={cn("font-bold px-1 rounded-sm", isMe ? "bg-black/20 text-primary-foreground" : "bg-primary/15 text-primary")}>{part}</span>;
                                     }
                                     return part;
                                   })}
@@ -3024,23 +3462,23 @@ export default function ProjectDetails() {
                 {/* @Mention Popover */}
                 {mentionOpen && (
                   <div className="absolute bottom-20 left-4 w-64 bg-popover text-popover-foreground rounded-lg shadow-lg border border-border max-h-48 overflow-y-auto z-10 p-1">
-                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: project.creator_name || project.creator_username } as any] : []).filter(u => 
+                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: (project as any)?.creator_name || (project as any)?.creator_username } as any] : []).filter((u: any) => 
                       u.name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.username?.toLowerCase().includes(mentionQuery.toLowerCase())
-                    ).map((u, i) => (
+                    ).map((u: any, i) => (
                       <div 
                         key={i}
-                        className="flex items-center gap-2 p-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded cursor-pointer"
+                        className="flex items-center gap-2 p-2 hover:bg-surface-hover rounded cursor-pointer"
                         onClick={() => insertMention(u.name?.split(' ')[0] || u.full_name?.split(' ')[0] || u.username || "User")}
                       >
                         <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px] bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/40">{u.name?.[0] || u.full_name?.[0] || 'U'}</AvatarFallback>
+                          <AvatarFallback className="text-[10px] bg-primary/15 text-primary border border-primary/30">{u.name?.[0] || u.full_name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm font-medium text-foreground">{u.name || u.full_name || u.username}</span>
                       </div>
                     ))}
-                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: project.creator_name || project.creator_username } as any] : []).filter(u => 
+                    {dbMembers.concat(project?.created_by ? [{ user_id: project.created_by, name: (project as any)?.creator_name || (project as any)?.creator_username } as any] : []).filter((u: any) => 
                       u.name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.full_name?.toLowerCase().includes(mentionQuery.toLowerCase()) || 
                       u.username?.toLowerCase().includes(mentionQuery.toLowerCase())
@@ -3058,9 +3496,9 @@ export default function ProjectDetails() {
                     onChange={handleMessageChange}
                     placeholder="Type a message... (Use @ to mention)"
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="flex-1 border-yellow-200 dark:border-yellow-900/30 focus:border-yellow-500 bg-background text-foreground"
+                    className="flex-1 border-border/80 focus:border-primary bg-surface-elevated/50 text-foreground"
                   />
-                  <Button onClick={handleSendMessage} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shrink-0 shadow-sm transition-transform active:scale-95 px-3 sm:px-4">
+                  <Button onClick={handleSendMessage} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium shrink-0 shadow-sm transition-transform active:scale-95 px-3 sm:px-4">
                     <Send className="h-4 w-4 sm:mr-1.5" />
                     <span className="hidden sm:inline">Send</span>
                   </Button>
@@ -3073,8 +3511,8 @@ export default function ProjectDetails() {
           {/* Team Members Tab */}
           <TabsContent value="team" className="space-y-6">
             {!isTeamMember ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 p-8 text-center bg-card text-card-foreground">
-                <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-950/40 flex items-center justify-center text-yellow-600 mb-4">
+              <Card className="border-border/80 p-8 text-center bg-card text-card-foreground shadow-noir rounded-xl">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-4">
                   <Lock className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Team Members Only</h3>
@@ -3083,19 +3521,19 @@ export default function ProjectDetails() {
                 </p>
               </Card>
             ) : (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-foreground">
-                  <Users className="h-5 w-5 text-yellow-600" />
+                  <Users className="h-5 w-5 text-primary" />
                   Team Members
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {projectMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-4 p-3 border rounded-lg border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-                      <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-semibold">
+                    <div key={member.id} className="flex items-center gap-4 p-3 border rounded-xl border-border/80 bg-surface-elevated/40 text-card-foreground">
+                      <div className="w-12 h-12 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center">
+                        <span className="text-primary font-semibold">
                           {member.avatar}
                         </span>
                       </div>
@@ -3105,7 +3543,7 @@ export default function ProjectDetails() {
                         <p className="text-xs text-muted-foreground">Joined: {formatDate(member.joined_date)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 px-2 sm:px-3">
+                        <Button variant="outline" size="sm" className="border-border/80 hover:border-primary/40 hover:bg-surface-hover px-2 sm:px-3">
                           <MessageCircle className="h-4 w-4 sm:mr-2" />
                           <span className="hidden sm:inline">Message</span>
                         </Button>
@@ -3152,19 +3590,19 @@ export default function ProjectDetails() {
           {/* Applicants Tab (Only for created projects) */}
           {sourceTab === 'created' && (
             <TabsContent value="applicants" className="space-y-6">
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl overflow-hidden">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-foreground">
-                    <UserPlus className="h-5 w-5 text-yellow-600" />
+                    <UserPlus className="h-5 w-5 text-primary" />
                     Project Applicants
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {applicants.length > 0 ? applicants.map((applicant) => (
-                      <div key={applicant.id} className="flex items-center gap-4 p-4 border rounded-lg border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-                        <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
-                          <span className="text-white font-semibold">
+                      <div key={applicant.id} className="flex items-center gap-4 p-4 border rounded-xl border-border/80 bg-surface-elevated/40 text-card-foreground">
+                        <div className="w-12 h-12 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center">
+                          <span className="text-primary font-semibold">
                             {applicant.avatar}
                           </span>
                         </div>
@@ -3178,7 +3616,7 @@ export default function ProjectDetails() {
                           </div>
                           <div className="flex flex-wrap gap-2 mt-2">
                             {applicant.skills.map((skill, index) => (
-                              <Badge key={index} variant="outline" className="text-xs border-yellow-200 dark:border-yellow-900/50 bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400">
+                              <Badge key={index} variant="outline" className="text-xs border-primary/25 bg-primary/10 text-primary">
                                 {skill}
                               </Badge>
                             ))}
@@ -3189,17 +3627,17 @@ export default function ProjectDetails() {
                             applicant.status === "accepted" ? "default" :
                             applicant.status === "rejected" ? "destructive" : "secondary"
                           } className={
-                            applicant.status === "accepted" ? "bg-green-100 text-green-800" :
-                            applicant.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"
+                            applicant.status === "accepted" ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30" :
+                            applicant.status === "rejected" ? "bg-destructive/15 text-destructive border border-destructive/30" : "bg-primary/15 text-primary border border-primary/30"
                           }>
                             {applicant.status}
                           </Badge>
                           {applicant.status === "pending" && (
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleAcceptApplicant(applicant.id)} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                              <Button size="sm" onClick={() => handleAcceptApplicant(applicant.id)} className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                                 Accept
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleRejectApplicant(applicant.id)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                              <Button size="sm" variant="outline" onClick={() => handleRejectApplicant(applicant.id)} className="border-border/80 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive">
                                 Reject
                               </Button>
                             </div>
@@ -3216,13 +3654,86 @@ export default function ProjectDetails() {
               </Card>
             </TabsContent>
           )}
-        </Tabs>
+                </div>
+
+                {/* RIGHT ZONE: Persistent Live Project Chat Dock matching 04 / Project workspace */}
+                {isTeamMember && activeTab !== "chat" && (
+                  <aside className="2xl:col-span-4 rounded-2xl border border-border/80 bg-card/95 overflow-hidden shadow-noir flex flex-col h-[520px]">
+                    <div className="px-4 py-3.5 border-b border-border/70 flex items-center justify-between bg-surface-base/70">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        <h3 className="text-xs font-semibold text-foreground">Project chat</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("chat")}
+                        className="text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Full view
+                      </button>
+                    </div>
+
+                    <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                      {chatMessages.slice(-4).map((msg, idx) => (
+                        <div key={msg.id || idx} className="flex items-start gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-primary/15 border border-primary/30 text-[10px] font-bold text-primary flex items-center justify-center shrink-0 mt-0.5">
+                            {msg.user_avatar || "CR"}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-xs font-semibold text-foreground truncate">
+                                {msg.user_name}
+                              </span>
+                              <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed break-words">
+                              {msg.message}
+                            </p>
+                            {idx === 0 && (
+                              <div className="mt-2 rounded-lg overflow-hidden border border-border/70 aspect-[16/9]">
+                                <img
+                                  src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80"
+                                  alt="Location scout reference"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="p-3 border-t border-border/70 bg-surface-base/70 flex items-center gap-2">
+                      <Input
+                        value={newMessage}
+                        onChange={handleMessageChange}
+                        placeholder="Write a message..."
+                        onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                        className="h-9 text-xs bg-card border-border/80 rounded-lg"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSendMessage}
+                        className="h-9 w-9 p-0 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg shrink-0"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </aside>
+                )}
+              </div>
+            </Tabs>
 
         {/* Edit Project Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold">Edit Project Details</DialogTitle>
+              <DialogTitle className="font-display text-xl font-bold tracking-tight">Edit Project Details</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdateProject} className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-4">
@@ -3344,7 +3855,7 @@ export default function ProjectDetails() {
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+                <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                   Save Changes
                 </Button>
               </div>
@@ -3371,13 +3882,15 @@ export default function ProjectDetails() {
               </Button>
               <Button 
                 onClick={handleConfirmHire}
-                className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white"
+                className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
               >
                 Confirm
               </Button>
             </div>
           </DialogContent>
         </Dialog>
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

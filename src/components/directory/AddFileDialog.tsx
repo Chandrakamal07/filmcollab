@@ -8,15 +8,21 @@ import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  DIRECTORY_STORAGE_BUCKET,
+  toCanonicalDirectoryStorageUri,
+  cleanupUploadedStorageObjects,
+} from "@/lib/directory-storage";
 
 interface AddFileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUploadSuccess?: () => void;
   userId?: string;
+  projectId?: string | null;
 }
 
-export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: AddFileDialogProps) {
+export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId, projectId }: AddFileDialogProps) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [selectedAddFiles, setSelectedAddFiles] = useState<File[]>([]);
   const [addFileTitle, setAddFileTitle] = useState("");
@@ -71,10 +77,13 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
       return;
     }
 
+    const uploadedPaths: string[] = [];
     try {
       setIsUploadingDirectoryFile(true);
-      let publicUrl = "";
-      let additionalUrls: string[] = [];
+      let fileReferenceUrl = "";
+      let primaryStoragePath: string | null = null;
+      const additionalUrls: string[] = [];
+      const additionalStoragePaths: string[] = [];
       let finalName = "";
       let finalSize = "0 MB";
 
@@ -86,16 +95,13 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
         const primaryPath = `${userId}/${primaryName}`;
 
         const { error: primaryUploadError } = await supabase.storage
-          .from('directory_assets')
+          .from(DIRECTORY_STORAGE_BUCKET)
           .upload(primaryPath, primaryFile);
 
         if (primaryUploadError) throw primaryUploadError;
-
-        const { data: primaryData } = supabase.storage
-          .from('directory_assets')
-          .getPublicUrl(primaryPath);
-        
-        publicUrl = primaryData.publicUrl;
+        uploadedPaths.push(primaryPath);
+        primaryStoragePath = primaryPath;
+        fileReferenceUrl = toCanonicalDirectoryStorageUri(primaryPath, DIRECTORY_STORAGE_BUCKET);
         finalName = primaryFile.name;
         finalSize = `${(primaryFile.size / (1024 * 1024)).toFixed(2)} MB`;
 
@@ -108,56 +114,75 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
             const path = `${userId}/${name}`;
 
             const { error: uploadError } = await supabase.storage
-              .from('directory_assets')
+              .from(DIRECTORY_STORAGE_BUCKET)
               .upload(path, file);
 
-            if (!uploadError) {
-              const { data } = supabase.storage
-                .from('directory_assets')
-                .getPublicUrl(path);
-              additionalUrls.push(data.publicUrl);
-            }
+            if (uploadError) throw uploadError;
+            uploadedPaths.push(path);
+            additionalStoragePaths.push(path);
+            additionalUrls.push(toCanonicalDirectoryStorageUri(path, DIRECTORY_STORAGE_BUCKET));
           }
         }
       } else {
         // Video URL
-        publicUrl = videoUrl.trim();
+        fileReferenceUrl = videoUrl.trim();
         finalName = "Linked Video";
         finalSize = "Link";
       }
 
       let coverUrl = "";
+      let coverStoragePath: string | null = null;
       if (selectedCoverImage) {
         const coverExt = selectedCoverImage.name.split('.').pop();
         const coverName = `${crypto.randomUUID()}_cover.${coverExt}`;
         const coverPath = `${userId}/${coverName}`;
 
         const { error: coverUploadError } = await supabase.storage
-          .from('directory_assets')
+          .from(DIRECTORY_STORAGE_BUCKET)
           .upload(coverPath, selectedCoverImage);
 
-        if (!coverUploadError) {
-          const { data: coverData } = supabase.storage
-            .from('directory_assets')
-            .getPublicUrl(coverPath);
-          coverUrl = coverData.publicUrl;
-        }
+        if (coverUploadError) throw coverUploadError;
+        uploadedPaths.push(coverPath);
+        coverStoragePath = coverPath;
+        coverUrl = toCanonicalDirectoryStorageUri(coverPath, DIRECTORY_STORAGE_BUCKET);
       }
 
       const finalTitle = addFileTitle.trim() || finalName.replace(/\.[^/.]+$/, "");
 
+      let fileUserId = userId;
+      let ownerShowDirectory = true;
+      if (userId) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id, privacy_show_directory')
+          .or(`id.eq.${userId},user_id.eq.${userId}`)
+          .limit(1)
+          .maybeSingle();
+        if (prof?.id) fileUserId = prof.id;
+        if (typeof (prof as any)?.privacy_show_directory === "boolean") {
+          ownerShowDirectory = (prof as any).privacy_show_directory;
+        }
+      }
+
       const { error: insertError } = await supabase
         .from('directory_files')
         .insert({
-          user_id: userId,
+          user_id: fileUserId,
+          project_id: projectId || null,
           title: finalTitle,
-          file_url: publicUrl,
+          file_url: fileReferenceUrl,
           additional_urls: additionalUrls.length > 0 ? additionalUrls : [],
+          cover_image_url: coverUrl || null,
+          storage_bucket: DIRECTORY_STORAGE_BUCKET,
+          storage_path: primaryStoragePath,
+          additional_paths: additionalStoragePaths,
+          cover_storage_path: coverStoragePath,
+          is_public: ownerShowDirectory,
           file_type: fileType,
           file_size: finalSize,
           tags: selectedCategory ? [selectedCategory] : [],
           stats: { likes: 0, views: 0, downloads: 0, coverUrl: coverUrl }
-        });
+        } as any);
 
       if (insertError) throw insertError;
 
@@ -176,6 +201,9 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
       }
 
     } catch (err: any) {
+      if (uploadedPaths.length > 0) {
+        await cleanupUploadedStorageObjects(uploadedPaths, DIRECTORY_STORAGE_BUCKET);
+      }
       console.error("Error uploading file:", err);
       toast.error(err.message || "An error occurred while uploading.");
     } finally {
@@ -185,14 +213,15 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card text-card-foreground border-border shadow-xl">
+      <DialogContent className="max-w-md bg-card text-card-foreground border-border/80 shadow-noir rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-foreground">Add Files</DialogTitle>
+          <span className="noir-eyebrow text-primary">Asset Upload</span>
+          <DialogTitle className="text-xl font-display font-semibold text-foreground tracking-tight">Add Files</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className={categories.length > 0 ? "grid grid-cols-2 gap-4" : "space-y-1.5"}>
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-foreground">File Type</Label>
+              <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">File Type</Label>
               <Select
                 value={fileType}
                 onValueChange={(val: any) => {
@@ -201,10 +230,10 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
                   setVideoUrl("");
                 }}
               >
-                <SelectTrigger className="h-10 w-full bg-background border-input text-foreground focus:ring-yellow-500">
+                <SelectTrigger className="h-10 w-full bg-surface-elevated border-border/80 text-foreground focus:ring-primary/40">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover text-popover-foreground border-border">
+                <SelectContent className="bg-popover text-popover-foreground border-border/80">
                   <SelectItem value="image">Photo</SelectItem>
                   <SelectItem value="video">Video</SelectItem>
                   <SelectItem value="document">Document</SelectItem>
@@ -215,15 +244,15 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
 
             {categories.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-foreground">Category</Label>
+                <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Category</Label>
                 <Select
                   value={selectedCategory}
                   onValueChange={setSelectedCategory}
                 >
-                  <SelectTrigger className="h-10 w-full bg-background border-input text-foreground focus:ring-yellow-500">
+                  <SelectTrigger className="h-10 w-full bg-surface-elevated border-border/80 text-foreground focus:ring-primary/40">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover text-popover-foreground border-border">
+                  <SelectContent className="bg-popover text-popover-foreground border-border/80">
                     {categories.map((catName, idx) => (
                       <SelectItem key={idx} value={catName}>{catName}</SelectItem>
                     ))}
@@ -234,14 +263,14 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
           </div>
 
           {fileType === "video" && (
-            <div className="flex bg-muted border border-border p-1 rounded-lg">
+            <div className="flex bg-surface-elevated border border-border/80 p-1 rounded-lg">
               <button
                 type="button"
                 onClick={() => setVideoInputMode("upload")}
                 className={cn(
                   "flex-1 text-xs font-semibold py-1.5 rounded-md transition-all",
                   videoInputMode === "upload" 
-                    ? "bg-card shadow-sm text-yellow-600 dark:text-yellow-400" 
+                    ? "bg-card shadow-sm text-primary border border-primary/30" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -253,7 +282,7 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
                 className={cn(
                   "flex-1 text-xs font-semibold py-1.5 rounded-md transition-all",
                   videoInputMode === "link" 
-                    ? "bg-card shadow-sm text-yellow-600 dark:text-yellow-400" 
+                    ? "bg-card shadow-sm text-primary border border-primary/30" 
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -282,10 +311,10 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
             }}
             onClick={() => addFileInputRef.current?.click()}
             className={cn(
-              "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
+              "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
               isDraggingFile
-                ? "border-yellow-500 bg-yellow-500/10"
-                : "border-border hover:border-yellow-500 bg-muted/20 hover:bg-muted/40"
+                ? "border-primary bg-primary/10"
+                : "border-border/80 hover:border-primary/60 bg-surface-elevated/60 hover:bg-surface-hover/50"
             )}
           >
             <input
@@ -312,13 +341,15 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
                 }
               }}
             />
-            <Upload className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+            <div className="w-11 h-11 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <Upload className="w-5 h-5" />
+            </div>
             {selectedAddFiles.length > 0 ? (
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   {selectedAddFiles.length === 1 ? selectedAddFiles[0].name : `${selectedAddFiles.length} files selected`}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs font-mono text-muted-foreground mt-0.5">
                   {selectedAddFiles.length === 1 
                     ? `${(selectedAddFiles[0].size / (1024 * 1024)).toFixed(2)} MB` 
                     : `${(selectedAddFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024)).toFixed(2)} MB total`}
@@ -327,7 +358,7 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
             ) : (
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  Drag and drop your {fileType} here, or <span className="text-yellow-600 dark:text-yellow-400 underline font-semibold">browse</span>
+                  Drag and drop your {fileType} here, or <span className="text-primary underline font-semibold">browse</span>
                 </p>
               </div>
             )}
@@ -336,33 +367,33 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
 
           {fileType === "video" && videoInputMode === "link" && (
             <div className="space-y-1.5">
-              <Label htmlFor="video-url" className="text-sm font-medium text-foreground">Video URL (YouTube/Instagram/Facebook/Direct)</Label>
+              <Label htmlFor="video-url" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Video URL (YouTube/Instagram/Facebook/Direct)</Label>
               <Input
                 id="video-url"
                 placeholder="https://..."
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                className="bg-background text-foreground border-border focus-visible:ring-yellow-500"
+                className="bg-surface-elevated text-foreground border-border/80 focus-visible:ring-primary/40"
               />
             </div>
           )}
 
           {(fileType === "document" || fileType === "audio" || fileType === "video") && (
             <div className="space-y-1.5 pt-2">
-              <Label className="text-sm font-medium text-foreground">Cover Image (Thumbnail)</Label>
+              <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Cover Image (Thumbnail)</Label>
               <div className="flex items-center gap-3">
                 <Button 
                   type="button" 
                   variant="outline" 
                   size="sm"
                   onClick={() => coverImageInputRef.current?.click()}
-                  className="border-dashed border-border hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 text-xs text-foreground"
+                  className="border-dashed border-border/80 bg-surface-elevated hover:border-primary/60 hover:bg-primary/10 text-xs text-foreground"
                 >
-                  <Upload className="w-4 h-4 mr-1.5" />
+                  <Upload className="w-4 h-4 mr-1.5 text-primary" />
                   {selectedCoverImage ? "Change Cover" : "Upload Cover Image"}
                 </Button>
                 {selectedCoverImage && (
-                  <span className="text-xs text-muted-foreground max-w-[200px] truncate">
+                  <span className="text-xs font-mono text-muted-foreground max-w-[200px] truncate">
                     {selectedCoverImage.name}
                   </span>
                 )}
@@ -382,17 +413,17 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="add-file-title" className="text-sm font-medium text-foreground">Title</Label>
+            <Label htmlFor="add-file-title" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Title</Label>
             <Input
               id="add-file-title"
               placeholder="Enter file title"
               value={addFileTitle}
               onChange={(e) => setAddFileTitle(e.target.value)}
-              className="bg-background text-foreground border-border focus-visible:ring-yellow-500"
+              className="bg-surface-elevated text-foreground border-border/80 focus-visible:ring-primary/40"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3">
+          <div className="flex justify-end gap-2 pt-3 border-t border-border/60">
             <Button
               variant="outline"
               onClick={() => {
@@ -402,14 +433,14 @@ export function AddFileDialog({ open, onOpenChange, onUploadSuccess, userId }: A
                 setVideoUrl("");
                 setFileType("image");
               }}
-              className="border-border text-foreground hover:bg-muted hover:border-yellow-500 transition-colors"
+              className="border-border/80 text-foreground hover:bg-surface-hover hover:border-primary/40 transition-colors"
             >
               Cancel
             </Button>
             <Button
               onClick={handleAddFileSubmit}
               disabled={isUploadingDirectoryFile}
-              className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium shadow-sm transition-all"
+              className="bg-primary text-primary-foreground hover:bg-primary-hover font-semibold shadow-sm transition-all"
             >
               {isUploadingDirectoryFile ? "Uploading..." : "Upload File"}
             </Button>

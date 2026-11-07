@@ -66,9 +66,6 @@ export default function AdminTickets() {
         `)
         .order("created_at", { ascending: false });
 
-      console.log("Fetched tickets data:", data);
-      console.log("Fetch error:", error);
-
       if (error) throw error;
       setTickets(data || []);
     } catch (error) {
@@ -86,12 +83,19 @@ export default function AdminTickets() {
   const handleDeleteTicket = async () => {
     if (!ticketToDelete) return;
     try {
-      const { error } = await supabase.from("tickets").delete().eq("id", ticketToDelete);
+      const { data, error } = await supabase
+        .from("tickets")
+        .delete()
+        .eq("id", ticketToDelete)
+        .select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was deleted. Permission denied or ticket not found.");
+      }
       setTickets(prev => prev.filter(t => t.id !== ticketToDelete));
       toast({ title: "Ticket deleted successfully" });
-    } catch (error) {
-      toast({ title: "Failed to delete ticket", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Failed to delete ticket", description: error?.message || "Operation failed", variant: "destructive" });
     } finally {
       setTicketToDelete(null);
     }
@@ -100,13 +104,13 @@ export default function AdminTickets() {
   const getStatusBadgeStyle = (status: string) => {
     switch (status) {
       case "Open":
-        return "bg-blue-50 text-blue-700 hover:bg-blue-100";
+        return "bg-primary/15 text-primary border border-primary/30";
       case "In Progress":
-        return "bg-yellow-50 text-yellow-700 hover:bg-yellow-100";
+        return "bg-amber-500/15 text-amber-500 border border-amber-500/30";
       case "Closed":
-        return "bg-green-50 text-green-700 hover:bg-green-100";
+        return "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30";
       default:
-        return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+        return "bg-surface-elevated text-muted-foreground border border-border/80";
     }
   };
 
@@ -138,30 +142,31 @@ export default function AdminTickets() {
   return (
     <AdminLayout pageTitle="Support Tickets" pageName="Tickets">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Support Tickets</h1>
-          <p className="text-muted-foreground mt-1">Manage and track support tickets</p>
+        <div className="border-b border-border/60 pb-5">
+          <p className="noir-eyebrow mb-1">Concierge Operations</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Support Tickets</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Manage and track support tickets</p>
         </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
-            <CardTitle className="text-xl">All Tickets</CardTitle>
+        <Card className="noir-card border-border/80 bg-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/60">
+            <CardTitle className="text-xl font-display">All Tickets</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative flex-1">
+              <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   placeholder="Search by ticket number or title..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 bg-surface-elevated border-border/80"
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Status:</label>
+                <label className="text-sm font-medium text-muted-foreground">Status:</label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px] bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -174,10 +179,10 @@ export default function AdminTickets() {
               </div>
             </div>
 
-            <div className="border rounded-lg overflow-x-auto">
+            <div className="border border-border/80 rounded-xl overflow-x-auto bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Ticket ID</TableHead>
                     <TableHead>Subject</TableHead>
                     <TableHead>Creator</TableHead>
@@ -190,36 +195,36 @@ export default function AdminTickets() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">Loading tickets...</TableCell>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading tickets...</TableCell>
                     </TableRow>
                   ) : filteredTickets.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">No tickets found.</TableCell>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No tickets found.</TableCell>
                     </TableRow>
                   ) : filteredTickets.map((ticket) => {
                     const StatusIcon = getStatusIcon(ticket.status);
                     return (
                       <TableRow 
                         key={ticket.id}
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="cursor-pointer border-border/60 hover:bg-surface-hover/50"
                         onClick={() => navigate(`/admin-dashboard/tickets/${ticket.id}`)}
                       >
-                        <TableCell className="font-medium">{ticket.ticket_number || "TKT-UNKNOWN"}</TableCell>
+                        <TableCell className="font-mono font-medium text-primary">{ticket.ticket_number || "TKT-UNKNOWN"}</TableCell>
                         <TableCell>
                           <div className="flex flex-col max-w-[200px]">
-                            <span className="font-medium truncate">{ticket.subject}</span>
+                            <span className="font-medium text-foreground truncate">{ticket.subject}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
-                           {ticket.creator?.full_name || "Unknown"}
+                        <TableCell className="text-foreground">
+                          {ticket.creator?.full_name || "Unknown"}
                         </TableCell>
                         <TableCell>
                           {ticket.assignee ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                                <UserCog className="h-4 w-4 text-yellow-600" />
+                              <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                                <UserCog className="h-4 w-4 text-primary" />
                               </div>
-                              <span className="text-sm font-medium">{ticket.assignee.full_name}</span>
+                              <span className="text-sm font-medium text-foreground">{ticket.assignee.full_name}</span>
                             </div>
                           ) : (
                             <span className="text-sm text-muted-foreground italic">Unassigned</span>
@@ -232,7 +237,7 @@ export default function AdminTickets() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm">{new Date(ticket.created_at).toLocaleDateString()}</span>
+                          <span className="text-xs font-mono text-muted-foreground">{new Date(ticket.created_at).toLocaleDateString()}</span>
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -245,12 +250,12 @@ export default function AdminTickets() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuContent align="end" className="bg-card border-border/80" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/admin-dashboard/tickets/${ticket.id}`); }}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-700" onClick={(e) => { e.stopPropagation(); setTicketToDelete(ticket.id); }}>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={(e) => { e.stopPropagation(); setTicketToDelete(ticket.id); }}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
                               </DropdownMenuItem>
@@ -263,7 +268,7 @@ export default function AdminTickets() {
                 </TableBody>
               </Table>
             </div>
-            <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
+            <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground font-mono">
               <span>Showing {filteredTickets.length} tickets</span>
             </div>
           </CardContent>
@@ -271,9 +276,9 @@ export default function AdminTickets() {
 
         {/* Delete Confirmation Alert */}
         <AlertDialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-          <AlertDialogContent>
+          <AlertDialogContent className="bg-card border-border/80">
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogTitle className="font-display">Are you absolutely sure?</AlertDialogTitle>
               <AlertDialogDescription>
                 This action cannot be undone. This will permanently delete the ticket
                 and all of its associated messages.
@@ -281,7 +286,7 @@ export default function AdminTickets() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteTicket} className="bg-red-600 hover:bg-red-700 text-white">
+              <AlertDialogAction onClick={handleDeleteTicket} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>

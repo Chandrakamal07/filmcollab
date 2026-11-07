@@ -107,11 +107,12 @@ export default function UserTicketDetail() {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !profile) return;
     
+    const draftText = newMessage.trim();
     const tempMessage = {
       id: Date.now(),
       ticket_id: ticketId,
       author_id: profile.id,
-      message: newMessage.trim(),
+      message: draftText,
       created_at: new Date().toISOString(),
       author: profile
     };
@@ -126,7 +127,7 @@ export default function UserTicketDetail() {
         .insert({
           ticket_id: ticketId,
           author_id: profile.id,
-          message: newMessage.trim()
+          message: draftText
         })
         .select(`*, author:profiles(id, full_name, role)`).single();
 
@@ -135,6 +136,7 @@ export default function UserTicketDetail() {
     } catch (error: any) {
       console.error("Send message error:", error);
       setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+      setNewMessage(draftText);
       toast({ title: `Failed to send message: ${error.message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsSending(false);
@@ -144,11 +146,11 @@ export default function UserTicketDetail() {
   const getStatusBadgeStyle = (status: string) => {
     const s = status?.toLowerCase() || "";
     switch (s) {
-      case "open": return "bg-blue-50 text-blue-700 hover:bg-blue-100";
-      case "in-progress": return "bg-yellow-50 text-yellow-700 hover:bg-yellow-100";
+      case "open": return "bg-primary/15 text-primary border border-primary/30";
+      case "in-progress": return "bg-amber-500/15 text-amber-500 border border-amber-500/30";
       case "resolved":
-      case "closed": return "bg-green-50 text-green-700 hover:bg-green-100";
-      default: return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+      case "closed": return "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30";
+      default: return "bg-surface-elevated text-muted-foreground border border-border/80";
     }
   };
 
@@ -182,19 +184,20 @@ export default function UserTicketDetail() {
   return (
     <AppLayout>
       <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-border/60 pb-5">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate("/support")}
-              className="h-8 w-8 p-0"
+              className="h-9 w-9 p-0 border border-border/80 bg-surface-elevated hover:bg-surface-hover"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Ticket Details</h1>
-              <p className="text-gray-500 mt-1">View your ticket #{ticket.ticket_number}</p>
+              <p className="noir-eyebrow mb-0.5">Support Case</p>
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Ticket Details</h1>
+              <p className="text-muted-foreground font-mono text-xs mt-1">View your ticket #{ticket.ticket_number}</p>
             </div>
           </div>
           <Button
@@ -202,7 +205,7 @@ export default function UserTicketDetail() {
             size="sm"
             onClick={() => fetchData(true)}
             disabled={isRefreshing}
-            className="h-9 border-yellow-200 hover:bg-yellow-50 hover:text-yellow-700"
+            className="h-9 border-primary/30 hover:bg-primary/10 hover:text-primary"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -210,49 +213,49 @@ export default function UserTicketDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-2xl flex items-center justify-between">
-                <span>{ticket.subject}</span>
+          <Card className="lg:col-span-2 noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="text-xl sm:text-2xl font-display flex items-center justify-between gap-3">
+                <span className="text-foreground">{ticket.subject}</span>
                 <Badge variant="secondary" className={getStatusBadgeStyle(ticket.status)}>
                   {StatusIcon(ticket.status)}
                   {ticket.status}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-500 font-medium block">Created Date</span>
-                    <span className="mt-1">{new Date(ticket.created_at).toLocaleString()}</span>
+                    <span className="text-muted-foreground font-medium block">Created Date</span>
+                    <span className="mt-1 font-mono text-foreground">{new Date(ticket.created_at).toLocaleString()}</span>
                   </div>
                   <div>
-                    <span className="text-gray-500 font-medium block">Category</span>
-                    <span className="mt-1">{ticket.category}</span>
+                    <span className="text-muted-foreground font-medium block">Category</span>
+                    <span className="mt-1 text-foreground">{ticket.category}</span>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t">
-                  <Label className="text-sm font-medium text-gray-500">Description</Label>
-                  <div className="mt-2 p-4 bg-gray-50 rounded-md whitespace-pre-wrap">{ticket.description}</div>
+                <div className="pt-4 border-t border-border/60">
+                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                  <div className="mt-2 p-4 bg-surface-elevated border border-border/80 rounded-xl whitespace-pre-wrap text-foreground text-sm leading-relaxed">{ticket.description}</div>
                 </div>
                 
-                <div className="pt-4 border-t space-y-4">
-                  <Label className="text-lg font-semibold text-gray-900">Official Updates</Label>
+                <div className="pt-4 border-t border-border/60 space-y-4">
+                  <Label className="text-lg font-display font-semibold text-foreground">Official Updates</Label>
                   <div className="space-y-3">
                     {ticketUpdates.length === 0 ? (
-                      <p className="text-sm text-gray-500 italic">No official updates posted yet.</p>
+                      <p className="text-sm text-muted-foreground italic">No official updates posted yet.</p>
                     ) : (
                       ticketUpdates.map((update) => (
-                        <div key={update.id} className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                        <div key={update.id} className="bg-primary/10 border border-primary/25 p-4 rounded-xl">
                           <div className="flex justify-between items-start mb-2">
-                            <span className="font-semibold text-blue-900 text-sm">{update.author?.full_name || "Support Team"}</span>
-                            <span className="text-xs text-blue-600 font-medium">
+                            <span className="font-semibold text-primary text-sm">{update.author?.full_name || "Support Team"}</span>
+                            <span className="text-xs text-muted-foreground font-mono">
                               {new Date(update.created_at).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm text-blue-800 whitespace-pre-wrap">{update.content}</p>
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{update.content}</p>
                         </div>
                       ))
                     )}
@@ -262,16 +265,16 @@ export default function UserTicketDetail() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-1 flex flex-col h-[600px]">
-            <CardHeader>
-              <CardTitle className="text-xl">Interaction Chat</CardTitle>
+          <Card className="lg:col-span-1 flex flex-col h-[600px] noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="text-xl font-display">Interaction Chat</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col flex-1 overflow-hidden space-y-4">
+            <CardContent className="flex flex-col flex-1 overflow-hidden space-y-4 pt-4">
               {!ticket.chat_enabled ? (
-                <div className="flex-1 flex items-center justify-center text-center p-6 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
+                <div className="flex-1 flex items-center justify-center text-center p-6 text-muted-foreground bg-surface-elevated/50 rounded-xl border border-dashed border-border/80">
                   <div>
-                    <TicketCheck className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm font-medium">Chat is currently disabled</p>
+                    <TicketCheck className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">Chat is currently disabled</p>
                     <p className="text-xs mt-1">A support agent will enable chat if they need more details from you.</p>
                   </div>
                 </div>
@@ -280,7 +283,7 @@ export default function UserTicketDetail() {
                   <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
                     <div className="space-y-4 pb-4">
                       {messages.length === 0 ? (
-                        <div className="text-center text-gray-500 text-sm py-4">No messages yet.</div>
+                        <div className="text-center text-muted-foreground text-sm py-4">No messages yet.</div>
                       ) : messages.map((msg) => {
                         const isAdmin = msg.author?.role === "admin";
                         const isMe = msg.author_id === profile?.id;
@@ -295,17 +298,17 @@ export default function UserTicketDetail() {
                           >
                             <div
                               className={cn(
-                                "max-w-[85%] rounded-lg p-3",
+                                "max-w-[85%] rounded-xl p-3 border",
                                 isMe
-                                  ? "bg-yellow-500 text-white ml-auto"
-                                  : isAdmin ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-900"
+                                  ? "bg-primary text-primary-foreground border-primary/40 ml-auto"
+                                  : isAdmin ? "bg-surface-elevated text-foreground border-primary/30" : "bg-surface-elevated text-foreground border-border/80"
                               )}
                             >
                               <div className="flex items-center gap-1 mb-1">
-                                {isAdmin && <UserCog className="w-3 h-3" />}
+                                {isAdmin && <UserCog className="w-3 h-3 text-primary" />}
                                 <span className={cn(
                                   "text-xs font-semibold", 
-                                  isMe ? "text-yellow-100" : isAdmin ? "text-gray-300" : "text-gray-600"
+                                  isMe ? "text-primary-foreground/90" : isAdmin ? "text-primary" : "text-muted-foreground"
                                 )}>
                                   {isMe ? "You" : msg.author?.full_name || "Agent"}
                                 </span>
@@ -313,8 +316,8 @@ export default function UserTicketDetail() {
                               <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                               <div
                                 className={cn(
-                                  "text-[10px] mt-1 text-right",
-                                  isMe ? "text-yellow-100" : isAdmin ? "text-gray-400" : "text-gray-500"
+                                  "text-[10px] font-mono mt-1 text-right",
+                                  isMe ? "text-primary-foreground/80" : "text-muted-foreground"
                                 )}
                               >
                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -326,12 +329,12 @@ export default function UserTicketDetail() {
                     </div>
                   </ScrollArea>
 
-                  <div className="flex gap-2 pt-2 border-t">
+                  <div className="flex gap-2 pt-3 border-t border-border/60">
                     <Input
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Type a message..."
-                      className="flex-1"
+                      className="flex-1 bg-surface-elevated border-border/80"
                       disabled={isSending || ticket.status === 'closed' || ticket.status === 'resolved'}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -343,7 +346,7 @@ export default function UserTicketDetail() {
                     <Button
                       onClick={handleSendMessage}
                       disabled={isSending || !newMessage.trim() || ticket.status === 'closed' || ticket.status === 'resolved'}
-                      className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                     >
                       <Send className="h-4 w-4 mr-2" />
                       Send

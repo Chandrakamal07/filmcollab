@@ -1,0 +1,82 @@
+import * as THREE from "three";
+import { FRAME_COUNT } from "./silhouette-atlas";
+import type { ReelGeometryParameters } from "./ReelGeometry";
+import { buildFilmLayout, type FilmSample } from "./film-layout";
+
+export interface FilmSystem {
+  group: THREE.Group;
+  filmMesh: THREE.Mesh;
+  filmMaterial: THREE.MeshBasicMaterial;
+  samples: FilmSample[];
+  framePitch: number;
+  updateTransport: (transportInFrames: number) => void;
+  dispose: () => void;
+}
+
+export function createFilmSystem(texture: THREE.CanvasTexture, reel: THREE.Group, parameters: ReelGeometryParameters): FilmSystem {
+  reel.updateWorldMatrix(true, false);
+  const layout = buildFilmLayout(reel.matrixWorld, parameters);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  layout.samples.forEach((s, i) => {
+    for (const sign of [-1, 1]) {
+      const p = s.center.clone().addScaledVector(s.widthAxis, sign * s.width / 2);
+      positions.push(p.x, p.y, p.z);
+      uvs.push(sign < 0 ? 0 : 1, (layout.gateEndDistance - s.distance) / layout.framePitch);
+      // Three prominent foreground stories. The distant continuation remains
+      // visible as dark film, rather than a ladder of equally bright tiles.
+      const framesFromFront = (layout.gateEndDistance - s.distance) / layout.framePitch;
+      const light = 1 - THREE.MathUtils.smoothstep(framesFromFront, 2.9, 3.45);
+      const brightness = THREE.MathUtils.lerp(0.035, 1, light);
+      colors.push(brightness, brightness * 0.91, brightness * 0.77);
+    }
+    if (i < layout.samples.length - 1) {
+      const j = i * 2;
+      indices.push(j, j + 2, j + 1, j + 1, j + 2, j + 3);
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const filmMaterial = new THREE.MeshBasicMaterial({
+    map: texture, side: THREE.DoubleSide, toneMapped: false,
+    transparent: true, alphaTest: 0.5,
+    vertexColors: true,
+  });
+  const filmMesh = new THREE.Mesh(geometry, filmMaterial);
+  const group = new THREE.Group();
+  group.name = "continuousCurvedFilm";
+  group.add(filmMesh);
+  // Thin physical edge catches the same studio lights as the reel. The image
+  // surface stays luminous, while these edges reveal the ribbon curvature.
+  const edgeMaterial = new THREE.MeshStandardMaterial({ color: "#b57a2c", metalness: .92, roughness: .24, side: THREE.DoubleSide });
+  const edgeGeometries: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    const edgePositions: number[] = [];
+    for (const s of layout.samples) {
+      for (const inset of [0, .003]) {
+        const p = s.center.clone().addScaledVector(s.widthAxis, side * (s.width / 2 - inset));
+        edgePositions.push(p.x, p.y, p.z + .0005);
+      }
+    }
+    const edge = new THREE.BufferGeometry();
+    edge.setAttribute("position", new THREE.Float32BufferAttribute(edgePositions, 3));
+    edge.setIndex(indices); edge.computeVertexNormals(); edgeGeometries.push(edge);
+    group.add(new THREE.Mesh(edge, edgeMaterial));
+  }
+  texture.repeat.set(1, 1 / FRAME_COUNT);
+  texture.offset.set(0, (FRAME_COUNT - 1) / FRAME_COUNT);
+  return {
+    group, filmMesh, filmMaterial, samples: layout.samples,
+    framePitch: layout.framePitch,
+    updateTransport(frames) {
+      texture.offset.y = THREE.MathUtils.euclideanModulo(FRAME_COUNT - 1 + frames, FRAME_COUNT) / FRAME_COUNT;
+    },
+    dispose() { geometry.dispose(); filmMaterial.dispose(); edgeGeometries.forEach(edge => edge.dispose()); edgeMaterial.dispose(); },
+  };
+}

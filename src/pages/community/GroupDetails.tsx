@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft,
   Users,
@@ -69,12 +72,18 @@ interface ChatMessage {
 export default function GroupDetails() {
   const { groupId } = useParams();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
   const [newMessage, setNewMessage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [loadingGroup, setLoadingGroup] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [group, setGroup] = useState<any>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [groupSettings, setGroupSettings] = useState({
-    name: "My Film Production Group",
-    description: "A private group for my upcoming film project. Collaborating with trusted team members.",
-    privacy: "private", // private, public
+    name: "",
+    description: "",
+    privacy: "public",
     allowMemberInvites: true,
     allowMemberPosts: true,
     requireApproval: false,
@@ -84,98 +93,7 @@ export default function GroupDetails() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Mock group data - in real app, this would be fetched based on groupId
-  const group = {
-    id: groupId,
-    name: "My Film Production Group",
-    description: "A private group for my upcoming film project. Collaborating with trusted team members.",
-    members: 12,
-    posts: 45,
-    category: "Production",
-    tags: ["production", "private", "collaboration"],
-    createdBy: "You",
-    createdDate: "2024-11-15",
-    status: "Active",
-    rules: [
-      "Be respectful to all members",
-      "Keep discussions relevant to film production",
-      "No spam or self-promotion without permission",
-      "Share resources and knowledge generously"
-    ],
-    recentActivity: [
-      { action: "New member joined", user: "Sarah Chen", time: "2 hours ago" },
-      { action: "Posted in chat", user: "Mike Johnson", time: "3 hours ago" },
-      { action: "Shared resource", user: "Lisa Park", time: "1 day ago" }
-    ]
-  };
-
-  const members: GroupMember[] = [
-    { id: "1", name: "You", role: "Group Admin", avatar: "Y", joinedDate: "2024-11-15", isAdmin: true, isModerator: false, online: true },
-    { id: "2", name: "Sarah Chen", role: "Producer", avatar: "SC", joinedDate: "2024-11-16", isAdmin: false, isModerator: true, online: true },
-    { id: "3", name: "Mike Johnson", role: "Director", avatar: "MJ", joinedDate: "2024-11-17", isAdmin: false, isModerator: false, online: false },
-    { id: "4", name: "Lisa Park", role: "Cinematographer", avatar: "LP", joinedDate: "2024-11-18", isAdmin: false, isModerator: false, online: true },
-    { id: "5", name: "David Kim", role: "Editor", avatar: "DK", joinedDate: "2024-11-19", isAdmin: false, isModerator: false, online: false },
-    { id: "6", name: "Emma Rodriguez", role: "Sound Designer", avatar: "ER", joinedDate: "2024-11-20", isAdmin: false, isModerator: false, online: true }
-  ];
-
-  const chatMessages: ChatMessage[] = [
-    {
-      id: "1",
-      userId: "2",
-      userName: "Sarah Chen",
-      userAvatar: "SC",
-      message: "Hey everyone! Just wanted to share the updated production schedule. We're ahead of schedule on pre-production!",
-      timestamp: "2 hours ago",
-      type: "text",
-      isModerator: true
-    },
-    {
-      id: "2",
-      userId: "1",
-      userName: "You",
-      userAvatar: "Y",
-      message: "That's fantastic news, Sarah! Thanks for keeping us updated. The team is doing amazing work.",
-      timestamp: "2 hours ago",
-      type: "text",
-      isAdmin: true
-    },
-    {
-      id: "3",
-      userId: "3",
-      userName: "Mike Johnson",
-      userAvatar: "MJ",
-      message: "I've been reviewing the script changes. The new dialogue flows much better. Great work on the revisions!",
-      timestamp: "1 hour ago",
-      type: "text"
-    },
-    {
-      id: "4",
-      userId: "4",
-      userName: "Lisa Park",
-      userAvatar: "LP",
-      message: "I've uploaded some location photos to the shared drive. Check them out when you get a chance.",
-      timestamp: "45 minutes ago",
-      type: "text"
-    },
-    {
-      id: "5",
-      userId: "5",
-      userName: "David Kim",
-      userAvatar: "DK",
-      message: "The rough cut is looking good. I'll have the first edit ready by tomorrow evening.",
-      timestamp: "30 minutes ago",
-      type: "text"
-    },
-    {
-      id: "6",
-      userId: "6",
-      userName: "Emma Rodriguez",
-      userAvatar: "ER",
-      message: "Sound design is progressing well. I've created some ambient tracks that should work perfectly for the forest scenes.",
-      timestamp: "15 minutes ago",
-      type: "text"
-    }
-  ];
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -185,11 +103,204 @@ export default function GroupDetails() {
     scrollToBottom();
   }, [chatMessages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      // In a real app, this would send the message to the server
-      console.log("Sending message:", newMessage);
-      setNewMessage("");
+  const isUuid = (id: string | null | undefined): boolean => {
+    if (!id) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  };
+
+  useEffect(() => {
+    if (!groupId) {
+      setLoadingGroup(false);
+      return;
+    }
+
+    if (!isUuid(groupId)) {
+      setLoadingGroup(false);
+      return;
+    }
+
+    const fetchGroupAndMembers = async () => {
+      setLoadingGroup(true);
+      try {
+        const { data: gData, error: gErr } = await supabase
+          .from("community_groups")
+          .select("*")
+          .eq("id", groupId)
+          .single();
+
+        if (gErr) throw gErr;
+        if (gData) {
+          const settings = (gData.settings || {}) as Record<string, any>;
+          setGroup({
+            id: gData.id,
+            name: gData.name,
+            description: gData.description || "",
+            members: 1,
+            posts: 0,
+            category: gData.category || "Filmmaking",
+            tags: Array.isArray(gData.tags) ? gData.tags : [],
+            createdBy: gData.created_by,
+            createdDate: gData.created_at ? new Date(gData.created_at).toLocaleDateString() : "Recent",
+            status: "Active",
+            rules: [
+              "Be respectful to all members",
+              "Keep discussions relevant to film production",
+              "Share resources and knowledge generously",
+              "No spam or self-promotion without permission"
+            ],
+            recentActivity: []
+          });
+
+          setGroupSettings({
+            name: gData.name || "",
+            description: gData.description || "",
+            privacy: gData.privacy || "public",
+            allowMemberInvites: settings.allowMemberInvites ?? true,
+            allowMemberPosts: settings.allowMemberPosts ?? true,
+            requireApproval: settings.requireApproval ?? false,
+            notifications: settings.notifications ?? true,
+            autoDeleteMessages: settings.autoDeleteMessages ?? false,
+            messageRetentionDays: settings.messageRetentionDays ?? 30
+          });
+        }
+
+        // Fetch real members
+        const { data: mRows, error: mErr } = await supabase
+          .from("community_group_members")
+          .select("id, role, joined_at, user_id")
+          .eq("group_id", groupId);
+
+        if (!mErr && mRows && mRows.length > 0) {
+          const uids = mRows.map((m: any) => m.user_id);
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, user_id, full_name, avatar_url")
+            .in("user_id", uids);
+
+          const profMap = new Map((profs || []).map((p: any) => [p.user_id, p]));
+          const formatted: GroupMember[] = mRows.map((m: any) => {
+            const p = profMap.get(m.user_id);
+            const name = m.user_id === user?.id ? "You" : (p?.full_name || "Community Member");
+            return {
+              id: m.id,
+              name,
+              role: m.role || "Member",
+              avatar: name.slice(0, 2).toUpperCase(),
+              joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().slice(0, 10) : "",
+              isAdmin: m.role === "Owner" || m.role === "Admin",
+              isModerator: m.role === "Moderator",
+              online: m.user_id === user?.id,
+            };
+          });
+          setMembers(formatted);
+          setGroup((prev: any) => prev ? { ...prev, members: formatted.length } : prev);
+        }
+      } catch (err: unknown) {
+        console.error("Failed to load group details:", err);
+      } finally {
+        setLoadingGroup(false);
+      }
+    };
+
+    fetchGroupAndMembers();
+  }, [groupId, user?.id]);
+
+  useEffect(() => {
+    if (!groupId) return;
+    let interval: NodeJS.Timeout | null = null;
+    if (isUuid(groupId)) {
+      const fetchGroupMessages = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("community_group_messages")
+            .select("id, user_id, message, type, created_at")
+            .eq("group_id", groupId)
+            .order("created_at", { ascending: true });
+
+          if (!error && data && data.length > 0) {
+            setChatMessages(data.map((m: any) => ({
+              id: m.id,
+              userId: m.user_id,
+              userName: m.user_id === user?.id ? (profile?.full_name || "You") : "Member",
+              userAvatar: (m.user_id === user?.id ? (profile?.full_name || "Y") : "M").slice(0, 2).toUpperCase(),
+              message: m.message,
+              timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              type: m.type || 'text',
+              isAdmin: false
+            })));
+          } else {
+            setChatMessages([]);
+          }
+        } catch (err) {
+          console.warn("Could not load real group messages:", err);
+        }
+      };
+      fetchGroupMessages();
+      interval = setInterval(fetchGroupMessages, 4000);
+    } else {
+      setChatMessages([]);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [groupId, user?.id, profile?.full_name]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+    const msg = newMessage.trim();
+    setNewMessage("");
+    try {
+      if (user && isUuid(groupId)) {
+        const { data, error } = await supabase
+          .from("community_group_messages")
+          .insert({
+            group_id: groupId,
+            user_id: user.id,
+            message: msg,
+            type: 'text'
+          })
+          .select("id, created_at")
+          .single();
+
+        if (error) throw error;
+
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: data?.id || `msg-${Date.now()}`,
+            userId: user.id,
+            userName: profile?.full_name || "You",
+            userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
+            message: msg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'text',
+            isAdmin: true
+          }
+        ]);
+      } else {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            userId: user?.id || "me",
+            userName: profile?.full_name || "You",
+            userAvatar: (profile?.full_name || "Y").slice(0, 2).toUpperCase(),
+            message: msg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'text',
+            isAdmin: true
+          }
+        ]);
+      }
+    } catch (err: any) {
+      console.error("Failed to send group message:", err);
+      setNewMessage(msg); // Preserve draft on failure
+      toast({
+        variant: "destructive",
+        title: "Message failed",
+        description: err?.message || "Could not deliver message to the group."
+      });
     }
   };
 
@@ -200,33 +311,73 @@ export default function GroupDetails() {
     }
   };
 
+  if (loadingGroup) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+            <p className="text-sm">Loading group collective...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!group) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground mb-2">Group Not Found</h1>
+            <p className="text-muted-foreground mb-6">The requested collective or guild could not be found.</p>
+            <Button onClick={() => navigate("/community")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Community
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
-      <div className="h-screen bg-yellow-50 flex flex-col">
+      <div className="h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b border-yellow-200 p-4">
+        <div className="bg-card border-b border-border/80 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/community')}>
+              <Button variant="ghost" size="sm" className="hover:bg-surface-elevated" onClick={() => navigate('/community')}>
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{group.name}</h1>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Users className="w-4 h-4" />
+                <h1 className="font-display text-xl font-bold text-foreground">{group.name}</h1>
+                <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                  <Users className="w-3.5 h-3.5 text-primary" />
                   <span>{group.members} members</span>
                   <span>•</span>
-                  <span>{group.status}</span>
+                  <span className="text-primary">{group.status}</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Share2 className="w-4 h-4 mr-1" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast({
+                    title: "Link copied",
+                    description: "Group link copied to clipboard."
+                  });
+                }}
+              >
+                <Share2 className="w-4 h-4 mr-1.5" />
                 Share
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowSettings(!showSettings)}>
-                <Settings className="w-4 h-4 mr-1" />
+              <Button variant="outline" size="sm" className="border-border/80 bg-surface-elevated hover:bg-surface-hover" onClick={() => setShowSettings(!showSettings)}>
+                <Settings className="w-4 h-4 mr-1.5" />
                 Settings
               </Button>
             </div>
@@ -240,18 +391,18 @@ export default function GroupDetails() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {chatMessages.map((message) => (
                 <div key={message.id} className="flex gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                  <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs flex-shrink-0">
                     {message.userAvatar}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm text-gray-900">{message.userName}</span>
-                      {message.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                      {message.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
-                      <span className="text-xs text-gray-500">{message.timestamp}</span>
+                      <span className="font-semibold text-sm text-foreground">{message.userName}</span>
+                      {message.isAdmin && <Crown className="w-3.5 h-3.5 text-primary" />}
+                      {message.isModerator && <Shield className="w-3.5 h-3.5 text-primary/80" />}
+                      <span className="text-xs font-mono text-muted-foreground">{message.timestamp}</span>
                     </div>
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-yellow-200">
-                      <p className="text-sm text-gray-800">{message.message}</p>
+                    <div className="bg-card rounded-xl p-3 shadow-noir border border-border/80">
+                      <p className="text-sm text-foreground/90">{message.message}</p>
                     </div>
                   </div>
                 </div>
@@ -260,7 +411,7 @@ export default function GroupDetails() {
             </div>
 
             {/* Message Input */}
-            <div className="bg-white border-t border-yellow-200 p-4">
+            <div className="bg-card border-t border-border/80 p-4">
               <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <Input
@@ -268,18 +419,18 @@ export default function GroupDetails() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Type a message..."
-                    className="pr-20"
+                    className="pr-20 bg-surface-elevated border-border/80"
                   />
                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Paperclip className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Paperclip className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Smile className="w-3 h-3" />
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                      <Smile className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </div>
-                <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white" onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary-hover" onClick={handleSendMessage} disabled={!newMessage.trim()}>
                   <Send className="w-4 h-4" />
                 </Button>
               </div>
@@ -287,31 +438,31 @@ export default function GroupDetails() {
           </div>
 
           {/* Sidebar */}
-          <div className="w-80 bg-white border-l border-yellow-200 overflow-y-auto">
+          <div className="w-80 bg-card border-l border-border/80 overflow-y-auto hidden lg:block">
             <div className="p-4 space-y-6">
               {/* Group Info */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Information</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Information</h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Description</p>
-                    <p className="text-sm text-gray-800">{group.description}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Description</p>
+                    <p className="text-sm text-foreground/90">{group.description}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Category</p>
-                    <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Category</p>
+                    <Badge variant="secondary" className="bg-surface-elevated text-foreground border border-border/80">
                       {group.category}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Created</p>
-                    <p className="text-sm text-gray-800">{group.createdDate}</p>
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Created</p>
+                    <p className="text-sm font-mono text-foreground">{group.createdDate}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 mb-1">Tags</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Tags</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {group.tags.map((tag, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
+                        <Badge key={index} variant="outline" className="text-xs bg-primary/10 text-primary border-primary/25 font-mono">
                           #{tag}
                         </Badge>
                       ))}
@@ -323,32 +474,43 @@ export default function GroupDetails() {
               {/* Members */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900">Members ({members.length})</h3>
-                  <Button variant="outline" size="sm" className="h-7 text-xs">
+                  <h3 className="font-display font-semibold text-foreground">Members (<span className="font-mono">{members.length}</span>)</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs border-border/80 bg-surface-elevated hover:bg-surface-hover"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/community/joined/${groupId}`);
+                      toast({
+                        title: "Invite link copied",
+                        description: "Share this link with collaborators to invite them."
+                      });
+                    }}
+                  >
                     <UserPlus className="w-3 h-3 mr-1" />
                     Invite
                   </Button>
                 </div>
                 <div className="space-y-2">
                   {members.map((member) => (
-                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-yellow-50">
+                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-elevated transition-colors">
                       <div className="relative">
-                        <div className="w-8 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                        <div className="w-8 h-8 bg-primary/20 border border-primary/30 text-primary rounded-full flex items-center justify-center font-mono font-semibold text-xs">
                           {member.avatar}
                         </div>
                         {member.online && (
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card"></div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
-                          {member.isAdmin && <Crown className="w-3 h-3 text-yellow-500" />}
-                          {member.isModerator && <Shield className="w-3 h-3 text-blue-500" />}
+                          <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
+                          {member.isAdmin && <Crown className="w-3 h-3 text-primary" />}
+                          {member.isModerator && <Shield className="w-3 h-3 text-primary/80" />}
                         </div>
-                        <p className="text-xs text-gray-600">{member.role}</p>
+                        <p className="text-xs text-muted-foreground">{member.role}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground">
                         <MoreHorizontal className="w-3 h-3" />
                       </Button>
                     </div>
@@ -358,12 +520,12 @@ export default function GroupDetails() {
 
               {/* Group Rules */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Group Rules</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Group Rules</h3>
                 <div className="space-y-2">
                   {group.rules.map((rule, index) => (
                     <div key={index} className="flex items-start gap-2">
-                      <span className="text-purple-600 mt-1">•</span>
-                      <p className="text-sm text-gray-700">{rule}</p>
+                      <span className="text-primary mt-0.5">•</span>
+                      <p className="text-sm text-muted-foreground">{rule}</p>
                     </div>
                   ))}
                 </div>
@@ -371,12 +533,12 @@ export default function GroupDetails() {
 
               {/* Recent Activity */}
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Activity</h3>
+                <h3 className="font-display font-semibold text-foreground mb-3">Recent Activity</h3>
                 <div className="space-y-2">
                   {group.recentActivity.map((activity, index) => (
-                    <div key={index} className="text-sm">
-                      <p className="text-gray-800">{activity.action}</p>
-                      <p className="text-gray-600 text-xs">{activity.user} • {activity.time}</p>
+                    <div key={index} className="text-sm p-2 rounded-lg bg-surface-elevated border border-border/60">
+                      <p className="text-foreground text-xs font-medium">{activity.action}</p>
+                      <p className="text-muted-foreground font-mono text-[11px]">{activity.user} • {activity.time}</p>
                     </div>
                   ))}
                 </div>
@@ -387,11 +549,11 @@ export default function GroupDetails() {
 
         {/* Settings Popup */}
         {showSettings && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border/80 shadow-noir rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">Group Settings</h2>
+                <div className="flex items-center justify-between mb-6 border-b border-border/60 pb-3">
+                  <h2 className="font-display text-xl font-bold text-foreground">Group Settings</h2>
                   <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)}>
                     <X className="w-4 h-4" />
                   </Button>
@@ -400,25 +562,25 @@ export default function GroupDetails() {
                 <div className="space-y-6">
                   {/* Basic Information */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Info className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Info className="w-4 h-4 text-primary" />
                       Basic Information
                     </h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Group Name</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Group Name</label>
                         <Input
                           value={groupSettings.name}
                           onChange={(e) => setGroupSettings(prev => ({ ...prev, name: e.target.value }))}
-                          className="w-full"
+                          className="w-full bg-surface-elevated border-border/80"
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Description</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Description</label>
                         <textarea
                           value={groupSettings.description}
                           onChange={(e) => setGroupSettings(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full px-3 py-2 border border-yellow-200 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 text-sm"
+                          className="w-full px-3 py-2 bg-surface-elevated border border-border/80 rounded-lg text-foreground text-sm"
                           rows={3}
                         />
                       </div>
@@ -427,37 +589,37 @@ export default function GroupDetails() {
 
                   {/* Privacy Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Lock className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-primary" />
                       Privacy Settings
                     </h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-700 mb-2 block">Group Visibility</label>
+                        <label className="text-sm font-medium text-foreground mb-2 block">Group Visibility</label>
                         <div className="flex gap-4">
-                          <label className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
                               name="privacy"
                               value="private"
                               checked={groupSettings.privacy === "private"}
                               onChange={(e) => setGroupSettings(prev => ({ ...prev, privacy: e.target.value }))}
-                              className="text-purple-600"
+                              className="text-primary"
                             />
-                            <Lock className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">Private</span>
+                            <Lock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">Private</span>
                           </label>
-                          <label className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
                               name="privacy"
                               value="public"
                               checked={groupSettings.privacy === "public"}
                               onChange={(e) => setGroupSettings(prev => ({ ...prev, privacy: e.target.value }))}
-                              className="text-purple-600"
+                              className="text-primary"
                             />
-                            <Globe className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">Public</span>
+                            <Globe className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">Public</span>
                           </label>
                         </div>
                       </div>
@@ -466,15 +628,15 @@ export default function GroupDetails() {
 
                   {/* Member Permissions */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <UserCheck className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-primary" />
                       Member Permissions
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Allow members to invite others</p>
-                          <p className="text-xs text-gray-500">Members can invite new people to join the group</p>
+                          <p className="text-sm font-medium text-foreground">Allow members to invite others</p>
+                          <p className="text-xs text-muted-foreground">Members can invite new people to join the group</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -483,13 +645,13 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, allowMemberInvites: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Allow members to post messages</p>
-                          <p className="text-xs text-gray-500">Members can send messages in the group chat</p>
+                          <p className="text-sm font-medium text-foreground">Allow members to post messages</p>
+                          <p className="text-xs text-muted-foreground">Members can send messages in the group chat</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -498,13 +660,13 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, allowMemberPosts: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Require approval for new members</p>
-                          <p className="text-xs text-gray-500">New member requests need admin approval</p>
+                          <p className="text-sm font-medium text-foreground">Require approval for new members</p>
+                          <p className="text-xs text-muted-foreground">New member requests need admin approval</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -513,7 +675,7 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, requireApproval: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                     </div>
@@ -521,15 +683,15 @@ export default function GroupDetails() {
 
                   {/* Notification Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Bell className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-primary" />
                       Notification Settings
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Enable notifications</p>
-                          <p className="text-xs text-gray-500">Receive notifications for group activities</p>
+                          <p className="text-sm font-medium text-foreground">Enable notifications</p>
+                          <p className="text-xs text-muted-foreground">Receive notifications for group activities</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -538,7 +700,7 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, notifications: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                     </div>
@@ -546,15 +708,15 @@ export default function GroupDetails() {
 
                   {/* Message Settings */}
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4" />
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-primary" />
                       Message Settings
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-700">Auto-delete old messages</p>
-                          <p className="text-xs text-gray-500">Automatically delete messages older than specified days</p>
+                          <p className="text-sm font-medium text-foreground">Auto-delete old messages</p>
+                          <p className="text-xs text-muted-foreground">Automatically delete messages older than specified days</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input
@@ -563,17 +725,17 @@ export default function GroupDetails() {
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, autoDeleteMessages: e.target.checked }))}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                          <div className="w-11 h-6 bg-surface-elevated border border-border/80 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-foreground after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                       {groupSettings.autoDeleteMessages && (
                         <div>
-                          <label className="text-sm font-medium text-gray-700 mb-2 block">Message retention (days)</label>
+                          <label className="text-sm font-medium text-foreground mb-2 block">Message retention (days)</label>
                           <Input
                             type="number"
                             value={groupSettings.messageRetentionDays}
                             onChange={(e) => setGroupSettings(prev => ({ ...prev, messageRetentionDays: parseInt(e.target.value) || 30 }))}
-                            className="w-32"
+                            className="w-32 bg-surface-elevated border-border/80 font-mono"
                             min="1"
                             max="365"
                           />
@@ -583,18 +745,54 @@ export default function GroupDetails() {
                   </div>
 
                   {/* Danger Zone */}
-                  <div className="border-t border-yellow-200 pt-6">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-red-600">
+                  <div className="border-t border-border/60 pt-6">
+                    <h3 className="font-semibold mb-4 flex items-center gap-2 text-destructive">
                       <AlertTriangle className="w-4 h-4" />
                       Danger Zone
                     </h3>
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="flex items-center justify-between p-4 bg-destructive/10 rounded-xl border border-destructive/30">
                         <div>
-                          <p className="text-sm font-medium text-red-800">Delete Group</p>
-                          <p className="text-xs text-red-600">Permanently delete this group and all its data</p>
+                          <p className="text-sm font-medium text-destructive">Delete Group</p>
+                          <p className="text-xs text-muted-foreground">Permanently delete this group and all its data</p>
                         </div>
-                        <Button variant="destructive" size="sm">
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          disabled={savingSettings}
+                          onClick={async () => {
+                            if (!window.confirm("Are you sure you want to delete this community group? This action cannot be undone.")) return;
+                            if (!isUuid(groupId)) {
+                              toast({ variant: "destructive", title: "Error", description: "Invalid group ID." });
+                              return;
+                            }
+                            setSavingSettings(true);
+                            try {
+                              const { data, error } = await supabase
+                                .from("community_groups")
+                                .delete()
+                                .eq("id", groupId)
+                                .select("id");
+                              if (error) throw error;
+                              if (!data || data.length === 0) {
+                                throw new Error("Could not delete group. You might not have owner permissions.");
+                              }
+                              toast({
+                                title: "Group Deleted",
+                                description: "The community group has been permanently removed."
+                              });
+                              navigate("/community");
+                            } catch (err: any) {
+                              toast({
+                                variant: "destructive",
+                                title: "Delete Failed",
+                                description: err.message || "Could not delete group."
+                              });
+                            } finally {
+                              setSavingSettings(false);
+                            }
+                          }}
+                        >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Delete
                         </Button>
@@ -603,19 +801,66 @@ export default function GroupDetails() {
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-yellow-200">
+                  <div className="flex gap-3 pt-4 border-t border-border/60">
                     <Button 
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                      onClick={() => {
-                        // Save settings logic here
-                        console.log("Saving settings:", groupSettings);
-                        setShowSettings(false);
+                      className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover"
+                      disabled={savingSettings || !group}
+                      onClick={async () => {
+                        if (!user || !isUuid(groupId) || !group) return;
+                        setSavingSettings(true);
+                        try {
+                          const { data: updatedGroup, error } = await supabase
+                            .from("community_groups")
+                            .update({
+                              name: groupSettings.name.trim(),
+                              description: groupSettings.description.trim(),
+                              privacy: groupSettings.privacy,
+                              require_approval: groupSettings.requireApproval,
+                              allow_member_posts: groupSettings.allowMemberPosts,
+                              settings: {
+                                allowMemberInvites: groupSettings.allowMemberInvites,
+                                allowMemberPosts: groupSettings.allowMemberPosts,
+                                requireApproval: groupSettings.requireApproval,
+                                notifications: groupSettings.notifications,
+                                autoDeleteMessages: groupSettings.autoDeleteMessages,
+                                messageRetentionDays: groupSettings.messageRetentionDays
+                              }
+                            })
+                            .eq("id", groupId)
+                            .select()
+                            .single();
+
+                          if (error) throw error;
+                          if (updatedGroup) {
+                            setGroup((prev: any) => ({
+                              ...prev,
+                              name: updatedGroup.name,
+                              description: updatedGroup.description,
+                              privacy: updatedGroup.privacy,
+                            }));
+                          }
+                          toast({
+                            title: "Settings saved",
+                            description: "Group preferences updated successfully."
+                          });
+                          setShowSettings(false);
+                        } catch (err: unknown) {
+                          const msg = err instanceof Error ? err.message : "Could not persist group settings.";
+                          console.error("Failed to save settings:", err);
+                          toast({
+                            variant: "destructive",
+                            title: "Save failed",
+                            description: msg
+                          });
+                        } finally {
+                          setSavingSettings(false);
+                        }
                       }}
                     >
                       <Save className="w-4 h-4 mr-2" />
-                      Save Changes
+                      {savingSettings ? "Saving..." : "Save Changes"}
                     </Button>
-                    <Button variant="outline" onClick={() => setShowSettings(false)}>
+                    <Button variant="outline" className="border-border/80 bg-surface-elevated" onClick={() => setShowSettings(false)}>
                       Cancel
                     </Button>
                   </div>

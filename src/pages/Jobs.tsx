@@ -67,6 +67,7 @@ interface Job {
   status: string;
   created_at?: string;
   updated_at?: string;
+  applications_count?: number | string | null;
 }
 
 const jobSchema = z.object({
@@ -517,7 +518,9 @@ export default function Jobs() {
           experience_level,
           industry: "Production",
           job_description,
-          posted_date: new Date().toISOString()
+          posted_date: new Date().toISOString(),
+          user_id: "",
+          status: "Active"
         };
       }
       if (foundJob) {
@@ -800,43 +803,28 @@ export default function Jobs() {
 
   const fetchApplicants = async (jobId: string) => {
     try {
-      // Mock applicants data - in a real app, you'd fetch from your database
-      const mockApplicants = [
-        {
-          id: "1",
-          name: "John Smith",
-          email: "john.smith@email.com",
-          avatar: "JS",
-          appliedDate: "2025-01-08",
-          status: "pending",
-          experience: "5 years",
-          skills: ["React", "Node.js", "TypeScript"],
-          resume: "john_smith_resume.pdf"
-        },
-        {
-          id: "2", 
-          name: "Sarah Johnson",
-          email: "sarah.j@email.com",
-          avatar: "SJ",
-          appliedDate: "2025-01-07",
-          status: "reviewed",
-          experience: "3 years",
-          skills: ["Vue.js", "Python", "Django"],
-          resume: "sarah_johnson_resume.pdf"
-        },
-        {
-          id: "3",
-          name: "Mike Chen",
-          email: "mike.chen@email.com", 
-          avatar: "MC",
-          appliedDate: "2025-01-06",
-          status: "shortlisted",
-          experience: "7 years",
-          skills: ["Angular", "Java", "Spring Boot"],
-          resume: "mike_chen_resume.pdf"
-        }
-      ];
-      setApplicants(mockApplicants);
+      const { data, error } = await supabase
+        .from('job_applications')
+        .select('id, name, email, phone, experience, skills, resume_url, portfolio_url, status, created_at, user_id')
+        .eq('job_id', jobId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const count = (data || []).length;
+      setSelectedJob((prev) => prev ? { ...prev, applications_count: count } : prev);
+      setApplicants((data || []).map((app: any) => ({
+        id: app.id,
+        name: app.name || "Applicant",
+        email: app.email || "",
+        avatar: (app.name || "A").slice(0, 2).toUpperCase(),
+        appliedDate: app.created_at ? new Date(app.created_at).toISOString().split("T")[0] : "Recent",
+        status: (app.status || "pending").toLowerCase(),
+        experience: app.experience || "Not specified",
+        skills: app.skills || [],
+        resume: app.resume_url || "",
+        portfolio: app.portfolio_url || "",
+        user_id: app.user_id
+      })));
     } catch (error) {
       console.error('Error fetching applicants:', error);
       setApplicants([]);
@@ -862,9 +850,17 @@ export default function Jobs() {
     }
 
     try {
+      let applicantProfileId = profile?.id;
+      if (!applicantProfileId && user.id) {
+        const { data: aProf } = await supabase.from('profiles').select('id').or(`id.eq.${user.id},user_id.eq.${user.id}`).limit(1).maybeSingle();
+        if (aProf?.id) applicantProfileId = aProf.id;
+      }
+      applicantProfileId = applicantProfileId || user.id;
+
       const { error } = await supabase.from('job_applications').insert({
         job_id: job.id,
-        user_id: user.id
+        user_id: user.id,
+        profile_id: applicantProfileId
       });
 
       if (error) throw error;
@@ -878,13 +874,17 @@ export default function Jobs() {
       
       // Notify the job poster
       if (job.user_id && job.user_id !== user.id) {
-        supabase.from("notifications").insert({
-          user_id: job.user_id,
-          title: "New Job Application",
-          description: `Someone applied for your job: ${job.job_title}`,
-          type: "job",
-          action_url: `/jobs?jobId=${job.id}`
-        }).then();
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: job.user_id,
+          p_title: "New Job Application",
+          p_description: `Someone applied for your job: ${job.job_title}`,
+          p_type: "job",
+          p_priority: "medium",
+          p_action_url: `/jobs?jobId=${job.id}`
+        });
+        if (notifErr) {
+          console.warn("Could not send job application notification:", notifErr);
+        }
       }
     } catch (error) {
       console.error('Error applying for job:', error);
@@ -923,17 +923,18 @@ export default function Jobs() {
     if (!jobToDelete) return;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('jobs')
         .delete()
-        .eq('id', jobToDelete.id);
+        .eq('id', jobToDelete.id)
+        .select('id');
 
-      if (error) {
+      if (error || !data || data.length === 0) {
         console.error('Error deleting job:', error);
         toast({
           variant: "destructive",
           title: "Error",
-          description: "Failed to delete job"
+          description: error?.message || "Failed to delete job"
         });
       } else {
         toast({
@@ -1117,11 +1118,11 @@ export default function Jobs() {
           </Button>
 
           {/* Job details card/view inside the page */}
-          <div className="bg-card text-card-foreground rounded-xl border border-border shadow-sm overflow-hidden p-6 md:p-8 space-y-8 animate-in fade-in duration-300">
+          <div className="bg-card text-card-foreground rounded-xl border border-border/80 shadow-noir overflow-hidden p-6 md:p-8 space-y-8 animate-in fade-in duration-300">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border pb-6">
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50">
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/25">
                     {selectedJob.job_type}
                   </Badge>
                   <Badge variant="outline" className="border-border">
@@ -1131,7 +1132,7 @@ export default function Jobs() {
                     {selectedJob.industry}
                   </Badge>
                 </div>
-                <h1 className="text-2xl md:text-3xl font-bold text-foreground">{selectedJob.job_title}</h1>
+                <h1 className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground">{selectedJob.job_title}</h1>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Building className="h-4 w-4 text-muted-foreground" />
@@ -1152,24 +1153,24 @@ export default function Jobs() {
                 {selectedJob.user_id !== user?.id ? (
                   <>
                     <Button 
-                      className="flex-1 md:flex-initial bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-sm"
+                      className="flex-1 md:flex-initial bg-primary text-primary-foreground hover:bg-primary-hover font-medium shadow-sm"
                       onClick={() => handleApplyJob(selectedJob)}
                     >
                       Apply Now
                     </Button>
                     <Button 
                       variant="outline" 
-                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
                       onClick={() => handleSaveJob(selectedJob.id)}
                     >
-                      <Bookmark className={`h-4 w-4 ${savedJobs.includes(selectedJob.id) ? "fill-current text-yellow-500" : ""}`} />
+                      <Bookmark className={`h-4 w-4 ${savedJobs.includes(selectedJob.id) ? "fill-current text-primary" : ""}`} />
                     </Button>
                   </>
                 ) : (
                   <>
                     <Button 
                       variant="outline" 
-                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors flex items-center gap-2"
+                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors flex items-center gap-2"
                       onClick={() => handleEditJob(selectedJob)}
                     >
                       <Edit className="h-4 w-4" />
@@ -1187,7 +1188,7 @@ export default function Jobs() {
                 )}
                 <Button 
                   variant="outline" 
-                  className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+                  className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
                   onClick={() => handleShareJob(selectedJob)}
                 >
                   <Share2 className="h-4 w-4" />
@@ -1222,7 +1223,7 @@ export default function Jobs() {
                     <h3 className="font-semibold text-lg text-foreground mb-3 border-b border-border pb-2">Tags</h3>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {selectedJob.job_tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                        <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                           {tag}
                         </Badge>
                       ))}
@@ -1239,7 +1240,7 @@ export default function Jobs() {
               </div>
 
               {/* Sidebar Info */}
-              <div className="space-y-6 bg-muted/30 p-6 rounded-xl border border-border">
+              <div className="space-y-6 bg-surface-elevated/60 p-6 rounded-xl border border-border/80">
                 <h3 className="font-semibold text-lg text-foreground border-b border-border pb-2">Overview</h3>
                 
                 <div className="space-y-4 text-sm">
@@ -1258,7 +1259,7 @@ export default function Jobs() {
                   {selectedJob.salary_range && (
                     <div className="flex justify-between py-1 border-b border-border">
                       <span className="text-muted-foreground">Salary Range</span>
-                      <span className="font-semibold text-green-600">{selectedJob.salary_range}</span>
+                      <span className="font-mono font-semibold text-primary">{selectedJob.salary_range}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-1">
@@ -1270,8 +1271,8 @@ export default function Jobs() {
                 <div className="pt-4 border-t border-border space-y-3">
                   <h4 className="font-medium text-sm text-muted-foreground">Posted By</h4>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-950/50 rounded-full flex items-center justify-center border border-yellow-200 dark:border-yellow-900/40">
-                      <span className="text-yellow-700 dark:text-yellow-400 font-bold text-sm">
+                    <div className="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center border border-primary/30">
+                      <span className="text-primary font-bold text-sm">
                         {selectedJob.user_id === user?.id ? "Y" : (profilesMap[selectedJob.user_id]?.[0]?.toUpperCase() || "F")}
                       </span>
                     </div>
@@ -1317,13 +1318,14 @@ export default function Jobs() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Jobs</h1>
+            <p className="noir-eyebrow mb-1">Production Crew & Roles</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Jobs</h1>
             <p className="text-muted-foreground">Discover opportunities in the film industry</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                 <Plus className="h-4 w-4 mr-2" />
                 Post Job
               </Button>
@@ -1346,7 +1348,7 @@ export default function Jobs() {
                         <FormItem>
                           <FormLabel className="text-foreground">Job Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Senior Director" className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                            <Input placeholder="e.g. Senior Director" className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1360,7 +1362,7 @@ export default function Jobs() {
                         <FormItem>
                           <FormLabel className="text-foreground">Company Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Netflix Studios" className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                            <Input placeholder="e.g. Netflix Studios" className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1376,7 +1378,7 @@ export default function Jobs() {
                         <FormItem>
                           <FormLabel className="text-foreground">Location</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Mumbai, Maharashtra" className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                            <Input placeholder="e.g. Mumbai, Maharashtra" className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1395,7 +1397,7 @@ export default function Jobs() {
                               <Input 
                                 type="number"
                                 placeholder="e.g. 500000" 
-                                className="pl-8 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                                className="pl-8 border-border/80 bg-surface-elevated/50 focus:border-primary"
                                 value={field.value === 0 ? "" : field.value || ""}
                                 onChange={(e) => {
                                   const value = e.target.value;
@@ -1421,7 +1423,7 @@ export default function Jobs() {
                               <Input 
                                 type="number"
                                 placeholder="e.g. 800000" 
-                                className="pl-8 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                                className="pl-8 border-border/80 bg-surface-elevated/50 focus:border-primary"
                                 value={field.value === 0 ? "" : field.value || ""}
                                 onChange={(e) => {
                                   const value = e.target.value;
@@ -1445,7 +1447,7 @@ export default function Jobs() {
                           <FormLabel className="text-foreground">Job Type</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                              <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                                 <SelectValue placeholder="Select type" />
                               </SelectTrigger>
                             </FormControl>
@@ -1469,7 +1471,7 @@ export default function Jobs() {
                           <FormLabel className="text-foreground">Experience Level</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                              <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                                 <SelectValue placeholder="Select level" />
                               </SelectTrigger>
                             </FormControl>
@@ -1509,7 +1511,7 @@ export default function Jobs() {
                       <FormItem>
                         <FormLabel className="text-foreground">Required Skills (Optional)</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Adobe Premiere, Final Cut Pro, Cinematography (comma separated)" className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                          <Input placeholder="e.g. Adobe Premiere, Final Cut Pro, Cinematography (comma separated)" className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1525,7 +1527,7 @@ export default function Jobs() {
                         <FormControl>
                           <Textarea 
                             placeholder="Describe the role, responsibilities, and requirements..."
-                            className="min-h-[120px] border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="min-h-[120px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                             {...field}
                           />
                         </FormControl>
@@ -1543,7 +1545,7 @@ export default function Jobs() {
                         <FormControl>
                           <Textarea 
                             placeholder="Describe benefits, perks, and additional compensation..."
-                            className="min-h-[80px] border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="min-h-[80px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                             {...field}
                           />
                         </FormControl>
@@ -1553,10 +1555,10 @@ export default function Jobs() {
                   />
 
                   <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30" onClick={() => setIsDialogOpen(false)}>
+                    <Button type="button" variant="outline" className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover" onClick={() => setIsDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                    <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                       Post Job
                     </Button>
                   </div>
@@ -1568,12 +1570,12 @@ export default function Jobs() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-yellow-100 pb-4 mb-6">
-            <TabsList className="bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border self-start shrink-0">
-              <TabsTrigger value="all" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">All Jobs</TabsTrigger>
-              <TabsTrigger value="applied" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">My Jobs</TabsTrigger>
-              <TabsTrigger value="saved" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Saved Jobs ({savedJobs.length})</TabsTrigger>
-              <TabsTrigger value="created" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Created Jobs</TabsTrigger>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/80 pb-4 mb-6">
+            <TabsList className="bg-surface-elevated border border-border/80 p-1 self-start shrink-0">
+              <TabsTrigger value="all" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium">All Jobs</TabsTrigger>
+              <TabsTrigger value="applied" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium">My Jobs</TabsTrigger>
+              <TabsTrigger value="saved" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium">Saved Jobs ({savedJobs.length})</TabsTrigger>
+              <TabsTrigger value="created" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-medium">Created Jobs</TabsTrigger>
             </TabsList>
 
             <div className="flex items-center gap-2 w-full md:w-auto">
@@ -1583,19 +1585,19 @@ export default function Jobs() {
                   placeholder="Search jobs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 h-9"
+                  className="pl-10 border-border/80 bg-surface-elevated/50 focus:border-primary h-9"
                 />
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsFilterSidebarOpen(true)}
-                className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 h-9 flex items-center gap-2 shrink-0 text-foreground transition-colors"
+                className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary h-9 flex items-center gap-2 shrink-0 text-foreground transition-colors"
               >
                 <Filter className="h-4 w-4" />
                 <span>Filters</span>
                 {(filterType !== "all" || filterLocation !== "all" || filterDate !== "all" || filterExperience !== "all" || filterCategory !== "all" || filterSalaryMin !== "" || filterSalaryMax !== "") && (
-                  <Badge variant="default" className="ml-1 bg-yellow-500 text-white px-1.5 py-0.5 text-[10px] rounded-full">
+                  <Badge variant="default" className="ml-1 bg-primary text-primary-foreground px-1.5 py-0.5 text-[10px] font-mono rounded-full">
                     {[filterType, filterLocation, filterDate, filterExperience, filterCategory].filter(v => v !== "all").length + (filterSalaryMin ? 1 : 0) + (filterSalaryMax ? 1 : 0)}
                   </Badge>
                 )}
@@ -1608,7 +1610,7 @@ export default function Jobs() {
             <SheetContent side="right" className="w-[350px] sm:w-[400px]">
               <SheetHeader>
                 <SheetTitle className="text-xl font-bold flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-yellow-500" />
+                  <Filter className="h-5 w-5 text-primary" />
                   Filter Jobs
                 </SheetTitle>
                 <SheetDescription>
@@ -1621,7 +1623,7 @@ export default function Jobs() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Job Type</label>
                   <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="w-full border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Job Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1638,7 +1640,7 @@ export default function Jobs() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Experience Level</label>
                   <Select value={filterExperience} onValueChange={setFilterExperience}>
-                    <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="w-full border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Experience Level" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1665,7 +1667,7 @@ export default function Jobs() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Location</label>
                   <Select value={filterLocation} onValueChange={setFilterLocation}>
-                    <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="w-full border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Location" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1683,7 +1685,7 @@ export default function Jobs() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Date Posted</label>
                   <Select value={filterDate} onValueChange={setFilterDate}>
-                    <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="w-full border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Posted" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1706,7 +1708,7 @@ export default function Jobs() {
                         placeholder="Min Salary"
                         value={filterSalaryMin}
                         onChange={(e) => setFilterSalaryMin(e.target.value)}
-                        className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 h-9"
+                        className="border-border/80 bg-surface-elevated/50 focus:border-primary h-9"
                       />
                     </div>
                     <div className="relative flex-1">
@@ -1715,7 +1717,7 @@ export default function Jobs() {
                         placeholder="Max Salary"
                         value={filterSalaryMax}
                         onChange={(e) => setFilterSalaryMax(e.target.value)}
-                        className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 h-9"
+                        className="border-border/80 bg-surface-elevated/50 focus:border-primary h-9"
                       />
                     </div>
                   </div>
@@ -1739,13 +1741,13 @@ export default function Jobs() {
                       description: "All job listings have been reset."
                     });
                   }}
-                  className="flex-1 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+                  className="flex-1 border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
                 >
                   Reset
                 </Button>
                 <Button 
                   onClick={() => setIsFilterSidebarOpen(false)}
-                  className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                 >
                   Apply
                 </Button>
@@ -1770,7 +1772,7 @@ export default function Jobs() {
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
               </div>
             ) : filteredJobs.length === 0 ? (
-              <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                 <CardContent className="text-center py-12">
                   <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold text-foreground mb-2">No jobs found</h3>
@@ -1789,7 +1791,7 @@ export default function Jobs() {
             ) : (
               <>
                 {activeTab === "created" || activeTab === "saved" || activeTab === "applied" ? (
-                  <div className="rounded-md border">
+                  <div className="rounded-xl border border-border/80 bg-card shadow-noir overflow-hidden">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1844,7 +1846,7 @@ export default function Jobs() {
                             </TableCell>
                             <TableCell>
                               {job.salary_range ? (
-                                <span className="text-sm font-medium text-green-600">
+                                <span className="text-sm font-mono font-medium text-primary">
                                   {job.salary_range}
                                 </span>
                               ) : (
@@ -1872,7 +1874,7 @@ export default function Jobs() {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleViewDetails(job)}
                                       title="View Details"
                                     >
@@ -1881,7 +1883,7 @@ export default function Jobs() {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleEditJob(job)}
                                       title="Edit Job"
                                     >
@@ -1889,7 +1891,7 @@ export default function Jobs() {
                                     </Button>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 transition-colors">
+                                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-surface-hover hover:text-primary transition-colors">
                                           <MoreVertical className="h-4 w-4" />
                                         </Button>
                                       </DropdownMenuTrigger>
@@ -1914,13 +1916,13 @@ export default function Jobs() {
                                   </>
                                 ) : activeTab === "applied" ? (
                                   <>
-                                    <Badge className="bg-green-100 text-green-800 border-green-200 font-medium mr-2">
+                                    <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium mr-2">
                                       Applied
                                     </Badge>
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleViewDetails(job)}
                                       title="View Details"
                                     >
@@ -1929,7 +1931,7 @@ export default function Jobs() {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleShareJob(job)}
                                       title="Share"
                                     >
@@ -1941,7 +1943,7 @@ export default function Jobs() {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleViewDetails(job)}
                                       title="View Details"
                                     >
@@ -1950,16 +1952,16 @@ export default function Jobs() {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleSaveJob(job.id)}
                                       title={savedJobs.includes(job.id) ? "Unsave" : "Save"}
                                     >
-                                      <Bookmark className={`h-4 w-4 ${savedJobs.includes(job.id) ? "fill-yellow-500 text-yellow-500" : ""}`} />
+                                      <Bookmark className={`h-4 w-4 ${savedJobs.includes(job.id) ? "fill-primary text-primary" : ""}`} />
                                     </Button>
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-muted-foreground transition-colors"
+                                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-muted-foreground transition-colors"
                                       onClick={() => handleShareJob(job)}
                                       title="Share"
                                     >
@@ -1977,11 +1979,11 @@ export default function Jobs() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {paginatedJobs.map((job) => (
-                  <Card key={job.id} className="hover:shadow-soft transition-shadow border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                  <Card key={job.id} className="rounded-xl border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/40 transition-all duration-200 flex flex-col justify-between">
                     <CardHeader className="pb-4">
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex-1 min-w-0 cursor-pointer group/title" onClick={() => handleViewDetails(job)}>
-                          <CardTitle className="text-lg line-clamp-2 text-foreground group-hover/title:text-yellow-600 dark:group-hover/title:text-yellow-400 transition-colors">{job.job_title}</CardTitle>
+                          <CardTitle className="text-lg line-clamp-2 text-foreground group-hover/title:text-primary transition-colors">{job.job_title}</CardTitle>
                           <CardDescription className="flex items-center gap-1 mt-1 text-muted-foreground">
                             <Building className="h-4 w-4" />
                             {job.company_name}
@@ -1991,16 +1993,16 @@ export default function Jobs() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            className={`hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 transition-colors ${savedJobs.includes(job.id) ? "text-yellow-500" : "text-muted-foreground"}`}
+                            className={`hover:bg-surface-hover hover:text-primary transition-colors ${savedJobs.includes(job.id) ? "text-primary" : "text-muted-foreground"}`}
                             onClick={() => handleSaveJob(job.id)}
                             title={savedJobs.includes(job.id) ? "Unsave" : "Save"}
                           >
-                            <Bookmark className={`h-4 w-4 ${savedJobs.includes(job.id) ? "fill-yellow-500 text-yellow-500" : ""}`} />
+                            <Bookmark className={`h-4 w-4 ${savedJobs.includes(job.id) ? "fill-primary text-primary" : ""}`} />
                           </Button>
                           {activeTab === "created" ? (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 transition-colors">
+                                <Button variant="ghost" size="sm" className="text-muted-foreground hover:bg-surface-hover hover:text-primary transition-colors">
                                   <MoreVertical className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -2022,7 +2024,7 @@ export default function Jobs() {
                             <Button 
                               variant="ghost" 
                               size="sm"
-                              className="text-muted-foreground hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 transition-colors"
+                              className="text-muted-foreground hover:bg-surface-hover hover:text-primary transition-colors"
                               onClick={() => handleShareJob(job)}
                               title="Share"
                             >
@@ -2059,7 +2061,7 @@ export default function Jobs() {
                       </div>
                       
                       {job.salary_range && (
-                        <div className="flex items-center gap-1 text-sm font-medium text-green-600">
+                        <div className="flex items-center gap-1 text-sm font-mono font-medium text-primary">
                           {job.salary_range}
                         </div>
                       )}
@@ -2086,7 +2088,7 @@ export default function Jobs() {
                       {job.job_tags && job.job_tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
                           {job.job_tags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                            <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                               {tag}
                             </Badge>
                           ))}
@@ -2097,7 +2099,7 @@ export default function Jobs() {
                         {job.user_id !== user?.id && (
                           <Button 
                             size="sm" 
-                            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                            className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                             onClick={() => handleApplyJob(job)}
                           >
                             Apply Now
@@ -2106,7 +2108,7 @@ export default function Jobs() {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          className={`border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors ${job.user_id === user?.id ? "w-full" : "flex-1"}`}
+                          className={`border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors ${job.user_id === user?.id ? "w-full" : "flex-1"}`}
                           onClick={() => handleViewDetails(job)}
                         >
                           <Eye className="h-4 w-4 mr-1" />
@@ -2208,7 +2210,7 @@ export default function Jobs() {
                             {selectedJob.salary_range && (
                               <div className="flex justify-between items-center py-1">
                                 <span className="text-muted-foreground">Salary</span>
-                                <span className="font-semibold text-green-600">{selectedJob.salary_range}</span>
+                                <span className="font-mono font-semibold text-primary">{selectedJob.salary_range}</span>
                               </div>
                             )}
                           </div>
@@ -2255,7 +2257,7 @@ export default function Jobs() {
                             <div className="space-y-2">
                               <div className="flex justify-between items-center py-2 border-b border-muted/50">
                                 <span className="text-sm text-muted-foreground">Total Applications</span>
-                                <span className="font-semibold">{Math.floor(Math.random() * 50) + 10}</span>
+                                <span className="font-semibold">{(selectedJob as any).applications_count ?? ((selectedJob as any).user_id === user?.id ? "0" : "Confidential")}</span>
                               </div>
                             </div>
                           </div>
@@ -2320,7 +2322,7 @@ export default function Jobs() {
                         <Button 
                           variant="outline" 
                           size="lg"
-                          className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
                           onClick={() => handleSaveJob(selectedJob.id)}
                         >
                           <Bookmark className={`h-4 w-4 mr-2 ${savedJobs.includes(selectedJob.id) ? "fill-current" : ""}`} />
@@ -2329,7 +2331,7 @@ export default function Jobs() {
                         <Button 
                           variant="outline" 
                           size="lg"
-                          className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
                           onClick={() => handleShareJob(selectedJob)}
                         >
                           <Share2 className="h-4 w-4 mr-2" />
@@ -2384,12 +2386,36 @@ export default function Jobs() {
                                       {applicant.status}
                                     </Badge>
                                     <div className="flex gap-2">
-                                      <Button size="sm" variant="outline" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
-                                        View Resume
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
-                                        Contact
-                                      </Button>
+                                      <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
+                                          onClick={() => {
+                                            if (applicant.resume) {
+                                              window.open(applicant.resume, '_blank');
+                                            } else {
+                                              toast({ title: "No Resume Attached", description: "This applicant did not provide a resume file." });
+                                            }
+                                          }}
+                                        >
+                                          View Resume
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
+                                          onClick={() => {
+                                            if (applicant.user_id) {
+                                              navigate(`/messages?recipient=${applicant.user_id}`);
+                                            } else if (applicant.email) {
+                                              window.location.href = `mailto:${applicant.email}`;
+                                            } else {
+                                              toast({ title: "No Contact Info", description: "Applicant contact details are unavailable." });
+                                            }
+                                          }}
+                                        >
+                                          Contact
+                                        </Button>
                                     </div>
                                   </div>
                                 </div>
@@ -2427,7 +2453,7 @@ export default function Jobs() {
                           {selectedJob.salary_range && (
                             <div className="flex justify-between items-center py-1">
                               <span className="text-muted-foreground">Salary</span>
-                              <span className="font-semibold text-green-600">{selectedJob.salary_range}</span>
+                              <span className="font-mono font-semibold text-primary">{selectedJob.salary_range}</span>
                             </div>
                           )}
                         </div>
@@ -2474,7 +2500,7 @@ export default function Jobs() {
                           <div className="space-y-2">
                             <div className="flex justify-between items-center py-2 border-b border-muted/50">
                               <span className="text-sm text-muted-foreground">Total Applications</span>
-                              <span className="font-semibold">{Math.floor(Math.random() * 50) + 10}</span>
+                              <span className="font-semibold">{selectedJob.applications_count !== undefined && selectedJob.applications_count !== null ? selectedJob.applications_count : (selectedJob.user_id === user?.id ? "0" : "Confidential")}</span>
                             </div>
                           </div>
                         </div>
@@ -2531,7 +2557,7 @@ export default function Jobs() {
                   <div className="flex gap-4 pt-4 border-t">
                     <Button 
                       size="lg" 
-                      className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                      className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                       onClick={() => {
                         handleApplyJob(selectedJob);
                         setIsViewDetailsOpen(false);
@@ -2542,7 +2568,7 @@ export default function Jobs() {
                     <Button 
                       variant="outline" 
                       size="lg"
-                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
                       onClick={() => handleSaveJob(selectedJob.id)}
                     >
                       <Bookmark className={`h-4 w-4 mr-2 ${savedJobs.includes(selectedJob.id) ? "fill-current" : ""}`} />
@@ -2551,7 +2577,7 @@ export default function Jobs() {
                     <Button 
                       variant="outline" 
                       size="lg"
-                      className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                      className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover"
                       onClick={() => handleShareJob(selectedJob)}
                     >
                       <Share2 className="h-4 w-4 mr-2" />
@@ -2802,10 +2828,10 @@ export default function Jobs() {
                 />
 
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30" onClick={() => setIsEditDialogOpen(false)}>
+                  <Button type="button" variant="outline" className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover" onClick={() => setIsEditDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium">
                     Update Job
                   </Button>
                 </div>

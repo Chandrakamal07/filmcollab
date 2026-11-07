@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { DimensionalCard, DimensionalLayer, FadeInSection } from "@/components/ui/motion-primitives";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +20,14 @@ import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DIRECTORY_STORAGE_BUCKET,
+  toCanonicalDirectoryStorageUri,
+  resolveDirectoryMediaUrl,
+  resolveDirectoryMediaUrls,
+  invalidateDirectoryUrlCache,
+  cleanupUploadedStorageObjects,
+} from "@/lib/directory-storage";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -114,7 +124,7 @@ interface ProfileData {
   portfolio: PortfolioItem[];
   directoryFiles: DirectoryFile[];
   systemRole?: "user" | "admin";
-  
+
   // New Personal Information
   dateOfBirth?: string;
   languages?: string[];
@@ -151,7 +161,7 @@ interface ProfileData {
   allowMessagesFrom?: string;
   allowConnectionsFrom?: string;
   allowProfileViews?: boolean;
-  
+
   // Short ID
   shortId?: string;
 }
@@ -248,6 +258,7 @@ const emptyProfileData: ProfileData = {
   achievements: [],
   recentActivity: [],
   portfolio: [],
+  directoryFiles: [],
   languages: [],
   availableForTravel: false,
   privacyShowPhone: true,
@@ -300,7 +311,7 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     recentActivity: [],
     directoryFiles: [],
     systemRole: (row?.role === "admin" || row?.role === "ADMIN") ? "admin" : "user",
-    
+
     // Personal Information
     dateOfBirth: row?.date_of_birth ?? "",
     languages: Array.isArray(row?.languages) ? row.languages : [],
@@ -315,7 +326,7 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     pricePerDay: row?.price_per_day?.toString() ?? "",
     pricePerHour: row?.price_per_hour?.toString() ?? "",
     priceNegotiable: row?.price_negotiable ?? false,
-    
+
     // Physical Details
     height: row?.height ?? "",
     weight: row?.weight ?? "",
@@ -329,11 +340,11 @@ function rowToProfile(row: any, authEmail?: string | null): ProfileData {
     currentCountry: row?.current_country ?? "",
 
     // Privacy Settings
-    privacyShowPhone: row?.settingsData?.privacy_settings?.showPhone ?? true,
-    privacyShowEmail: row?.settingsData?.privacy_settings?.showEmail ?? true,
-    privacyShowDob: row?.settingsData?.privacy_settings?.showBirthday ?? true,
-    privacyShowDirectory: row?.settingsData?.privacy_settings?.showDirectory ?? true,
-    privacyShowLocation: row?.settingsData?.privacy_settings?.showLocation ?? true,
+    privacyShowPhone: row?.settingsData?.privacy_settings?.showPhone ?? row?.privacy_show_phone ?? true,
+    privacyShowEmail: row?.settingsData?.privacy_settings?.showEmail ?? row?.privacy_show_email ?? true,
+    privacyShowDob: row?.settingsData?.privacy_settings?.showBirthday ?? row?.privacy_show_dob ?? true,
+    privacyShowDirectory: row?.settingsData?.privacy_settings?.showDirectory ?? row?.privacy_show_directory ?? true,
+    privacyShowLocation: row?.settingsData?.privacy_settings?.showLocation ?? row?.privacy_show_location ?? true,
     allowMessagesFrom: row?.settingsData?.privacy_settings?.allowMessages ?? 'everyone',
     allowConnectionsFrom: row?.settingsData?.privacy_settings?.allowConnectionRequests ?? 'everyone',
     allowProfileViews: row?.settingsData?.privacy_settings?.allowProfileViews ?? true,
@@ -370,7 +381,7 @@ function profileToRow(p: ProfileData, userId: string) {
     achievements: p.achievements ?? [],
     portfolio: p.portfolio ?? [],
     updated_at: new Date().toISOString(),
-    
+
     // Personal Information
     date_of_birth: p.dateOfBirth || null,
     languages: p.languages ?? [],
@@ -385,24 +396,25 @@ function profileToRow(p: ProfileData, userId: string) {
     price_per_day: p.pricePerDay ? parseFloat(p.pricePerDay) : null,
     price_per_hour: p.pricePerHour ? parseFloat(p.pricePerHour) : null,
     price_negotiable: p.priceNegotiable ?? false,
-    
+
     // Physical Details
     height: p.height || null,
     weight: p.weight || null,
     eye_color: p.eyeColor || null,
     hair_color: p.hairColor || null,
     skin_tone: p.skinTone || null,
-    
+
     // Current Location
     current_city: p.currentCity || null,
     current_state: p.currentState || null,
     current_country: p.currentCountry || null,
-    
+
     // Privacy Settings
     privacy_show_phone: p.privacyShowPhone ?? true,
     privacy_show_email: p.privacyShowEmail ?? true,
     privacy_show_dob: p.privacyShowDob ?? true,
     privacy_show_directory: p.privacyShowDirectory ?? true,
+    privacy_show_location: p.privacyShowLocation ?? true,
   };
 }
 
@@ -435,7 +447,7 @@ function getYouTubeUsername(url: string): string | null {
     if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return null;
-    
+
     if (parts[0] === "channel" || parts[0] === "c" || parts[0] === "user" || parts[0] === "show") {
       return parts[1] || null;
     }
@@ -478,7 +490,7 @@ function getFacebookUsername(url: string): string | null {
     if (pathname.endsWith("/")) pathname = pathname.slice(0, -1);
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length === 0) return null;
-    
+
     if (parts[0] === "pages" || parts[0] === "people" || parts[0] === "groups" || parts[0] === "events") {
       return parts[1] || null;
     }
@@ -493,20 +505,20 @@ function getFacebookUsername(url: string): string | null {
 function isPublicUrl(url: string, platform: string): boolean {
   if (!url) return false;
   const val = url.trim().toLowerCase();
-  
+
   if (!val.startsWith("http://") && !val.startsWith("https://") && !val.includes(".")) {
     return false;
   }
-  
+
   const privateKeywords = [
-    "private", "settings", "edit", "admin", "dashboard", "studio", 
-    "only-friends", "draft", "config", "personal", "me", "login", 
+    "private", "settings", "edit", "admin", "dashboard", "studio",
+    "only-friends", "draft", "config", "personal", "me", "login",
     "signup", "accounts/login", "accounts/edit", "my-account"
   ];
   if (privateKeywords.some(keyword => val.includes(keyword))) {
     return false;
   }
-  
+
   if (platform === "instagram") {
     return getInstagramUsername(url) !== null;
   }
@@ -519,44 +531,14 @@ function isPublicUrl(url: string, platform: string): boolean {
   if (platform === "twitter") {
     return getTwitterUsername(url) !== null;
   }
-  
+
   return false;
 }
 
 function extractFollowersFromUrl(url: string, platform: string): string {
   if (!url) return "NA";
   if (!isPublicUrl(url, platform)) return "NA";
-  
-  try {
-    let clean = url.trim();
-    if (clean.includes("?")) {
-      clean = clean.split("?")[0];
-    }
-    const parts = clean.split("/");
-    let username = parts[parts.length - 1] || parts[parts.length - 2] || "user";
-    if (username.startsWith("@")) {
-      username = username.substring(1);
-    }
-    
-    let hash = 0;
-    const str = `${username}-${platform}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    hash = Math.abs(hash);
-    
-    if (hash % 4 === 0) {
-      return `${((hash % 900) / 10 + 10).toFixed(1)}K`;
-    } else if (hash % 4 === 1) {
-      return `${((hash % 90) / 10 + 1.5).toFixed(1)}M`;
-    } else if (hash % 4 === 2) {
-      return `${((hash % 800) / 10 + 5).toFixed(1)}K`;
-    } else {
-      return ((hash % 15000) + 1200).toLocaleString();
-    }
-  } catch (e) {
-    return "12.4K";
-  }
+  return "Unavailable";
 }
 
 function getMetaTagContent(html: string, nameOrProperty: string): string | null {
@@ -592,7 +574,7 @@ function parseFollowersFromHtml(html: string, platform: string): string {
     if (platform === "instagram") {
       // 1. Try to parse JSON-LD schema (most robust and exact on public crawlers)
       const schemaMatch = html.match(/"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"\s*,\s*"userInteractionCount"\s*:\s*["']?(\d+)["']?/i) ||
-                          html.match(/"userInteractionCount"\s*:\s*["']?(\d+)["']?[^}]*"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"/i);
+        html.match(/"userInteractionCount"\s*:\s*["']?(\d+)["']?[^}]*"interactionType"\s*:\s*"http:\/\/schema\.org\/FollowAction"/i);
       if (schemaMatch && schemaMatch[1]) {
         return formatNumber(parseInt(schemaMatch[1], 10));
       }
@@ -613,10 +595,10 @@ function parseFollowersFromHtml(html: string, platform: string): string {
       }
 
       // 4. Picuki HTML parsing fallback
-      const picukiMatch = html.match(/class=["']profile-followers["'][^>]*>\s*([\d,.\sKMkm]+)/i) || 
-                          html.match(/([\d,.\sKMkm]+)\s*<span>\s*followers/i) ||
-                          html.match(/followed-by["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/([\d,.\sKMkm]+)\s*followers/i);
+      const picukiMatch = html.match(/class=["']profile-followers["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/([\d,.\sKMkm]+)\s*<span>\s*followers/i) ||
+        html.match(/followed-by["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/([\d,.\sKMkm]+)\s*followers/i);
       if (picukiMatch && picukiMatch[1]) {
         const cleaned = picukiMatch[1].replace(/,/g, "").trim().toUpperCase();
         if (cleaned) return cleaned;
@@ -674,9 +656,9 @@ function parseFollowersFromHtml(html: string, platform: string): string {
 
       // Nitter profile-stat-num followers match
       const nitterMatch = html.match(/class=["']followers["'][^>]*>[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)[\s\S]*?Followers/i) ||
-                          html.match(/Followers[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
-                          html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i);
+        html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)[\s\S]*?Followers/i) ||
+        html.match(/Followers[\s\S]*?class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i) ||
+        html.match(/class=["']profile-stat-num["'][^>]*>\s*([\d,.\sKMkm]+)/i);
       if (nitterMatch && nitterMatch[1]) {
         return nitterMatch[1].trim().toUpperCase();
       }
@@ -878,13 +860,13 @@ async function fetchFollowersCount(url: string, platform: string): Promise<strin
       const res = await fetch(`https://instagram-feed-api-gamma.vercel.app/api/${encodeURIComponent(cleanUser)}`);
       if (res.ok) {
         const data = await res.json();
-        const count = data?.followers || 
-                      data?.follower_count || 
-                      data?.followers_count || 
-                      data?.user?.followers || 
-                      data?.user?.follower_count || 
-                      data?.user?.followers_count ||
-                      data?.graphql?.user?.edge_followed_by?.count;
+        const count = data?.followers ||
+          data?.follower_count ||
+          data?.followers_count ||
+          data?.user?.followers ||
+          data?.user?.follower_count ||
+          data?.user?.followers_count ||
+          data?.graphql?.user?.edge_followed_by?.count;
         if (count) {
           const num = parseInt(count, 10);
           if (!isNaN(num)) return formatNumber(num);
@@ -967,7 +949,7 @@ async function fetchFollowersCount(url: string, platform: string): Promise<strin
         const id = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(id);
-        
+
         if (!response.ok) continue;
         const html = await response.text();
         if (!html) continue;
@@ -994,7 +976,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { id: routeId } = useParams();
   const [searchParams] = useSearchParams();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [profile, setProfile] = useState<ProfileData>(emptyProfileData);
   const [isConnected, setIsConnected] = useState(false);
@@ -1019,7 +1001,7 @@ export default function ProfilePage() {
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [userProjects, setUserProjects] = useState<any[]>([]);
   const [directoryPage, setDirectoryPage] = useState(1);
-  const [directoryFilter, setDirectoryFilter] = useState<"all"|"document"|"image"|"video"|"audio">("all");
+  const [directoryFilter, setDirectoryFilter] = useState<"all" | "document" | "image" | "video" | "audio">("all");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -1039,7 +1021,7 @@ export default function ProfilePage() {
   const addFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [isUploadingDirectoryFile, setIsUploadingDirectoryFile] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, onConfirm: () => void, title?: string, desc?: string }>({ isOpen: false, onConfirm: () => {} });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean, onConfirm: () => void, title?: string, desc?: string }>({ isOpen: false, onConfirm: () => { } });
 
   const handleAddFileSubmit = async () => {
     if (selectedAddFiles.length === 0) {
@@ -1064,27 +1046,25 @@ export default function ProfilePage() {
 
     const finalTitle = addFileTitle.trim() || primaryFile.name;
 
+    const uploadedPaths: string[] = [];
     try {
       setIsUploadingDirectoryFile(true);
-      
-      let publicUrl = "";
-      let additionalUrls: string[] = [];
+
+      const additionalUrls: string[] = [];
+      const additionalStoragePaths: string[] = [];
 
       // Upload primary file
       const fileExt = primaryFile.name.split('.').pop();
       const fileName = `${user?.id || 'anon'}/${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('directory_assets')
+        .from(DIRECTORY_STORAGE_BUCKET)
         .upload(fileName, primaryFile);
 
       if (uploadError) throw uploadError;
+      uploadedPaths.push(fileName);
 
-      const { data: publicUrlData } = supabase.storage
-        .from('directory_assets')
-        .getPublicUrl(fileName);
-
-      publicUrl = publicUrlData.publicUrl;
+      const canonicalPrimaryUri = toCanonicalDirectoryStorageUri(fileName, DIRECTORY_STORAGE_BUCKET);
       const fileSizeStr = (primaryFile.size / (1024 * 1024)).toFixed(2) + " MB";
 
       // Upload additional files if any
@@ -1095,24 +1075,26 @@ export default function ProfilePage() {
           const name = `${user?.id || 'anon'}/${crypto.randomUUID()}.${ext}`;
 
           const { error: err } = await supabase.storage
-            .from('directory_assets')
+            .from(DIRECTORY_STORAGE_BUCKET)
             .upload(name, file);
 
-          if (!err) {
-            const { data } = supabase.storage
-              .from('directory_assets')
-              .getPublicUrl(name);
-            additionalUrls.push(data.publicUrl);
-          }
+          if (err) throw err;
+          uploadedPaths.push(name);
+          additionalStoragePaths.push(name);
+          additionalUrls.push(toCanonicalDirectoryStorageUri(name, DIRECTORY_STORAGE_BUCKET));
         }
       }
 
-      const profileDbId = profile.user_id || profile.id;
+      const profileDbId = profile.id;
       const newDbFile = {
         title: finalTitle,
         file_type: type,
-        file_url: publicUrl,
+        file_url: canonicalPrimaryUri,
         additional_urls: additionalUrls.length > 0 ? additionalUrls : [],
+        storage_bucket: DIRECTORY_STORAGE_BUCKET,
+        storage_path: fileName,
+        additional_paths: additionalStoragePaths,
+        is_public: profile.privacyShowDirectory ?? true,
         file_size: fileSizeStr,
         user_id: profileDbId,
         tags: parsedTags,
@@ -1120,19 +1102,24 @@ export default function ProfilePage() {
 
       const { data: insertedFile, error: insertError } = await supabase
         .from('directory_files')
-        .insert(newDbFile)
+        .insert(newDbFile as any)
         .select()
         .single();
 
       if (insertError) throw insertError;
+
+      const [resolvedUrl, resolvedAdditionalUrls] = await Promise.all([
+        resolveDirectoryMediaUrl(fileName, { bucket: DIRECTORY_STORAGE_BUCKET }),
+        resolveDirectoryMediaUrls(additionalStoragePaths, { bucket: DIRECTORY_STORAGE_BUCKET }),
+      ]);
 
       setDirectoryFiles(prev => [{
         id: insertedFile.id,
         name: finalTitle,
         title: finalTitle,
         type: type,
-        url: publicUrl,
-        additional_urls: insertedFile.additional_urls,
+        url: resolvedUrl || canonicalPrimaryUri,
+        additional_urls: resolvedAdditionalUrls,
         uploadDate: insertedFile.created_at,
         tags: parsedTags
       }, ...prev]);
@@ -1147,6 +1134,9 @@ export default function ProfilePage() {
         description: `"${finalTitle}" has been added to your directory.`
       });
     } catch (err: any) {
+      if (uploadedPaths.length > 0) {
+        await cleanupUploadedStorageObjects(uploadedPaths, DIRECTORY_STORAGE_BUCKET);
+      }
       console.error("Error uploading file:", err);
       toast({
         title: "Upload Failed",
@@ -1281,7 +1271,7 @@ export default function ProfilePage() {
       if (!actualUserIdParam && usernameParam) {
         try {
           const { data, error } = await supabase
-            .from('profiles')
+            .from('public_profiles')
             .select('id')
             .eq('username', usernameParam)
             .maybeSingle();
@@ -1303,7 +1293,7 @@ export default function ProfilePage() {
       if (resolvedUserId && profileDataCache.has(resolvedUserId)) {
         setProfile(profileDataCache.get(resolvedUserId));
         setEditForm(profileDataCache.get(resolvedUserId));
-        
+
         if (profileStatsCache.has(resolvedUserId)) {
           const stats = profileStatsCache.get(resolvedUserId);
           setUserProjects(stats.projects);
@@ -1319,13 +1309,18 @@ export default function ProfilePage() {
       }
 
       if (!user) return;
-      
+
       let actualUserIdParamSanitized = actualUserIdParam;
       if (actualUserIdParamSanitized === "undefined" || actualUserIdParamSanitized === "null") {
         actualUserIdParamSanitized = undefined;
       }
 
-      let query = supabase.from("profiles").select("*");
+      const isFetchingOwn =
+        !actualUserIdParamSanitized && !usernameParam
+          ? true
+          : actualUserIdParamSanitized === user.id || actualUserIdParamSanitized === authProfile?.id;
+      const targetTable = isFetchingOwn ? "profiles" : "public_profiles";
+      let query = supabase.from(targetTable as "profiles").select("*");
       if (actualUserIdParamSanitized) {
         const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(actualUserIdParamSanitized);
         if (isValidUuid) {
@@ -1349,41 +1344,48 @@ export default function ProfilePage() {
       let resolvedId = "";
       if (data) {
         const { data: sData } = await supabase.from('settings').select('*').eq('profile_id', data.id).maybeSingle();
-        data.settingsData = sData;
+        (data as any).settingsData = sData;
 
         const mapped = rowToProfile(data, user.email);
         setProfile(mapped);
         setEditForm(mapped);
         profileDataCache.set(data.id, mapped);
-        resolvedId = mapped.user_id || mapped.id;
-        
+        const targetAuthUserId = data.user_id || data.id;
+        const targetProfileId = data.id;
+        resolvedUserId = targetAuthUserId;
+        resolvedId = targetProfileId;
+
         // Update URL bar to show 6-digit short ID
         if (mapped.shortId && window.location.pathname.startsWith("/profile")) {
           window.history.replaceState(null, '', `/profile/${mapped.shortId}`);
         }
 
         // Check if current user is connected and log profile view
-        if (user && user.id && user.id !== resolvedUserId) {
+        const currentProfileId = authProfile?.id || user.id;
+        if (user && user.id && targetAuthUserId !== user.id) {
           const { data: connData } = await supabase
             .from("connections")
             .select("status")
             .eq("status", "accepted")
-            .or(`and(user_id.eq.${user.id},connected_user_id.eq.${resolvedUserId}),and(user_id.eq.${resolvedUserId},connected_user_id.eq.${user.id})`)
+            .or(`and(user_id.eq.${currentProfileId},connected_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},connected_user_id.eq.${currentProfileId})`)
             .maybeSingle();
-            
+
           if (connData) {
             setIsConnected(true);
           }
 
           if (mapped.allowProfileViews) {
-            await supabase.from("notifications").insert({
-              user_id: resolvedUserId,
-              title: "Profile View",
-              description: `Someone viewed your profile.`,
-              type: "profile",
-              action: "view",
-              action_url: `/profile/${user.id}`
+            const { error: viewNotifErr } = await supabase.rpc("send_authorized_notification", {
+              p_recipient_id: targetProfileId,
+              p_title: "Profile View",
+              p_description: `Someone viewed your profile.`,
+              p_type: "profile",
+              p_priority: "low",
+              p_action_url: `/profile/${user.id}`
             });
+            if (viewNotifErr) {
+              console.warn("Could not log profile view notification:", viewNotifErr);
+            }
           }
         }
       } else {
@@ -1436,26 +1438,26 @@ export default function ProfilePage() {
           ]);
 
           let allUserProjects = projRes.data || [];
-          
+
           if (!joinedProjRes.error && joinedProjRes.data && joinedProjRes.data.length > 0) {
             const joinedIds = joinedProjRes.data
               .map((p: any) => p.project_id)
               .filter((id: string) => id && !allUserProjects.find((up: any) => up.id === id));
-              
+
             if (joinedIds.length > 0) {
               const { data: joinedProjects } = await supabase
                 .from("projects")
                 .select("*")
                 .in("id", joinedIds)
                 .order("created_at", { ascending: false });
-                
+
               if (joinedProjects) {
                 allUserProjects = [...allUserProjects, ...joinedProjects];
                 allUserProjects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
               }
             }
           }
-          
+
           setUserProjects(allUserProjects);
 
           if (!connRes.error) {
@@ -1494,13 +1496,13 @@ export default function ProfilePage() {
           console.error("Error reading jobs count:", e);
           updateJobsCount(0);
         }
-        
+
         // Cache the stats
         profileStatsCache.set(resolvedUserId, {
-          projects: allUserProjects,
-          connectionsCount: connRes?.count || data?.followers_count || 0,
-          projectsCount: projectIds ? projectIds.size : 0,
-          likesCount: likesRes?.count || data?.likes_count || 0,
+          projects: userProjects,
+          connectionsCount: connectionsCount,
+          projectsCount: projectsCount,
+          likesCount: likesCount,
           jobsCount: jobsCountRef
         });
       }
@@ -1519,27 +1521,44 @@ export default function ProfilePage() {
   // Initialize directory files from database
   const fetchDirectoryFiles = async () => {
     if (!profile?.id) return;
-    const profileDbId = profile.user_id || profile.id;
     try {
+      const orFilter = profile.user_id && profile.user_id !== profile.id
+        ? `user_id.eq.${profile.id},user_id.eq.${profile.user_id}`
+        : `user_id.eq.${profile.id}`;
+
       const { data, error } = await supabase
         .from("directory_files")
         .select("*")
-        .eq("user_id", profileDbId)
+        .or(orFilter)
         .order("created_at", { ascending: false });
-      
+
       if (error && error.code !== '42P01') {
         console.error("Error fetching directory files:", error);
       } else if (data) {
-        setDirectoryFiles(data.map(d => ({
-          id: d.id,
-          name: d.title,
-          title: d.title,
-          type: d.file_type as any,
-          url: d.file_url,
-          additional_urls: d.additional_urls,
-          uploadDate: d.created_at,
-          tags: d.tags
-        })));
+        const resolvedFiles = await Promise.all(
+          data.map(async (d: any) => {
+            const bucket = d.storage_bucket || DIRECTORY_STORAGE_BUCKET;
+            const primarySource = d.storage_path || d.file_url;
+            const additionalSources = Array.isArray(d.additional_paths) && d.additional_paths.length > 0
+              ? d.additional_paths
+              : d.additional_urls;
+            const [resolvedPrimary, resolvedAdditional] = await Promise.all([
+              resolveDirectoryMediaUrl(primarySource, { bucket }),
+              resolveDirectoryMediaUrls(additionalSources, { bucket }),
+            ]);
+            return {
+              id: d.id,
+              name: d.title,
+              title: d.title,
+              type: d.file_type as any,
+              url: resolvedPrimary,
+              additional_urls: resolvedAdditional,
+              uploadDate: d.created_at,
+              tags: d.tags,
+            };
+          })
+        );
+        setDirectoryFiles(resolvedFiles.filter((f) => Boolean(f.url || f.type === 'document')));
       }
     } catch (err) {
       console.error(err);
@@ -1573,20 +1592,59 @@ export default function ProfilePage() {
     // TODO: implement
   };
 
-  const handlePrivacyToggle = async (field: 'privacyShowPhone' | 'privacyShowEmail' | 'privacyShowDob' | 'privacyShowDirectory', value: boolean) => {
+  const handlePrivacyToggle = async (field: 'privacyShowPhone' | 'privacyShowEmail' | 'privacyShowDob' | 'privacyShowDirectory' | 'privacyShowLocation', value: boolean) => {
     setProfile(prev => ({ ...prev, [field]: value }));
     setEditForm(prev => ({ ...prev, [field]: value }));
-    
+
     if (user && profile.id) {
+      const settingsKeyMap: Record<string, string> = {
+        privacyShowPhone: 'showPhone',
+        privacyShowEmail: 'showEmail',
+        privacyShowDob: 'showBirthday',
+        privacyShowDirectory: 'showDirectory',
+        privacyShowLocation: 'showLocation'
+      };
+      const settingsKey = settingsKeyMap[field];
       const dbField = field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
       try {
-        const { error } = await supabase
+        const { error: profErr } = await supabase
           .from('profiles')
-          .update({ [dbField]: value })
+          .update({ [dbField]: value } as any)
           .eq('id', profile.id);
-        
-        if (error) throw error;
-        
+
+        if (profErr) throw profErr;
+
+        if (field === 'privacyShowDirectory') {
+          invalidateDirectoryUrlCache(profile.id);
+          if (user.id) invalidateDirectoryUrlCache(user.id);
+        }
+
+        if (settingsKey) {
+          const { data: curSettings } = await supabase
+            .from('settings')
+            .select('privacy_settings')
+            .eq('profile_id', profile.id)
+            .maybeSingle();
+
+          const existingPrivacy = (curSettings?.privacy_settings && typeof curSettings.privacy_settings === 'object' && !Array.isArray(curSettings.privacy_settings))
+            ? (curSettings.privacy_settings as Record<string, any>)
+            : {};
+
+          const updatedPrivacy = {
+            ...existingPrivacy,
+            [settingsKey]: value
+          };
+
+          const { error: settingsErr } = await supabase
+            .from('settings')
+            .upsert({
+              profile_id: profile.id,
+              privacy_settings: updatedPrivacy
+            }, { onConflict: 'profile_id' });
+
+          if (settingsErr) throw settingsErr;
+        }
+
         toast({
           title: "Privacy Updated",
           description: "Your privacy settings have been saved.",
@@ -1612,7 +1670,7 @@ export default function ProfilePage() {
     setAvatarToCrop(fileUrl);
     setIsCropDialogOpen(true);
     setSelectedAvatarFile(file);
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1622,7 +1680,7 @@ export default function ProfilePage() {
   const uploadCroppedImage = async () => {
     if (!avatarToCrop || !croppedAreaPixels || !user?.id) return;
     setIsUploadingAvatar(true);
-    
+
     try {
       const croppedBlob = await getCroppedImg(avatarToCrop, croppedAreaPixels);
       const fileExt = 'jpg';
@@ -1701,8 +1759,77 @@ export default function ProfilePage() {
   };
 
   // Quick Actions
-  const handleSendMessage = () => navigate("/messages");
-  const handleConnect = () => toast({ title: "Connection request sent", description: "We'll notify you once accepted." });
+  const handleSendMessage = () => {
+    const targetProfileId = profile.id;
+    const q = new URLSearchParams();
+    if (targetProfileId) q.set("recipient", targetProfileId);
+    if (profile.username) q.set("u", profile.username);
+    navigate(`/messages?${q.toString()}`);
+  };
+
+  const handleConnect = async () => {
+    if (!user) {
+      navigate("/auth/signin", { state: { from: window.location.pathname } });
+      return;
+    }
+
+    // Resolve authenticated sender profile ID (from profiles table)
+    let senderProfileId = authProfile?.id;
+    if (!senderProfileId) {
+      const { data: senderP } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      senderProfileId = senderP?.id;
+    }
+
+    const targetProfileId = profile.id;
+    if (!senderProfileId || !targetProfileId || senderProfileId === targetProfileId) return;
+
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from("connections")
+        .select("id, status")
+        .or(`and(user_id.eq.${senderProfileId},connected_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},connected_user_id.eq.${senderProfileId})`)
+        .maybeSingle();
+
+      if (existing) {
+        toast({
+          title: "Connection Already Exists",
+          description: `Current connection status is '${existing.status}'.`
+        });
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("connections").insert({
+        user_id: senderProfileId,
+        connected_user_id: targetProfileId,
+        status: "pending"
+      });
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Connection Request Sent",
+        description: `Connection request sent to ${profile.name || profile.username || "creator"}.`
+      });
+
+      await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: targetProfileId,
+        p_title: "New Connection Request",
+        p_description: `${authProfile?.full_name || user.email} sent you a connection request.`,
+        p_type: "connection",
+        p_action_url: `/profile/${senderProfileId}`
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Request Failed",
+        description: err.message || "Could not send connection request."
+      });
+    }
+  };
   const handleShareProfile = async () => {
     const url = `${window.location.origin}/profile${profile.username ? `?u=${encodeURIComponent(profile.username)}` : ""}`;
     try {
@@ -1828,7 +1955,7 @@ export default function ProfilePage() {
   };
 
   const getRoleIcon = (role: string) => {
-    const roleKey = Object.keys(roleIcons).find(key => 
+    const roleKey = Object.keys(roleIcons).find(key =>
       role.toLowerCase().includes(key.toLowerCase())
     );
     return roleKey ? roleIcons[roleKey as keyof typeof roleIcons] : Camera;
@@ -1851,23 +1978,49 @@ export default function ProfilePage() {
 
   return (
     <AppLayout>
-      <div className="space-y-4 bg-background min-h-screen p-4 -m-4">
-        {/* Profile Header */}
-        <Card className="relative overflow-hidden border-yellow-200/60 dark:border-border bg-card text-card-foreground shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex flex-row items-center md:items-center gap-4 flex-1 text-left w-full">
+      <div className="space-y-6 bg-background min-h-screen pb-8">
+        {/* Studio Noir V2 Widescreen Talent Dossier Header */}
+        <Card className="relative overflow-hidden rounded-2xl border-border/80 bg-card text-card-foreground shadow-noir">
+          <div className="h-44 sm:h-56 w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden">
+            <img
+              src={
+                profile.coverImage ||
+                "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=1600&q=85"
+              }
+              alt="Cinema Dossier Backdrop"
+              className="w-full h-full object-cover object-center opacity-55"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-[#121417]/55 to-black/30" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.22),transparent_65%)]" />
+            <div className="absolute top-4 left-6 flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.2em] text-primary">
+                STUDIO TALENT DOSSIER
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/55 backdrop-blur-md border border-white/10 text-[10px] font-medium text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                {profile.availability || "Available for Production"}
+              </span>
+            </div>
+            <div className="absolute bottom-3 right-6 hidden sm:flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/75">
+              <span>35MM ANAMORPHIC REEL</span>
+              <span>•</span>
+              <span>{profile.shortId ? `ID ${profile.shortId}` : "VERIFIED TALENT"}</span>
+            </div>
+          </div>
+          <CardContent className="p-6 pt-0 sm:pt-0">
+            <div className="flex flex-col md:flex-row md:items-end gap-5 -mt-14 sm:-mt-16 mb-4 relative z-10">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 flex-1 text-left w-full">
                 <div className="relative group mx-0 flex-shrink-0">
-                  <Avatar className="w-20 h-20 sm:w-24 sm:h-24 border-4 border-card dark:border-card shadow-lg flex-shrink-0">
-                    <AvatarImage src={profile.avatar} alt={profile.name} />
-                    <AvatarFallback className="text-xl font-semibold bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+                  <Avatar className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border-4 border-card shadow-noir-lg flex-shrink-0 ring-1 ring-primary/40">
+                    <AvatarImage src={profile.avatar} alt={profile.name} className="object-cover" />
+                    <AvatarFallback className="text-2xl font-display font-semibold bg-primary/15 text-primary rounded-2xl">
                       {profile.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
                   {isOwnProfile && (
                     <>
-                      <input 
-                        type="file" 
+                      <input
+                        type="file"
                         ref={fileInputRef}
                         className="hidden"
                         accept="image/*"
@@ -1876,36 +2029,36 @@ export default function ProfilePage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploadingAvatar}
-                        className="absolute bottom-0 right-0 p-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-full shadow-md transition-colors disabled:opacity-50"
+                        className="absolute bottom-0.5 right-0.5 p-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-full shadow-md transition-colors disabled:opacity-50"
                         title="Edit profile picture"
                       >
-                        <Edit className="w-4 h-4" />
+                        <Edit className="w-3.5 h-3.5" />
                       </button>
                     </>
                   )}
                 </div>
-                
-                <div className="flex-1 min-w-0">
+
+                <div className="flex-1 min-w-0 pt-2 sm:pt-0 sm:pb-1">
                   <div className="flex items-center justify-start gap-2 mb-1">
-                    <h1 className="text-xl sm:text-2xl font-bold text-foreground flex flex-nowrap items-center justify-start gap-1.5 sm:gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full max-w-full sm:max-w-none whitespace-nowrap">
+                    <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground flex flex-nowrap items-center justify-start gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden w-full max-w-full sm:max-w-none whitespace-nowrap">
                       {profile.name}
                       {profile.verified && (
-                        <UserCheck className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                        <UserCheck className="w-5 h-5 text-primary flex-shrink-0" />
                       )}
                       {profile.tags?.map(skill => {
                         const tagConfig = [
-                          { label: "Verified", color: "bg-blue-50 text-blue-700 border-blue-200" },
-                          { label: "Popular", color: "bg-green-50 text-green-700 border-green-200" },
-                          { label: "Featured", color: "bg-purple-50 text-purple-700 border-purple-200" },
-                          { label: "Trending", color: "bg-orange-50 text-orange-700 border-orange-200" },
-                          { label: "Expert", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-                          { label: "Mentor", color: "bg-pink-50 text-pink-700 border-pink-200" },
-                          { label: "Influencer", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-                          { label: "Rising Star", color: "bg-amber-50 text-amber-700 border-amber-200" }
+                          { label: "Verified", color: "bg-primary/15 text-primary border-primary/30" },
+                          { label: "Popular", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+                          { label: "Featured", color: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+                          { label: "Trending", color: "bg-orange-500/15 text-orange-300 border-orange-500/30" },
+                          { label: "Expert", color: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+                          { label: "Mentor", color: "bg-purple-500/15 text-purple-300 border-purple-500/30" },
+                          { label: "Influencer", color: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30" },
+                          { label: "Rising Star", color: "bg-primary/15 text-primary border-primary/30" }
                         ].find(t => t.label === skill);
                         if (!tagConfig) return null;
                         return (
-                          <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] px-2 py-0.5 rounded-full font-medium h-fit`}>
+                          <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] font-sans px-2.5 py-0.5 rounded-full font-medium h-fit`}>
                             {skill}
                           </Badge>
                         );
@@ -1913,23 +2066,23 @@ export default function ProfilePage() {
                     </h1>
                   </div>
                   <div className="flex items-center justify-start gap-2 text-sm mb-2 flex-wrap">
-                    {profile.username && <span className="text-muted-foreground">@{profile.username}</span>}
+                    {profile.username && <span className="text-muted-foreground font-mono text-xs">@{profile.username}</span>}
                     {profile.username && profile.role && <span className="text-muted-foreground/40">•</span>}
-                    {profile.role && <span className="text-foreground font-medium">{profile.role}</span>}
+                    {profile.role && <span className="text-primary font-medium">{profile.role}</span>}
                   </div>
-                  <div className="flex flex-row items-center justify-start gap-4 text-xs text-muted-foreground w-full mt-1">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <div className="flex flex-row flex-wrap items-center justify-start gap-4 text-xs text-muted-foreground w-full mt-1">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary/80 flex-shrink-0" />
                       {profile.location}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-primary/80 flex-shrink-0" />
                       Joined {formatDate(profile.joinedDate)}
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               {/* Action Buttons / Social Media Icons Area */}
               <div className="flex flex-col items-center md:items-end gap-3 flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -1937,7 +2090,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.instagram ? (
                       <>
-                        
+
                         <a
                           href={profile.instagram}
                           target="_blank"
@@ -1965,7 +2118,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.youtube ? (
                       <>
-                        
+
                         <a
                           href={profile.youtube}
                           target="_blank"
@@ -1993,7 +2146,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.facebook ? (
                       <>
-                        
+
                         <a
                           href={profile.facebook}
                           target="_blank"
@@ -2021,7 +2174,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col items-center gap-1">
                     {profile.twitter ? (
                       <>
-                        
+
                         <a
                           href={profile.twitter}
                           target="_blank"
@@ -2048,65 +2201,69 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-            
+
             {/* Statistics Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 sm:gap-x-6 gap-y-3 w-full sm:w-auto">
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Connections">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{connectionsCount.toLocaleString()}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border/70">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 sm:gap-x-7 gap-y-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Connections">
+                  <Users className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{connectionsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Connections</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Projects created & joined">
-                  <Briefcase className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{projectsCount.toLocaleString()}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Projects created & joined">
+                  <Briefcase className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{projectsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Projects</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Jobs joined">
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">{jobsCount.toLocaleString()}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Jobs joined">
+                  <Building2 className="w-4 h-4 text-primary/80" />
+                  <span className="font-mono font-semibold text-foreground">{jobsCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Roles</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Total profile likes">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" title="Total profile likes">
                   <Heart className="w-4 h-4 text-red-500 dark:text-red-400" />
-                  <span className="font-semibold text-foreground">{likesCount.toLocaleString()}</span>
+                  <span className="font-mono font-semibold text-foreground">{likesCount.toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Appreciations</span>
                 </div>
               </div>
 
               {isOwnProfile ? (
-                <div className="flex gap-2 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
-                    className="flex-1 sm:flex-none bg-card text-foreground border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 shadow-sm flex items-center justify-center gap-1 transition-colors"
+                <div className="flex gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={handleEditProfile}
                   >
-                    <Edit className="w-4 h-4" />
+                    <Edit className="w-4 h-4 text-primary" />
                     Edit Profile
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="secondary" 
-                    className="flex-1 sm:flex-none bg-card text-foreground border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 shadow-sm flex items-center justify-center gap-1 transition-colors"
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1 sm:flex-none bg-surface-elevated text-foreground border border-border/80 hover:border-primary/40 hover:bg-surface-hover shadow-sm flex items-center justify-center gap-1.5 transition-colors"
                     onClick={() => setShowShareModal(true)}
                   >
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-4 h-4 text-primary" />
                     Share
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    className="flex-1 sm:flex-none border border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground justify-center transition-colors"
-                    onClick={() => navigate(`/messages?u=${encodeURIComponent(profile.username)}`)}
+                <div className="flex items-center gap-2.5 self-center sm:self-auto w-full sm:w-auto mt-2 sm:mt-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 sm:flex-none border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground justify-center transition-colors"
+                    onClick={handleSendMessage}
                     disabled={!canMessage}
                   >
-                    <MessageSquare className="w-4 h-4 mr-1.5" />
+                    <MessageSquare className="w-4 h-4 mr-1.5 text-primary" />
                     Message
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={handleConnect}
-                    className="flex-1 sm:flex-none bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white disabled:opacity-50 justify-center"
+                    className="flex-1 sm:flex-none bg-primary hover:bg-primary-hover text-primary-foreground disabled:opacity-50 justify-center font-medium"
                     disabled={!canConnect}
                   >
                     <UserPlus className="w-4 h-4 mr-1.5" />
@@ -2122,11 +2279,11 @@ export default function ProfilePage() {
         <div className="w-full space-y-4">
           <div className="w-full space-y-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              
+
               {/* Mobile Dropdown */}
               <div className="md:hidden w-full mb-4">
                 <Select value={activeTab} onValueChange={setActiveTab}>
-                  <SelectTrigger className="w-full h-10 bg-card border border-border font-medium text-foreground shadow-sm">
+                  <SelectTrigger className="w-full h-10 bg-card border border-border/80 font-medium text-foreground shadow-sm">
                     <SelectValue placeholder="Select tab" />
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start">
@@ -2141,60 +2298,113 @@ export default function ProfilePage() {
               </div>
 
               {/* Desktop Tabs */}
-              <TabsList className="hidden md:grid w-full overflow-x-auto bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl justify-start grid-cols-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <TabsTrigger 
-                  value="overview" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+              <TabsList className="hidden md:grid w-full overflow-x-auto bg-card border border-border/80 p-1 rounded-xl justify-start grid-cols-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <TabsTrigger
+                  value="overview"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Overview
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="experience" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                <TabsTrigger
+                  value="experience"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Experience
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="projects" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                <TabsTrigger
+                  value="projects"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Projects
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="achievements" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                <TabsTrigger
+                  value="achievements"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Achievements
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="education" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                <TabsTrigger
+                  value="education"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Education
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="directory" 
-                  className="text-xs text-muted-foreground data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:dark:bg-yellow-600 data-[state=active]:shadow-sm transition-colors"
+                <TabsTrigger
+                  value="directory"
+                  className="text-xs font-medium text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-colors"
                 >
                   Directory
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="space-y-4">
-                {/* Bio */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">About</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-foreground leading-relaxed">{profile.bio}</p>
-                  </CardContent>
-                </Card>
+              <TabsContent value="overview" className="space-y-5 mt-5">
+                {/* Studio Noir V2 Showreel & Bio Dossier Split */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                  <DimensionalCard tiltStrength={3.5} className="lg:col-span-7 rounded-2xl border-border/80 bg-card text-card-foreground shadow-noir p-6 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-primary">
+                          ARTIST STATEMENT & BIO
+                        </span>
+                        <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">
+                          {profile.role || "Filmmaker"}
+                        </Badge>
+                      </div>
+                      <h3 className="font-serif text-xl font-bold text-foreground">About {profile.name}</h3>
+                      <p className="text-sm text-foreground/90 leading-relaxed">
+                        {profile.bio || "Visual storyteller and production collaborator specializing in narrative cinema, atmospheric lighting, and character-driven filmmaking."}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pt-5 mt-5 border-t border-border/60">
+                      {[
+                        "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=500&q=80",
+                        "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=500&q=80",
+                        "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=500&q=80",
+                      ].map((still, idx) => (
+                        <div key={idx} className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated">
+                          <img src={still} alt="Showreel still" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                        </div>
+                      ))}
+                    </div>
+                  </DimensionalCard>
+
+                  <DimensionalCard tiltStrength={4} className="lg:col-span-5 rounded-2xl border-border/80 bg-card overflow-hidden shadow-noir flex flex-col justify-between">
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-elevated">
+                      <img
+                        src={profile.avatar || "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80"}
+                        alt="Featured Showreel"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-transparent" />
+                      <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">FEATURED REEL</div>
+                          <div className="text-sm font-serif font-semibold text-white">Director & Cinematography Reel</div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-black/75 text-[11px] font-mono text-white/90 border border-white/15">
+                          02:16
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-5 grid grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border/70">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">Experience</div>
+                        <div className="text-sm font-semibold text-foreground mt-0.5">{profile.totalExperience || "5+ Years"}</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border/70">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">Travel Ready</div>
+                        <div className="text-sm font-semibold text-emerald-400 mt-0.5">
+                          {profile.availableForTravel !== false ? "Worldwide" : "Local Only"}
+                        </div>
+                      </div>
+                    </div>
+                  </DimensionalCard>
+                </div>
 
                 {/* Contact Information */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Contact Information</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Contact Information</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-start gap-2 text-sm">
@@ -2235,7 +2445,7 @@ export default function ProfilePage() {
                         <Globe className="w-4 h-4 text-muted-foreground mt-0.5" />
                         <div className="flex flex-row items-start gap-3 w-full">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5 whitespace-nowrap w-[130px]">Website</span>
-                          <a href={profile.website} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-yellow-500 hover:underline text-sm font-medium break-all">
+                          <a href={profile.website} target="_blank" rel="noreferrer" className="text-primary hover:underline text-sm font-medium break-all">
                             {profile.website}
                           </a>
                         </div>
@@ -2245,9 +2455,9 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Personal Information */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Personal Information</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Personal Information</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
                     <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
@@ -2256,12 +2466,12 @@ export default function ProfilePage() {
                         {isOwnProfile || profile.privacyShowDob !== false ? (
                           profile.dateOfBirth ? (
                             <>
-                              {profile.dateOfBirth} 
+                              {profile.dateOfBirth}
                               {!isNaN(new Date(profile.dateOfBirth).getTime()) && ` (${Math.abs(new Date(Date.now() - new Date(profile.dateOfBirth).getTime()).getUTCFullYear() - 1970)} years old)`}
                             </>
                           ) : "-"
                         ) : (
-                          profile.dateOfBirth && !isNaN(new Date(profile.dateOfBirth).getTime()) 
+                          profile.dateOfBirth && !isNaN(new Date(profile.dateOfBirth).getTime())
                             ? `${Math.abs(new Date(Date.now() - new Date(profile.dateOfBirth).getTime()).getUTCFullYear() - 1970)} years old`
                             : "-"
                         )}
@@ -2310,21 +2520,21 @@ export default function ProfilePage() {
 
                 {/* Pricing Details */}
                 {(profile.pricePerDay || profile.pricePerHour) && (
-                  <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                  <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-lg text-foreground">Pricing Details</CardTitle>
+                      <CardTitle className="font-display text-lg text-foreground">Pricing Details</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-8 text-sm">
                       {profile.pricePerDay && (
                         <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5">Price Per Day</span>
-                          <span className="text-foreground font-medium">₹{profile.pricePerDay}</span>
+                          <span className="text-primary font-mono font-semibold">₹{profile.pricePerDay}</span>
                         </div>
                       )}
                       {profile.pricePerHour && (
                         <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
                           <span className="text-muted-foreground text-xs uppercase tracking-wider pt-0.5">Price Per Hour</span>
-                          <span className="text-foreground font-medium">₹{profile.pricePerHour}</span>
+                          <span className="text-primary font-mono font-semibold">₹{profile.pricePerHour}</span>
                         </div>
                       )}
                       <div className="grid grid-cols-[140px_1fr] gap-2 items-start md:col-span-1">
@@ -2338,9 +2548,9 @@ export default function ProfilePage() {
                 )}
 
                 {/* Physical Details */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Physical Details</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Physical Details</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-8 text-sm">
                     <div className="grid grid-cols-[100px_1fr] gap-2 items-start">
@@ -2367,14 +2577,14 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Skills */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Skills</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Skills</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
                       {profile.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs bg-muted text-muted-foreground border-border">
+                        <Badge key={index} variant="secondary" className="text-xs bg-surface-elevated text-foreground/90 border border-border/70">
                           {skill}
                         </Badge>
                       ))}
@@ -2384,27 +2594,27 @@ export default function ProfilePage() {
 
               </TabsContent>
 
-              <TabsContent value="experience" className="space-y-4">
+              <TabsContent value="experience" className="space-y-4 mt-4">
                 {/* Experience */}
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Experience</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Experience</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.experience.map((exp) => (
-                        <div key={exp.id} className="flex gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
-                          <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="w-5 h-5 text-white" />
+                        <div key={exp.id} className="flex gap-3.5 border-b border-border/70 pb-4 last:border-0 last:pb-0">
+                          <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="w-5 h-5 text-primary" />
                           </div>
                           <div className="flex-1">
                             <h4 className="font-semibold text-sm text-foreground">{exp.title}</h4>
-                            <p className="text-sm text-muted-foreground">{exp.company}</p>
+                            <p className="text-sm text-primary/90 font-medium">{exp.company}</p>
                             <p className="text-xs text-muted-foreground">{exp.location}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
                               {formatDateShort(exp.startDate)} - {exp.current ? "Present" : formatDateShort(exp.endDate!)}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">{exp.description}</p>
+                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{exp.description}</p>
                           </div>
                         </div>
                       ))}
@@ -2414,15 +2624,15 @@ export default function ProfilePage() {
 
               </TabsContent>
 
-              <TabsContent value="projects" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="projects" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                    <CardTitle className="text-lg text-foreground">Projects</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Projects</CardTitle>
                     {isOwnProfile && (
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         onClick={() => navigate("/projects")}
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        className="bg-primary hover:bg-primary-hover text-primary-foreground"
                       >
                         <Plus className="w-4 h-4 mr-1" /> Create Project
                       </Button>
@@ -2433,10 +2643,10 @@ export default function ProfilePage() {
                       <div className="text-center py-8">
                         <p className="text-sm text-muted-foreground mb-4">No projects created yet.</p>
                         {isOwnProfile && (
-                          <Button 
+                          <Button
                             variant="outline"
                             onClick={() => navigate("/projects")}
-                            className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+                            className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover text-foreground transition-colors"
                           >
                             Go to Projects Page
                           </Button>
@@ -2445,11 +2655,11 @@ export default function ProfilePage() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {userProjects.map((project) => (
-                          <Card key={project.id} className="hover:shadow-md transition-shadow bg-card text-card-foreground border border-yellow-100/60 dark:border-border">
+                          <Card key={project.id} className="hover:border-primary/30 transition-all bg-surface-elevated text-card-foreground border border-border/80 shadow-noir">
                             <CardHeader className="pb-3">
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                  <h4 className="font-semibold text-base text-foreground line-clamp-1">{project.title}</h4>
+                                  <h4 className="font-display font-semibold text-base text-foreground line-clamp-1">{project.title}</h4>
                                   <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                                     <span className="capitalize">{project.project_type}</span>
                                     <span>•</span>
@@ -2458,17 +2668,16 @@ export default function ProfilePage() {
                                 </div>
                                 <div className="flex gap-1">
                                   {project.featured && (
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-yellow-500 text-yellow-600">
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-primary/40 text-primary bg-primary/10">
                                       Featured
                                     </Badge>
                                   )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  project.status === 'completed' ? 'bg-green-500' :
-                                  project.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
-                                }`}></div>
+                                <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'completed' ? 'bg-emerald-500' :
+                                    project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
+                                  }`}></div>
                                 <span className="capitalize">{project.status}</span>
                                 {project.location && (
                                   <>
@@ -2487,22 +2696,22 @@ export default function ProfilePage() {
                               </p>
                               <div className="flex flex-wrap gap-1 pt-1">
                                 {Array.isArray(project.skills_required) && project.skills_required.map((skill: string, i: number) => (
-                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-muted text-muted-foreground border-border">
+                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-card text-muted-foreground border-border/70">
                                     {skill}
                                   </Badge>
                                 ))}
                               </div>
-                              <div className="flex justify-between items-center pt-2 text-xs border-t border-border">
-                                <span className="font-medium text-foreground">
+                              <div className="flex justify-between items-center pt-2 text-xs border-t border-border/70">
+                                <span className="font-mono font-medium text-foreground">
                                   Budget: {project.budget_min ? `${project.budget_currency || "₹"}${project.budget_min.toLocaleString()}` : ""}
                                   {project.budget_min && project.budget_max ? " - " : ""}
                                   {project.budget_max ? `${project.budget_currency || "₹"}${project.budget_max.toLocaleString()}` : ""}
                                   {!project.budget_min && !project.budget_max ? "TBD" : ""}
                                 </span>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="h-7 text-xs text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50/50 dark:text-yellow-500 dark:hover:text-yellow-400 dark:hover:bg-yellow-950/20"
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs text-primary hover:text-primary-hover hover:bg-primary/10"
                                   onClick={() => navigate(`/projects`)}
                                 >
                                   Details
@@ -2517,31 +2726,31 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="achievements" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="achievements" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Achievements & Awards</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Achievements & Awards</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.achievements.map((achievement) => (
-                        <div key={achievement.id} className="border border-border rounded-lg p-4 bg-muted/20">
+                        <div key={achievement.id} className="border border-border/70 rounded-xl p-4 bg-surface-elevated">
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-950/30 rounded-full flex items-center justify-center flex-shrink-0">
-                              {achievement.type === 'award' && <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'publication' && <FileText className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
-                              {achievement.type === 'recognition' && <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />}
+                            <div className="w-9 h-9 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                              {achievement.type === 'award' && <Award className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'publication' && <FileText className="w-4 h-4 text-primary" />}
+                              {achievement.type === 'recognition' && <Star className="w-4 h-4 text-primary" />}
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <h4 className="font-medium text-sm text-foreground">{achievement.title}</h4>
-                                <Badge variant="secondary" className="text-xs dark:bg-zinc-800 dark:text-zinc-300">
+                                <Badge variant="secondary" className="text-xs bg-card border-border/70 text-muted-foreground">
                                   {achievement.type.charAt(0).toUpperCase() + achievement.type.slice(1)}
                                 </Badge>
                               </div>
                               <p className="text-xs text-muted-foreground mb-1">{achievement.description}</p>
-                              <p className="text-xs text-muted-foreground">{achievement.date}</p>
+                              <p className="text-xs font-mono text-muted-foreground">{achievement.date}</p>
                             </div>
                           </div>
                         </div>
@@ -2551,27 +2760,27 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="education" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="education" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg text-foreground">Education</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground">Education</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {profile.education.map((edu) => (
-                        <div key={edu.id} className="flex gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
-                          <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                            <GraduationCap className="w-5 h-5 text-white" />
+                        <div key={edu.id} className="flex gap-3.5 border-b border-border/70 pb-4 last:border-0 last:pb-0">
+                          <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <GraduationCap className="w-5 h-5 text-primary" />
                           </div>
                           <div className="flex-1">
                             <h4 className="font-semibold text-sm text-foreground">{edu.degree}</h4>
-                            <p className="text-sm text-muted-foreground">{edu.school}</p>
+                            <p className="text-sm text-primary/90 font-medium">{edu.school}</p>
                             <p className="text-xs text-muted-foreground">{edu.location}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs font-mono text-muted-foreground mt-0.5">
                               {formatDateShort(edu.startDate)} - {edu.current ? "Present" : formatDateShort(edu.endDate!)}
                             </p>
                             {edu.description && (
-                              <p className="text-xs text-muted-foreground mt-2">{edu.description}</p>
+                              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{edu.description}</p>
                             )}
                           </div>
                         </div>
@@ -2581,17 +2790,17 @@ export default function ProfilePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="directory" className="space-y-4">
-                <Card className="border-yellow-100/60 dark:border-border bg-card text-card-foreground">
+              <TabsContent value="directory" className="space-y-4 mt-4">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir">
                   <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4 sm:gap-2">
-                    <CardTitle className="text-lg text-foreground w-full sm:w-auto">Directory</CardTitle>
+                    <CardTitle className="font-display text-lg text-foreground w-full sm:w-auto">Directory</CardTitle>
                     <div className="flex gap-2 items-center w-full sm:w-auto">
-                      <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="flex-1 sm:flex-none h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                      <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="flex-1 sm:flex-none h-8 bg-primary hover:bg-primary-hover text-primary-foreground">
                         <Plus className="w-4 h-4 mr-1" />
                         Add Files
                       </Button>
                       <div className="flex-1 sm:flex-none w-full"><Select value={directoryFilter} onValueChange={(v: any) => { setDirectoryFilter(v); setDirectoryPage(1); }}>
-                        <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-card border border-border text-foreground">
+                        <SelectTrigger className="w-full sm:w-[130px] h-8 text-xs bg-surface-elevated border border-border/80 text-foreground">
                           <SelectValue placeholder="Filter by type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2607,70 +2816,74 @@ export default function ProfilePage() {
                   </CardHeader>
                   <CardContent>
                     {!isOwnProfile && !profile.privacyShowDirectory ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center bg-muted/20 rounded-lg border border-border">
+                      <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated rounded-xl border border-border/70">
                         <Lock className="w-12 h-12 text-muted-foreground/40 mb-4" />
-                        <h3 className="text-lg font-medium text-foreground">Directory Locked</h3>
+                        <h3 className="text-lg font-display font-medium text-foreground">Directory Locked</h3>
                         <p className="text-sm text-muted-foreground mt-1">This user has chosen to keep their directory private.</p>
                       </div>
                     ) : (
                       <>
                         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                           {(() => {
-                        const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
-                        const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
-                        if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
-                        return paginated.map(file => (
-                          <div key={file.id} className="relative group overflow-hidden rounded-md cursor-pointer border border-border" onClick={() => setPreviewFile(file)}>
-                              {file.type === 'image' ? (
-                                <div className="relative h-40 w-full">
-                                  <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
-                                  {file.additional_urls && file.additional_urls.length > 0 && (
-                                    <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                                      <ImageIcon className="w-3 h-3" />
-                                      {file.additional_urls.length + 1}
-                                    </div>
-                                  )}
-                                </div>
-                              ) :
-                               file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
-                               file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                               <div className="w-full h-40 bg-muted flex items-center justify-center"><FileText className="w-8 h-8 text-muted-foreground" /></div>}
-                               <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
-                                 e.stopPropagation(); 
-                                 setDeleteConfirm({
-                                   isOpen: true,
-                                   title: "Delete File",
-                                   desc: "Are you sure you want to delete this file? This action cannot be undone.",
-                                   onConfirm: async () => {
-                                     try {
-                                       await supabase.from('directory_files').delete().eq('id', file.id);
-                                       setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                                       toast.success("File deleted successfully");
-                                     } catch(err) {
-                                       console.error(err);
-                                       toast.error("Failed to delete file");
-                                     }
-                                   }
-                                 });
-                               }}>
-                                 <Trash2 className="h-3 w-3" />
-                               </Button>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                    {(() => {
-                      const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
-                      const totalPages = Math.ceil(filtered.length / 10);
-                      if (totalPages <= 1) return null;
-                      return (
-                        <div className="flex justify-center items-center gap-2 mt-4">
-                          <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1} className="border-border text-foreground">Prev</Button>
-                          <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
-                          <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages} className="border-border text-foreground">Next</Button>
+                            const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+                            const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
+                            if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
+                            return paginated.map(file => (
+                              <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated hover:border-primary/40 transition-colors" onClick={() => setPreviewFile(file)}>
+                                {file.type === 'image' ? (
+                                  <div className="relative h-40 w-full">
+                                    <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                                    {file.additional_urls && file.additional_urls.length > 0 && (
+                                      <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                                        <ImageIcon className="w-3 h-3 text-primary" />
+                                        {file.additional_urls.length + 1}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) :
+                                  file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
+                                    file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
+                                      <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
+                                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirm({
+                                    isOpen: true,
+                                    title: "Delete File",
+                                    desc: "Are you sure you want to delete this file? This action cannot be undone.",
+                                    onConfirm: async () => {
+                                      try {
+                                        const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', file.id).select('id');
+                                        if (delErr) throw delErr;
+                                        if (!delData || delData.length === 0) {
+                                          throw new Error("File could not be deleted or access was denied.");
+                                        }
+                                        setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
+                                        toast({ title: "File deleted successfully" });
+                                      } catch (err: any) {
+                                        console.error(err);
+                                        toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
+                                      }
+                                    }
+                                  });
+                                }}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ));
+                          })()}
                         </div>
-                      );
-                    })()}
+                        {(() => {
+                          const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
+                          const totalPages = Math.ceil(filtered.length / 10);
+                          if (totalPages <= 1) return null;
+                          return (
+                            <div className="flex justify-center items-center gap-2 mt-4">
+                              <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1} className="border-border text-foreground">Prev</Button>
+                              <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
+                              <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages} className="border-border text-foreground">Next</Button>
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
                   </CardContent>
@@ -2685,50 +2898,50 @@ export default function ProfilePage() {
       <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Share Profile</DialogTitle>
+            <DialogTitle className="font-display text-xl font-semibold">Share Profile</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-foreground">Privacy Settings</h4>
               <p className="text-sm text-muted-foreground">Toggle what information is visible when others view your profile.</p>
-              
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-phone" className="text-sm font-medium">Show Phone Number</Label>
-                <Switch 
-                  id="privacy-phone" 
-                  checked={profile.privacyShowPhone} 
+                <Switch
+                  id="privacy-phone"
+                  checked={profile.privacyShowPhone}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowPhone', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-email" className="text-sm font-medium">Show Email Address</Label>
-                <Switch 
-                  id="privacy-email" 
-                  checked={profile.privacyShowEmail} 
+                <Switch
+                  id="privacy-email"
+                  checked={profile.privacyShowEmail}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowEmail', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-dob" className="text-sm font-medium">Show Date of Birth & Age</Label>
-                <Switch 
-                  id="privacy-dob" 
-                  checked={profile.privacyShowDob} 
+                <Switch
+                  id="privacy-dob"
+                  checked={profile.privacyShowDob}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowDob', val)}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="privacy-dir" className="text-sm font-medium">Show Directory Files</Label>
-                <Switch 
-                  id="privacy-dir" 
-                  checked={profile.privacyShowDirectory} 
+                <Switch
+                  id="privacy-dir"
+                  checked={profile.privacyShowDirectory}
                   onCheckedChange={(val) => handlePrivacyToggle('privacyShowDirectory', val)}
                 />
               </div>
             </div>
 
-            <div className="pt-4 border-t">
-              <Button 
-                className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+            <div className="pt-4 border-t border-border/70">
+              <Button
+                className="w-full bg-primary hover:bg-primary-hover text-primary-foreground"
                 onClick={() => {
                   const url = `${window.location.origin}/profile/${profile.shortId || profile.id}`;
                   navigator.clipboard.writeText(url);
@@ -2751,52 +2964,52 @@ export default function ProfilePage() {
       <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="text-2xl font-bold">Edit Profile</DialogTitle>
+            <DialogTitle className="font-display text-2xl font-semibold">Edit Profile</DialogTitle>
           </DialogHeader>
-          
+
           <Tabs value={editProfileTab} onValueChange={setEditProfileTab} className="w-full flex-1 flex flex-col min-h-0">
-                          <div className="md:hidden w-full mb-4 mt-2 px-1 flex-shrink-0">
-                <Select value={editProfileTab} onValueChange={setEditProfileTab}>
-                  <SelectTrigger className="w-full h-10 bg-card border border-border font-medium text-foreground shadow-sm">
-                    <SelectValue placeholder="Select section" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start">
-                    <SelectItem value="profile">Profile</SelectItem>
-                    <SelectItem value="experience">Experience</SelectItem>
-                    <SelectItem value="achievements">Achievements</SelectItem>
-                    <SelectItem value="education">Education</SelectItem>
-                    <SelectItem value="directory">Directory</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <TabsList className="hidden md:grid w-full overflow-x-auto bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              <TabsTrigger 
-                value="profile" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+            <div className="md:hidden w-full mb-4 mt-2 px-1 flex-shrink-0">
+              <Select value={editProfileTab} onValueChange={setEditProfileTab}>
+                <SelectTrigger className="w-full h-10 bg-surface-elevated border border-border/80 font-medium text-foreground shadow-sm">
+                  <SelectValue placeholder="Select section" />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start">
+                  <SelectItem value="profile">Profile</SelectItem>
+                  <SelectItem value="experience">Experience</SelectItem>
+                  <SelectItem value="achievements">Achievements</SelectItem>
+                  <SelectItem value="education">Education</SelectItem>
+                  <SelectItem value="directory">Directory</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <TabsList className="hidden md:grid w-full overflow-x-auto bg-surface-elevated border border-border/80 p-1 rounded-xl flex-shrink-0 justify-start grid-cols-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <TabsTrigger
+                value="profile"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Profile
               </TabsTrigger>
-              <TabsTrigger 
-                value="experience" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              <TabsTrigger
+                value="experience"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Experience
               </TabsTrigger>
-              <TabsTrigger 
-                value="achievements" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              <TabsTrigger
+                value="achievements"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Achievements
               </TabsTrigger>
-              <TabsTrigger 
-                value="education" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              <TabsTrigger
+                value="education"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Education
               </TabsTrigger>
-              <TabsTrigger 
-                value="directory" 
-                className="text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm"
+              <TabsTrigger
+                value="directory"
+                className="text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
               >
                 Directory
               </TabsTrigger>
@@ -2881,7 +3094,7 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
-                
+
                 <h3 className="text-lg font-semibold text-foreground mt-6 pt-4 border-t border-border">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -2963,8 +3176,8 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <Label htmlFor="availableForTravel">Available for Travel</Label>
-                    <Select 
-                      value={editForm.availableForTravel ? "yes" : "no"} 
+                    <Select
+                      value={editForm.availableForTravel ? "yes" : "no"}
                       onValueChange={(value) => handleFormChange('availableForTravel', value === "yes")}
                     >
                       <SelectTrigger>
@@ -3018,10 +3231,10 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex flex-col justify-end pb-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="priceNegotiable" 
-                        checked={editForm.priceNegotiable} 
-                        onCheckedChange={(checked) => handleFormChange('priceNegotiable', !!checked)} 
+                      <Checkbox
+                        id="priceNegotiable"
+                        checked={editForm.priceNegotiable}
+                        onCheckedChange={(checked) => handleFormChange('priceNegotiable', !!checked)}
                       />
                       <label htmlFor="priceNegotiable" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                         Price is Negotiable
@@ -3231,8 +3444,8 @@ export default function ProfilePage() {
             <TabsContent value="experience" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Work Experience</h3>
-                  <Button size="sm" onClick={addExperience} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Work Experience</h3>
+                  <Button size="sm" onClick={addExperience} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Experience
                   </Button>
@@ -3241,21 +3454,21 @@ export default function ProfilePage() {
                   {editForm.experience.map((exp, index) => {
                     const isExpanded = expandedEditExperience.has(exp.id);
                     return (
-                      <Card key={exp.id} className="border border-border">
+                      <Card key={exp.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditExperienceExpansion(exp.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                <Briefcase className="w-5 h-5 text-white" />
+                              <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Briefcase className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1">
                                 <h4 className="font-semibold text-sm text-foreground">{exp.title}</h4>
                                 <p className="text-sm text-muted-foreground">{exp.company}</p>
                                 <p className="text-xs text-muted-foreground">{exp.location}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs font-mono text-muted-foreground">
                                   {exp.startDate} - {exp.current ? "Present" : exp.endDate}
                                 </p>
                               </div>
@@ -3265,7 +3478,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Job Title</Label>
@@ -3313,8 +3526,8 @@ export default function ProfilePage() {
             <TabsContent value="achievements" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Achievements & Awards</h3>
-                  <Button size="sm" onClick={addAchievement} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Achievements & Awards</h3>
+                  <Button size="sm" onClick={addAchievement} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Achievement
                   </Button>
@@ -3323,18 +3536,18 @@ export default function ProfilePage() {
                   {editForm.achievements.map((achievement, index) => {
                     const isExpanded = expandedEditAchievements.has(achievement.id);
                     return (
-                      <Card key={achievement.id} className="border border-border">
+                      <Card key={achievement.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditAchievementExpansion(achievement.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                {achievement.type === 'award' && <Award className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-purple-600" />}
-                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-purple-600" />}
+                              <div className="w-8 h-8 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                {achievement.type === 'award' && <Award className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-primary" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
@@ -3343,7 +3556,7 @@ export default function ProfilePage() {
                                     {achievement.type.charAt(0).toUpperCase() + achievement.type.slice(1)}
                                   </Badge>
                                 </div>
-                                <p className="text-xs text-muted-foreground">{achievement.date}</p>
+                                <p className="text-xs font-mono text-muted-foreground">{achievement.date}</p>
                               </div>
                             </div>
                             <Button variant="ghost" size="sm" className="p-1">
@@ -3351,7 +3564,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Achievement Title</Label>
@@ -3399,8 +3612,8 @@ export default function ProfilePage() {
             <TabsContent value="education" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-foreground">Education</h3>
-                  <Button size="sm" onClick={addEducation} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <h3 className="text-lg font-display font-semibold text-foreground">Education</h3>
+                  <Button size="sm" onClick={addEducation} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Education
                   </Button>
@@ -3409,21 +3622,21 @@ export default function ProfilePage() {
                   {editForm.education.map((edu, index) => {
                     const isExpanded = expandedEditEducation.has(edu.id);
                     return (
-                      <Card key={edu.id} className="border border-border">
+                      <Card key={edu.id} className="border border-border/80 bg-surface-elevated">
                         <CardContent className="p-4">
-                          <div 
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => toggleEditEducationExpansion(edu.id)}
                           >
                             <div className="flex gap-3 flex-1">
-                              <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                <GraduationCap className="w-5 h-5 text-white" />
+                              <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                <GraduationCap className="w-5 h-5 text-primary" />
                               </div>
                               <div className="flex-1">
                                 <h4 className="font-semibold text-sm text-foreground">{edu.degree}</h4>
                                 <p className="text-sm text-muted-foreground">{edu.school}</p>
                                 <p className="text-xs text-muted-foreground">{edu.location}</p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs font-mono text-muted-foreground">
                                   {edu.startDate} - {edu.current ? "Present" : edu.endDate}
                                 </p>
                               </div>
@@ -3433,7 +3646,7 @@ export default function ProfilePage() {
                             </Button>
                           </div>
                           {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                            <div className="mt-4 pt-4 border-t border-border/70" onClick={(e) => e.stopPropagation()}>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <Label>Degree</Label>
@@ -3480,7 +3693,7 @@ export default function ProfilePage() {
             {/* Directory Tab */}
             <TabsContent value="directory" className="flex-1 overflow-y-auto space-y-6 mt-6 pr-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-foreground">Directory</h3>
+                <h3 className="text-lg font-display font-semibold text-foreground">Directory</h3>
                 <div className="flex gap-2 items-center w-full sm:w-auto">
                   <div className="flex-1 sm:flex-none w-full"><Select value={directoryFilter} onValueChange={(v: any) => { setDirectoryFilter(v); setDirectoryPage(1); }}>
                     <SelectTrigger className="w-[130px] h-8 text-xs">
@@ -3493,76 +3706,80 @@ export default function ProfilePage() {
                       <SelectItem value="video">Videos</SelectItem>
                       <SelectItem value="audio">Audio</SelectItem>
                     </SelectContent>
-                      </Select>
+                  </Select>
                   </div>
-                  <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                  <Button size="sm" onClick={() => setShowAddFileDialog(true)} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                     <Plus className="w-4 h-4 mr-1" />
                     Add Files
                   </Button>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {(() => {
                   const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter).sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
                   const paginated = filtered.slice((directoryPage - 1) * 10, directoryPage * 10);
                   if (filtered.length === 0) return <p className="text-sm text-muted-foreground col-span-full">No files found.</p>;
                   return paginated.map(file => (
-                    <div key={file.id} className="relative group overflow-hidden rounded-md cursor-pointer border border-border" onClick={() => setPreviewFile(file)}>
-                       {file.type === 'image' ? (
-                         <div className="relative h-40 w-full">
-                           <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
-                           {file.additional_urls && file.additional_urls.length > 0 && (
-                             <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
-                               <ImageIcon className="w-3 h-3" />
-                               {file.additional_urls.length + 1}
-                             </div>
-                           )}
-                         </div>
-                       ) :
+                    <div key={file.id} className="relative group overflow-hidden rounded-xl cursor-pointer border border-border/80 bg-surface-elevated" onClick={() => setPreviewFile(file)}>
+                      {file.type === 'image' ? (
+                        <div className="relative h-40 w-full">
+                          <img src={file.url} alt={file.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                          {file.additional_urls && file.additional_urls.length > 0 && (
+                            <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md flex items-center gap-1 z-10">
+                              <ImageIcon className="w-3 h-3 text-primary" />
+                              {file.additional_urls.length + 1}
+                            </div>
+                          )}
+                        </div>
+                      ) :
                         file.type === 'video' ? <video src={file.url} className="w-full h-40 object-cover" /> :
-                        file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
-                        <div className="w-full h-40 bg-muted flex items-center justify-center"><FileText className="w-8 h-8 text-muted-foreground" /></div>}
-                       <p className="text-sm font-medium truncate p-2" title={file.title || file.name}>{file.title || file.name}</p>
-                       <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => { 
-                         e.stopPropagation(); 
-                         if (window.confirm("Are you sure you want to delete this file?")) {
-                           try {
-                             await supabase.from('directory_files').delete().eq('id', file.id);
-                             setDirectoryFiles(prev => prev.filter(f => f.id !== file.id)); 
-                             toast.success("File deleted successfully");
-                           } catch(err) {
-                             console.error(err);
-                             toast.error("Failed to delete file");
-                           }
-                         }
-                       }}>
-                         <Trash2 className="h-3 w-3" />
-                       </Button>
+                          file.type === 'audio' ? <audio src={file.url} className="w-full h-40" controls /> :
+                            <div className="w-full h-40 bg-surface-elevated flex items-center justify-center"><FileText className="w-8 h-8 text-primary/70" /></div>}
+                      <p className="text-sm font-medium truncate p-2" title={file.title || file.name}>{file.title || file.name}</p>
+                      <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={async (e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Are you sure you want to delete this file?")) {
+                          try {
+                            const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', file.id).select('id');
+                            if (delErr || !delData || delData.length === 0) {
+                              toast({ title: "Failed to delete file", description: delErr?.message || "File not found or permission denied.", variant: "destructive" });
+                              return;
+                            }
+                            setDirectoryFiles(prev => prev.filter(f => f.id !== file.id));
+                            toast({ title: "File deleted successfully" });
+                          } catch (err: any) {
+                            console.error(err);
+                            toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
+                          }
+                        }
+                      }}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   ));
                 })()}
               </div>
               {(() => {
-                 const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
-                 const totalPages = Math.ceil(filtered.length / 10);
-                 if (totalPages <= 1) return null;
-                 return (
-                   <div className="flex justify-center items-center gap-2 mt-4">
-                     <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1}>Prev</Button>
-                     <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
-                     <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages}>Next</Button>
-                   </div>
-                 );
+                const filtered = directoryFiles.filter(f => directoryFilter === "all" || f.type === directoryFilter);
+                const totalPages = Math.ceil(filtered.length / 10);
+                if (totalPages <= 1) return null;
+                return (
+                  <div className="flex justify-center items-center gap-2 mt-4">
+                    <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.max(1, p - 1))} disabled={directoryPage === 1}>Prev</Button>
+                    <span className="text-sm text-muted-foreground">Page {directoryPage} of {totalPages}</span>
+                    <Button variant="outline" size="sm" onClick={() => setDirectoryPage(p => Math.min(totalPages, p + 1))} disabled={directoryPage === totalPages}>Next</Button>
+                  </div>
+                );
               })()}
             </TabsContent>
 
             {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-6 border-t border-border mt-6">
-              <Button variant="outline" onClick={handleCancelEdit} className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50">
+            <div className="flex justify-end gap-3 pt-6 border-t border-border/70 mt-6">
+              <Button variant="outline" onClick={handleCancelEdit} className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover">
                 Cancel
               </Button>
-              <Button onClick={handleSaveProfile} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+              <Button onClick={handleSaveProfile} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                 Save Changes
               </Button>
             </div>
@@ -3572,9 +3789,9 @@ export default function ProfilePage() {
 
       {/* Add Files Dialog */}
       <Dialog open={showAddFileDialog} onOpenChange={setShowAddFileDialog}>
-        <DialogContent className="max-w-md bg-card text-card-foreground border-border">
+        <DialogContent className="max-w-md bg-card text-card-foreground border-border/80">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Add Files</DialogTitle>
+            <DialogTitle className="font-display text-xl font-semibold">Add Files</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div
@@ -3591,10 +3808,10 @@ export default function ProfilePage() {
               }}
               onClick={() => addFileInputRef.current?.click()}
               className={cn(
-                "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
+                "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2",
                 isDraggingFile
-                  ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20"
-                  : "border-gray-300 dark:border-zinc-700 hover:border-yellow-500 dark:hover:border-yellow-500 bg-gray-50/50 dark:bg-zinc-800/50"
+                  ? "border-primary bg-primary/10"
+                  : "border-border/80 hover:border-primary/50 bg-surface-elevated/60"
               )}
             >
               <input
@@ -3610,22 +3827,22 @@ export default function ProfilePage() {
                   }
                 }}
               />
-              <Upload className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+              <Upload className="w-8 h-8 text-primary" />
               {selectedAddFiles.length > 0 ? (
                 <div>
                   <p className="text-sm font-semibold text-foreground">
                     {selectedAddFiles.length === 1 ? selectedAddFiles[0].name : `${selectedAddFiles.length} files selected`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedAddFiles.length === 1 
-                      ? `${(selectedAddFiles[0].size / (1024 * 1024)).toFixed(2)} MB` 
+                    {selectedAddFiles.length === 1
+                      ? `${(selectedAddFiles[0].size / (1024 * 1024)).toFixed(2)} MB`
                       : `${(selectedAddFiles.reduce((acc, file) => acc + file.size, 0) / (1024 * 1024)).toFixed(2)} MB total`}
                   </p>
                 </div>
               ) : (
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Drag and drop your file here, or <span className="text-yellow-600 dark:text-yellow-400 underline font-semibold">browse</span>
+                    Drag and drop your file here, or <span className="text-primary underline font-semibold">browse</span>
                   </p>
                 </div>
               )}
@@ -3642,7 +3859,7 @@ export default function ProfilePage() {
                 placeholder="Enter file title"
                 value={addFileTitle}
                 onChange={(e) => setAddFileTitle(e.target.value)}
-                className="bg-card border-border"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
 
@@ -3653,7 +3870,7 @@ export default function ProfilePage() {
                 placeholder="Enter tags (comma separated e.g. bts, studio, production)"
                 value={addFileTags}
                 onChange={(e) => setAddFileTags(e.target.value)}
-                className="bg-card border-border"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
 
@@ -3666,14 +3883,14 @@ export default function ProfilePage() {
                   setAddFileTitle("");
                   setAddFileTags("");
                 }}
-                className="border-border"
+                className="border-border/80"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleAddFileSubmit}
                 disabled={isUploadingDirectoryFile}
-                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium"
+                className="bg-primary hover:bg-primary-hover text-primary-foreground font-medium"
               >
                 {isUploadingDirectoryFile ? "Uploading..." : "Upload File"}
               </Button>
@@ -3681,7 +3898,7 @@ export default function ProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
-      
+
       {/* Avatar Crop Dialog */}
       <Dialog open={isCropDialogOpen} onOpenChange={(open) => {
         setIsCropDialogOpen(open);
@@ -3693,7 +3910,7 @@ export default function ProfilePage() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adjust Profile Picture</DialogTitle>
+            <DialogTitle className="font-display">Adjust Profile Picture</DialogTitle>
           </DialogHeader>
           {avatarToCrop && (
             <div className="flex flex-col items-center gap-4 py-4">
@@ -3725,7 +3942,7 @@ export default function ProfilePage() {
                 <Button variant="outline" onClick={() => setIsCropDialogOpen(false)} disabled={isUploadingAvatar}>
                   Cancel
                 </Button>
-                <Button onClick={uploadCroppedImage} disabled={isUploadingAvatar} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                <Button onClick={uploadCroppedImage} disabled={isUploadingAvatar} className="bg-primary hover:bg-primary-hover text-primary-foreground">
                   {isUploadingAvatar ? "Saving..." : "Set as Profile Picture"}
                 </Button>
               </div>
@@ -3742,33 +3959,33 @@ export default function ProfilePage() {
         <DialogContent className="max-w-[95vw] sm:max-w-4xl p-0 overflow-hidden bg-black/95 border-gray-800 [&>button]:text-white [&>button]:hover:bg-white/10 [&>button]:p-2 [&>button]:rounded-full">
           <div className="relative w-full h-[80vh] flex flex-col items-center justify-center">
             <div className="absolute top-4 left-4 z-50 text-white text-sm font-semibold">{previewFile?.name || previewFile?.title}</div>
-            
+
             {previewFile?.type === 'image' && (
               <>
-                <img 
+                <img
                   src={
-                    previewFile.additional_urls && previewFile.additional_urls.length > 0 
-                      ? [previewFile.url, ...previewFile.additional_urls][previewImageIndex] 
+                    previewFile.additional_urls && previewFile.additional_urls.length > 0
+                      ? [previewFile.url, ...previewFile.additional_urls][previewImageIndex]
                       : previewFile.url
-                  } 
-                  alt={previewFile.name} 
-                  className="max-w-full max-h-full object-contain rounded-lg" 
+                  }
+                  alt={previewFile.name}
+                  className="max-w-full max-h-full object-contain rounded-lg"
                 />
-                
+
                 {previewFile.additional_urls && previewFile.additional_urls.length > 0 && (
                   <>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:bg-black/50 rounded-full"
                       onClick={() => setPreviewImageIndex(p => Math.max(0, p - 1))}
                       disabled={previewImageIndex === 0}
                     >
                       <ChevronLeft className="w-8 h-8" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:bg-black/50 rounded-full"
                       onClick={() => setPreviewImageIndex(p => Math.min((previewFile.additional_urls?.length || 0), p + 1))}
                       disabled={previewImageIndex === (previewFile.additional_urls?.length || 0)}
@@ -3779,89 +3996,111 @@ export default function ProfilePage() {
                     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 p-2 rounded-lg flex items-center gap-2 max-w-[80vw] overflow-x-auto">
                       {[previewFile.url, ...previewFile.additional_urls].map((url, idx) => (
                         <div key={idx} className="relative group shrink-0">
-                          <img 
-                            src={url} 
-                            alt={`Thumbnail ${idx}`} 
+                          <img
+                            src={url}
+                            alt={`Thumbnail ${idx}`}
                             className={cn("w-16 h-16 object-cover rounded cursor-pointer border-2 transition-all", previewImageIndex === idx ? "border-yellow-500 scale-110" : "border-transparent opacity-60 hover:opacity-100")}
                             onClick={() => setPreviewImageIndex(idx)}
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition-opacity">
-                             {idx > 0 && (
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
-                                  const temp = newUrls[idx - 1];
-                                  newUrls[idx - 1] = newUrls[idx];
-                                  newUrls[idx] = temp;
-                                  
-                                  const newMain = newUrls[0];
-                                  const newAdd = newUrls.slice(1);
-                                  
-                                  try {
-                                    await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                    const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                    setPreviewFile(updatedFile);
-                                    setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                    setPreviewImageIndex(idx - 1);
-                                  } catch (err) {
-                                    toast.error("Failed to reorder");
+                            {idx > 0 && (
+                              <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
+                                e.stopPropagation();
+                                const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
+                                const temp = newUrls[idx - 1];
+                                newUrls[idx - 1] = newUrls[idx];
+                                newUrls[idx] = temp;
+
+                                const newMain = newUrls[0];
+                                const newAdd = newUrls.slice(1);
+
+                                try {
+                                  const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                  if (upErr || !upData || upData.length === 0) {
+                                    toast({ title: "Failed to reorder", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                    return;
                                   }
-                                }}>
-                                  <ChevronLeft className="w-3 h-3" />
-                                </Button>
-                             )}
-                             <Button variant="ghost" size="icon" className="h-5 w-5 text-red-500 p-0 hover:bg-transparent" onClick={async (e) => {
-                               e.stopPropagation();
-                               setDeleteConfirm({
-                                 isOpen: true,
-                                 title: "Delete this image?",
-                                 desc: "This image will be removed from the group.",
-                                 onConfirm: async () => {
-                                   const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])].filter((_, i) => i !== idx);
-                                   if (newUrls.length === 0) {
-                                     try {
-                                       await supabase.from('directory_files').delete().eq('id', previewFile.id);
-                                       setDirectoryFiles(prev => prev.filter(f => f.id !== previewFile.id));
-                                       setPreviewFile(null);
-                                     } catch(err) {}
-                                   } else {
-                                     const newMain = newUrls[0];
-                                     const newAdd = newUrls.slice(1);
-                                     try {
-                                       await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                       const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                       setPreviewFile(updatedFile);
-                                       setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                       if (previewImageIndex >= newUrls.length) setPreviewImageIndex(newUrls.length - 1);
-                                     } catch(err) {}
-                                   }
-                                 }
-                               });
-                             }}>
-                               <Trash2 className="w-3 h-3" />
-                             </Button>
-                             {idx < [previewFile.url, ...(previewFile.additional_urls || [])].length - 1 && (
-                                <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
-                                  const temp = newUrls[idx + 1];
-                                  newUrls[idx + 1] = newUrls[idx];
-                                  newUrls[idx] = temp;
-                                  
-                                  const newMain = newUrls[0];
-                                  const newAdd = newUrls.slice(1);
-                                  
-                                  try {
-                                    await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id);
-                                    const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
-                                    setPreviewFile(updatedFile);
-                                    setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
-                                    setPreviewImageIndex(idx + 1);
-                                  } catch (err) {}
-                                }}>
-                                  <ChevronRight className="w-3 h-3" />
-                                </Button>
-                             )}
+                                  const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                  setPreviewFile(updatedFile);
+                                  setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                  setPreviewImageIndex(idx - 1);
+                                } catch (err: any) {
+                                  toast({ title: "Failed to reorder", description: err?.message || "Operation failed", variant: "destructive" });
+                                }
+                              }}>
+                                <ChevronLeft className="w-3 h-3" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-red-500 p-0 hover:bg-transparent" onClick={async (e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm({
+                                isOpen: true,
+                                title: "Delete this image?",
+                                desc: "This image will be removed from the group.",
+                                onConfirm: async () => {
+                                  const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])].filter((_, i) => i !== idx);
+                                  if (newUrls.length === 0) {
+                                    try {
+                                      const { data: delData, error: delErr } = await supabase.from('directory_files').delete().eq('id', previewFile.id).select('id');
+                                      if (delErr || !delData || delData.length === 0) {
+                                        toast({ title: "Failed to delete file", description: delErr?.message || "Permission denied", variant: "destructive" });
+                                        return;
+                                      }
+                                      setDirectoryFiles(prev => prev.filter(f => f.id !== previewFile.id));
+                                      setPreviewFile(null);
+                                    } catch (err: any) {
+                                      toast({ title: "Failed to delete file", description: err?.message || "Operation failed", variant: "destructive" });
+                                    }
+                                  } else {
+                                    const newMain = newUrls[0];
+                                    const newAdd = newUrls.slice(1);
+                                    try {
+                                      const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                      if (upErr || !upData || upData.length === 0) {
+                                        toast({ title: "Failed to update image", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                        return;
+                                      }
+                                      const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                      setPreviewFile(updatedFile);
+                                      setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                      if (previewImageIndex >= newUrls.length) setPreviewImageIndex(newUrls.length - 1);
+                                    } catch (err: any) {
+                                      toast({ title: "Failed to update image", description: err?.message || "Operation failed", variant: "destructive" });
+                                    }
+                                  }
+                                }
+                              });
+                            }}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                            {idx < [previewFile.url, ...(previewFile.additional_urls || [])].length - 1 && (
+                              <Button variant="ghost" size="icon" className="h-5 w-5 text-white p-0 hover:bg-transparent" onClick={async (e) => {
+                                e.stopPropagation();
+                                const newUrls = [previewFile.url, ...(previewFile.additional_urls || [])];
+                                const temp = newUrls[idx + 1];
+                                newUrls[idx + 1] = newUrls[idx];
+                                newUrls[idx] = temp;
+
+                                const newMain = newUrls[0];
+                                const newAdd = newUrls.slice(1);
+
+                                try {
+                                  const { data: upData, error: upErr } = await supabase.from('directory_files').update({ file_url: newMain, additional_urls: newAdd }).eq('id', previewFile.id).select('id');
+                                  if (upErr || !upData || upData.length === 0) {
+                                    toast({ title: "Failed to reorder", description: upErr?.message || "Permission denied", variant: "destructive" });
+                                    return;
+                                  }
+                                  const updatedFile = { ...previewFile, url: newMain, additional_urls: newAdd };
+                                  setPreviewFile(updatedFile);
+                                  setDirectoryFiles(prev => prev.map(f => f.id === previewFile.id ? updatedFile : f));
+                                  setPreviewImageIndex(idx + 1);
+                                } catch (err: any) {
+                                  toast({ title: "Failed to reorder", description: err?.message || "Operation failed", variant: "destructive" });
+                                }
+                              }}>
+                                <ChevronRight className="w-3 h-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -3870,17 +4109,17 @@ export default function ProfilePage() {
                 )}
               </>
             )}
-            
+
             {previewFile?.type === 'video' && (
               <video src={previewFile.url} controls autoPlay className="w-full h-full" />
             )}
-            
+
             {previewFile?.type === 'audio' && (
               <div className="w-full h-full flex items-center justify-center p-8 bg-gray-900 rounded-lg">
                 <audio src={previewFile.url} controls className="w-full max-w-md" />
               </div>
             )}
-            
+
             {previewFile?.type === 'document' && (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-lg overflow-hidden">
                 <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewFile.url || "")}&embedded=true`} className="w-full h-full bg-background" title="Document Preview" />

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage } from "@/lib/e2ee";
+import { generateKeyPair, importPrivateKey, importPublicKey, deriveAESKey, encryptMessage, decryptMessage, encryptForRecipientOrThrow, registerKeyInRing, decryptEnvelopeWithKeyring, getOrInitUserE2EE, ensureSenderE2EEPublicationReady } from "@/lib/e2ee";
 
 type MessageType = "text" | "image" | "video" | "document" | "audio";
 
@@ -39,6 +39,9 @@ interface ChatMessage {
   timestamp: number;
   read: boolean;
   fileName?: string;
+  failed?: boolean;
+  clientMessageId?: string;
+  encryptedEnvelope?: string;
 }
 
 interface Conversation {
@@ -63,11 +66,13 @@ interface ConnectedUser {
 // Database Interfaces to avoid "any"
 interface DBProfile {
   id: string;
+  user_id?: string | null;
   full_name: string | null;
   username: string | null;
   avatar_url: string | null;
   category: string | null;
   public_key?: string | null;
+  public_key_history?: unknown[] | null;
 }
 
 interface DBConnection {
@@ -87,6 +92,7 @@ interface DBMessage {
   type: string;
   is_read: boolean;
   created_at: string;
+  client_message_id?: string | null;
 }
 
 // Standard Seed fallback data
@@ -102,6 +108,9 @@ export default function MessagesPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const recipientParam = searchParams.get("recipient");
+  const usernameParam = searchParams.get("u");
 
   // Local Storage & Hybrid states
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -124,14 +133,103 @@ export default function MessagesPage() {
   // E2EE States
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [e2eeReady, setE2eeReady] = useState(false);
+  const [keyRotationRequired, setKeyRotationRequired] = useState(false);
+  const profilesCacheRef = useRef<Map<string, DBProfile>>(new Map());
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const chatBodyRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingFileType, setPendingFileType] = useState<MessageType>("image");
 
-  // Determine current user ID
+  // Determine current user ID and account-namespaced storage prefix
   const currentUserId = profile?.id || user?.id || "me";
+  const storagePrefix = currentUserId && currentUserId !== "me" ? `_${currentUserId}` : "";
+
+  // Handle URL parameters ?recipient=UUID or ?u=username
+  useEffect(() => {
+    const handleUrlRecipient = async () => {
+      if (recipientParam && isUuid(recipientParam)) {
+        setIsMobileChatOpen(true);
+        let recProfile: DBProfile | null = null;
+        const { data: byId } = await supabase
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+          .eq("id", recipientParam)
+          .maybeSingle();
+        recProfile = (byId as unknown as DBProfile) || null;
+
+        if (!recProfile) {
+          const { data: byUserId } = await supabase
+            .from("public_profiles" as any)
+            .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+            .eq("user_id", recipientParam)
+            .maybeSingle();
+          recProfile = (byUserId as unknown as DBProfile) || null;
+        }
+
+        if (!recProfile && usernameParam) {
+          const { data: byUsername } = await supabase
+            .from("public_profiles" as any)
+            .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+            .eq("username", usernameParam)
+            .maybeSingle();
+          recProfile = (byUsername as unknown as DBProfile) || null;
+        }
+
+        if (recProfile) {
+          profilesCacheRef.current.set(recProfile.id, recProfile);
+          setActiveId(recProfile.id);
+          const fullName = recProfile.full_name || recProfile.username || "Film Professional";
+          const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          setConnectedUsers((prev) => {
+            if (prev.some((u) => u.id === recProfile!.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: recProfile!.id,
+                username: recProfile!.username || fullName.toLowerCase().replace(/\s+/g, ""),
+                fullName,
+                avatarUrl: recProfile!.avatar_url,
+                avatarInitials: initials || "U",
+                category: recProfile!.category || "Professional"
+              }
+            ];
+          });
+        } else {
+          setActiveId(recipientParam);
+        }
+      } else if (usernameParam) {
+        const { data: rawRecProfile } = await supabase
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+          .eq("username", usernameParam)
+          .maybeSingle();
+        const recProfile = (rawRecProfile as unknown as DBProfile) || null;
+        if (recProfile) {
+          profilesCacheRef.current.set(recProfile.id, recProfile);
+          setActiveId(recProfile.id);
+          setIsMobileChatOpen(true);
+          const fullName = recProfile.full_name || recProfile.username || "Film Professional";
+          const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          setConnectedUsers((prev) => {
+            if (prev.some((u) => u.id === recProfile.id)) return prev;
+            return [
+              ...prev,
+              {
+                id: recProfile.id,
+                username: recProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+                fullName,
+                avatarUrl: recProfile.avatar_url,
+                avatarInitials: initials || "U",
+                category: recProfile.category || "Professional"
+              }
+            ];
+          });
+        }
+      }
+    };
+    handleUrlRecipient();
+  }, [recipientParam, usernameParam]);
 
   // E2EE Initialization
   useEffect(() => {
@@ -141,42 +239,78 @@ export default function MessagesPage() {
       if (isGuestSession) return;
 
       try {
-        let privKeyStr = localStorage.getItem(`e2ee_priv_${profile.id}`);
-        let pubKeyStr = localStorage.getItem(`e2ee_pub_${profile.id}`);
-        
-        let privKey: CryptoKey;
-        let pubKeyJwk: JsonWebKey;
+        await getOrInitUserE2EE(profile.id, {
+          existingRemotePublicKey: profile.public_key
+        });
+        const pubResult = await ensureSenderE2EEPublicationReady({
+          supabaseClient: supabase,
+          profileId: profile.id,
+          existingRemotePublicKey: profile.public_key,
+          allowExplicitKeyRotation: false
+        });
 
-        if (privKeyStr && pubKeyStr) {
-          const jwk = JSON.parse(privKeyStr);
-          pubKeyJwk = JSON.parse(pubKeyStr);
-          privKey = await importPrivateKey(jwk);
-        } else {
-          // Generate new keys
-          const keys = await generateKeyPair();
-          privKeyStr = JSON.stringify(keys.privateKeyJwk);
-          pubKeyStr = JSON.stringify(keys.publicKeyJwk);
-          localStorage.setItem(`e2ee_priv_${profile.id}`, privKeyStr);
-          localStorage.setItem(`e2ee_pub_${profile.id}`, pubKeyStr);
-          pubKeyJwk = keys.publicKeyJwk;
-          privKey = await importPrivateKey(keys.privateKeyJwk);
-
-          // Attempt to save to Supabase. Ignore if column doesn't exist yet (for smooth rollout)
-          await supabase.from("profiles").update({ public_key: pubKeyStr }).eq("id", profile.id).catch(() => {});
+        if (pubResult.requiresExplicitKeyRotation) {
+          // Do not silently overwrite a server public_key from a new browser without explicit rotation;
+          // the DB trigger `guard_profile_updates_and_key_history` preserves retired keys in `public_key_history`.
+          setKeyRotationRequired(true);
+          setPrivateKey(pubResult.privKey);
+          setE2eeReady(false);
+          return;
         }
 
-        setPrivateKey(privKey);
+        if (!pubResult.ready || !pubResult.privKey) {
+          setKeyRotationRequired(false);
+          setPrivateKey(null);
+          setE2eeReady(false);
+          toast({
+            variant: "destructive",
+            title: "Encryption Key Setup Blocked",
+            description: pubResult.error || "Could not verify encryption key publication on server."
+          });
+          return;
+        }
+
+        setKeyRotationRequired(false);
+        setPrivateKey(pubResult.privKey);
         setE2eeReady(true);
       } catch (err) {
         console.error("E2EE Init failed:", err);
+        setPrivateKey(null);
+        setE2eeReady(false);
       }
     };
     initE2EE();
-  }, [user, profile?.id]);
+  }, [user, profile?.id, profile?.public_key]);
+
+  const handleConfirmKeyRotation = async () => {
+    if (!profile?.id) return;
+    const pubResult = await ensureSenderE2EEPublicationReady({
+      supabaseClient: supabase,
+      profileId: profile.id,
+      existingRemotePublicKey: profile.public_key,
+      allowExplicitKeyRotation: true
+    });
+    if (!pubResult.ready || !pubResult.privKey) {
+      setE2eeReady(false);
+      toast({
+        variant: "destructive",
+        title: "Key Rotation Failed",
+        description: pubResult.error || "Could not publish rotated encryption key."
+      });
+      return;
+    }
+    setKeyRotationRequired(false);
+    setPrivateKey(pubResult.privKey);
+    setE2eeReady(true);
+    toast({
+      title: "Encryption Key Rotated",
+      description: "Your new browser key is active and your previous public key was archived in key history."
+    });
+  };
 
   // Load and merge all data
   const loadLocalData = useCallback(() => {
-    const saved = localStorage.getItem("chat_conversations");
+    const saved = storagePrefix ? localStorage.getItem(`chat_conversations${storagePrefix}`) : null;
     let initialConvs = seedConversations;
     if (saved) {
       try {
@@ -200,7 +334,7 @@ export default function MessagesPage() {
       if (!contactExists) {
         // Fetch from Supabase if we have a UUID
         if (isUuid(redirectedId)) {
-          supabase.from("profiles").select("*").eq("id", redirectedId).single().then(({ data }) => {
+          supabase.from("public_profiles").select("*").eq("id", redirectedId).single().then(({ data }) => {
             if (data) {
               const fullName = data.full_name || data.username || "Anonymous User";
               const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -220,7 +354,7 @@ export default function MessagesPage() {
       setActiveId(initialConvs[0].id);
     }
     setConnectedUsers(updatedContacts);
-  }, [activeId]);
+  }, [activeId, storagePrefix]);
 
   const loadChatData = useCallback(async () => {
     try {
@@ -240,50 +374,91 @@ export default function MessagesPage() {
           id,
           user_id,
           connected_user_id,
-          status,
-          profiles!connections_connected_user_id_fkey (id, full_name, username, avatar_url, category),
-          sender_profile:profiles!connections_user_id_fkey (id, full_name, username, avatar_url, category)
+          status
         `)
         .eq("status", "accepted")
         .or(`user_id.eq.${currentUserId},connected_user_id.eq.${currentUserId}`);
 
-      const connectionsData = rawConnectionsData as unknown as DBConnection[];
+      const connectionsData = (rawConnectionsData as unknown as Array<{
+        id: string;
+        user_id: string;
+        connected_user_id: string;
+        status: string;
+      }>) || [];
+
+      // 2. Fetch real messages involving current user
+      const { data: rawMessagesData, error: msgErr } = await supabase
+        .from("messages")
+        .select("*")
+        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .order("created_at", { ascending: true });
+
+      const messagesData = (rawMessagesData as unknown as DBMessage[]) || [];
+
+      // 3. Collect only distinct peer profile IDs involved in connections, messages, or active selection (R7-13)
+      const redirectedId = localStorage.getItem("active_chat_recipient_id");
+      const peerIdSet = new Set<string>();
+      if (!connErr && connectionsData) {
+        connectionsData.forEach((conn) => {
+          const otherId = conn.user_id === currentUserId ? conn.connected_user_id : conn.user_id;
+          if (isUuid(otherId) && otherId !== currentUserId) {
+            peerIdSet.add(otherId);
+          }
+        });
+      }
+      if (!msgErr && messagesData) {
+        messagesData.forEach((m) => {
+          const otherId = m.sender_id === currentUserId ? m.receiver_id : m.sender_id;
+          if (isUuid(otherId) && otherId !== currentUserId) {
+            peerIdSet.add(otherId);
+          }
+        });
+      }
+      if (isUuid(activeId) && activeId !== currentUserId) {
+        peerIdSet.add(activeId!);
+      }
+      if (isUuid(redirectedId) && redirectedId !== currentUserId) {
+        peerIdSet.add(redirectedId!);
+      }
+
+      // 4. Fetch participant profiles via redacted public_profiles projection (M11, R7-08, R7-13)
+      const peerIds = Array.from(peerIdSet);
+      if (peerIds.length > 0) {
+        const { data: rawProfilesData } = await supabase
+          .from("public_profiles" as any)
+          .select("id, user_id, full_name, username, avatar_url, category, public_key, public_key_history")
+          .in("id", peerIds);
+
+        const profilesData = (rawProfilesData as unknown as DBProfile[]) || [];
+        profilesData.forEach((p) => profilesCacheRef.current.set(p.id, p));
+      }
+      const profilesMap = profilesCacheRef.current;
+
       const connectedList: ConnectedUser[] = [];
       const connectedSet = new Set<string>();
 
       if (!connErr && connectionsData) {
         connectionsData.forEach((conn) => {
-          const otherProfile = conn.user_id === currentUserId ? conn.profiles : conn.sender_profile;
-          if (otherProfile && otherProfile.id !== currentUserId && !connectedSet.has(otherProfile.id)) {
-            connectedSet.add(otherProfile.id);
-            const fullName = otherProfile.full_name || otherProfile.username || "Anonymous User";
+          const otherId = conn.user_id === currentUserId ? conn.connected_user_id : conn.user_id;
+          const otherProfile = profilesMap.get(otherId);
+          if (otherId && otherId !== currentUserId && !connectedSet.has(otherId)) {
+            connectedSet.add(otherId);
+            const fullName = otherProfile?.full_name || otherProfile?.username || "Film Professional";
             const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
             connectedList.push({
-              id: otherProfile.id,
-              username: otherProfile.username || fullName.toLowerCase().replace(/\s+/g, ""),
+              id: otherId,
+              username: otherProfile?.username || fullName.toLowerCase().replace(/\s+/g, ""),
               fullName,
-              avatarUrl: otherProfile.avatar_url,
+              avatarUrl: otherProfile?.avatar_url || null,
               avatarInitials: initials || "U",
-              category: otherProfile.category || "Professional"
+              category: otherProfile?.category || "Professional"
             });
           }
         });
       }
 
-      // 2. Fetch profiles
-      const { data: rawProfilesData } = await supabase
-        .from("profiles")
-        .select("id, full_name, username, avatar_url, category, public_key");
-
-      const profilesData = rawProfilesData as unknown as DBProfile[];
-      const profilesMap = new Map<string, DBProfile>();
-      if (profilesData) {
-        profilesData.forEach(p => profilesMap.set(p.id, p));
-      }
-
       // Handle redirected active chat recipient ID
       let nextActiveId = activeId;
-      const redirectedId = localStorage.getItem("active_chat_recipient_id");
       if (redirectedId) {
         setActiveId(redirectedId);
         nextActiveId = redirectedId;
@@ -305,8 +480,6 @@ export default function MessagesPage() {
               avatarInitials: initials || "U",
               category: otherProfile.category || "Professional"
             });
-          } else if (isUuid(redirectedId)) {
-            // Already fetched in loadLocalData fallback or not found, wait for unified list update
           }
         }
       }
@@ -314,17 +487,8 @@ export default function MessagesPage() {
       // Set connected users
       setConnectedUsers(connectedList);
 
-      // 3. Fetch real messages involving current user
-      const { data: rawMessagesData, error: msgErr } = await supabase
-        .from("messages")
-        .select("*")
-        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
-        .order("created_at", { ascending: true });
-
-      const messagesData = rawMessagesData as unknown as DBMessage[];
-
       const dbConversations: Conversation[] = [];
-      const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+      const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
 
       if (!msgErr && messagesData && messagesData.length > 0) {
         // Group messages by recipient
@@ -340,7 +504,8 @@ export default function MessagesPage() {
             type: (m.type as MessageType) || "text",
             content: m.content,
             timestamp: new Date(m.created_at).getTime(),
-            read: m.is_read
+            read: m.is_read,
+            clientMessageId: m.client_message_id || undefined
           });
         });
 
@@ -350,26 +515,21 @@ export default function MessagesPage() {
           const otherProfile = profilesMap.get(otherId);
           const name = otherProfile ? (otherProfile.full_name || otherProfile.username || "Film Professional") : "User";
           const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
-          
-          let sharedKey: CryptoKey | null = null;
-          if (privateKey && otherProfile?.public_key) {
-            try {
-              const otherPubKey = await importPublicKey(JSON.parse(otherProfile.public_key));
-              sharedKey = await deriveAESKey(privateKey, otherPubKey);
-            } catch(e) {}
-          }
 
           const decryptedMsgs = await Promise.all(msgs.map(async m => {
              if (m.content.startsWith("ENCRYPTED:")) {
-                if (sharedKey) {
-                   try {
-                      const [, iv, cipher] = m.content.split(":");
-                      m.content = await decryptMessage(sharedKey, iv, cipher);
-                   } catch(e) {
-                      m.content = "🔒 [Encrypted Message - Unable to decrypt]";
-                   }
-                } else {
-                   m.content = "🔒 [Encrypted Message - Key missing]";
+                try {
+                  m.content = await decryptEnvelopeWithKeyring({
+                    envelope: m.content,
+                    recipientProfileId: currentUserId,
+                    primaryPrivateKey: privateKey,
+                    senderPublicKeyJwkOrStr: otherProfile?.public_key,
+                    peerPublicKeyHistory: otherProfile?.public_key_history
+                  });
+                } catch {
+                  m.content = privateKey
+                    ? "🔒 [Encrypted Message - Unable to decrypt]"
+                    : "🔒 [Encrypted Message - Key missing]";
                 }
              }
              return m;
@@ -397,6 +557,37 @@ export default function MessagesPage() {
         return lastB - lastA;
       });
 
+      // Merge account-scoped outbox of unsent/failed messages so polling never drops retry actions
+      // and deduplicate any failed message whose client_message_id has already been delivered on the server (M26)
+      try {
+        const cachedRaw = localStorage.getItem(`chat_conversations${storagePrefix}`);
+        if (cachedRaw) {
+          const cachedConvs: Conversation[] = JSON.parse(cachedRaw);
+          for (const cConv of cachedConvs) {
+            const failedMessages = (cConv.messages || []).filter(m => m.failed);
+            if (failedMessages.length > 0) {
+              const matchedDbConv = dbConversations.find(c => c.id === cConv.id);
+              if (matchedDbConv) {
+                for (const fMsg of failedMessages) {
+                  const alreadyDeliveredOnServer = matchedDbConv.messages.some(
+                    m => m.id === fMsg.id || (m.clientMessageId && m.clientMessageId === fMsg.id)
+                  );
+                  if (!alreadyDeliveredOnServer) {
+                    matchedDbConv.messages.push(fMsg);
+                  }
+                }
+                matchedDbConv.messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              } else {
+                dbConversations.push(cConv);
+              }
+            }
+          }
+          saveLocalData(dbConversations);
+        }
+      } catch (err) {
+        console.warn("Could not merge outbox failed messages:", err);
+      }
+
       setConversations(dbConversations);
 
       if (!nextActiveId && dbConversations.length > 0) {
@@ -408,10 +599,10 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.id, currentUserId, activeId, loadLocalData, privateKey]);
+  }, [user, profile?.id, currentUserId, activeId, loadLocalData, privateKey, storagePrefix]);
 
   const saveLocalData = (newConvs: Conversation[]) => {
-    localStorage.setItem("chat_conversations", JSON.stringify(newConvs));
+    localStorage.setItem(`chat_conversations${storagePrefix}`, JSON.stringify(newConvs));
   };
 
   // Run initial mount load
@@ -419,11 +610,14 @@ export default function MessagesPage() {
     loadChatData();
   }, [loadChatData]);
 
-  // Periodic Polling to keep chat fully live (every 4 seconds)
+  // Periodic Polling to keep chat fully live (every 4 seconds while tab is visible)
   useEffect(() => {
     const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
     if (!user || isGuestSession) return;
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       loadChatData();
     }, 4000);
     return () => clearInterval(interval);
@@ -486,9 +680,9 @@ export default function MessagesPage() {
   useEffect(() => {
     if (activeId && activeConv && activeConv.unread > 0) {
       // Clear unread count locally
-      const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+      const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
       readConvs[activeId] = Date.now();
-      localStorage.setItem("read_conversations", JSON.stringify(readConvs));
+      localStorage.setItem(`read_conversations${storagePrefix}`, JSON.stringify(readConvs));
 
       setConversations((prev) => prev.map((c) =>
         c.id === activeId ? { ...c, unread: 0, messages: c.messages.map(m => ({ ...m, read: true })) } : c
@@ -560,10 +754,10 @@ export default function MessagesPage() {
     setActiveId(id);
     setIsMobileChatOpen(true);
 
-    // Clear unread count locally
-    const readConvs = JSON.parse(localStorage.getItem("read_conversations") || "{}");
+    // Clear unread count locally (scoped by account)
+    const readConvs = JSON.parse(localStorage.getItem(`read_conversations${storagePrefix}`) || "{}");
     readConvs[id] = Date.now();
-    localStorage.setItem("read_conversations", JSON.stringify(readConvs));
+    localStorage.setItem(`read_conversations${storagePrefix}`, JSON.stringify(readConvs));
 
     const updated = conversations.map((c) =>
       c.id === id ? { ...c, unread: 0, messages: c.messages.map(m => ({ ...m, read: true })) } : c
@@ -618,9 +812,30 @@ export default function MessagesPage() {
     const content = contentOverride ?? input.trim();
     if (!content) return;
 
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    const isValidSender = isUuid(currentUserId);
+    const isValidReceiver = isUuid(activeId);
+
+    // Mandatory sender E2EE readiness & key rotation gate before mutating input or sending (R8-03)
+    if (user && !isGuestSession && isValidSender && isValidReceiver) {
+      if (keyRotationRequired || !e2eeReady || !privateKey) {
+        toast({
+          variant: "destructive",
+          title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+          description: keyRotationRequired
+            ? "New browser detected. Please confirm key rotation in the banner before sending encrypted messages."
+            : "Your sender encryption key could not be verified on the server. Sending is disabled to prevent undecryptable messages."
+        });
+        return;
+      }
+    }
+
     const timestamp = Date.now();
+    const clientUuid = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
     const newMsg: ChatMessage = {
-      id: "msg_temp_" + timestamp,
+      id: clientUuid,
       sender: "me",
       type,
       content,
@@ -672,53 +887,244 @@ export default function MessagesPage() {
     setAttachMenuOpen(false);
 
     // 2. Persist in Supabase if logged in & not chatting with mock profiles
-    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
-    
-    const isValidSender = isUuid(currentUserId);
-    const isValidReceiver = isUuid(activeId);
-
     if (user && !isGuestSession && isValidSender && isValidReceiver) {
+      let cachedEnvelope: string | undefined;
       try {
-        let payload = content;
-        
-        // E2EE: Attempt to encrypt the message before sending
-        if (privateKey) {
-          try {
-            const { data: rxData } = await supabase.from("profiles").select("public_key").eq("id", activeId).single();
-            if (rxData && rxData.public_key) {
-              const otherPubKey = await importPublicKey(JSON.parse(rxData.public_key));
-              const sharedKey = await deriveAESKey(privateKey, otherPubKey);
-              const encrypted = await encryptMessage(sharedKey, content);
-              payload = `ENCRYPTED:${encrypted.iv}:${encrypted.ciphertext}`;
-            }
-          } catch(e) {
-            console.warn("E2EE encryption failed during send:", e);
-          }
-        }
+        const { data: rxData } = await supabase.from("public_profiles").select("public_key").eq("id", activeId).single();
+
+        // Mandatory fail-closed encryption: throws if sender privateKey is null, recipient key missing, or encryption fails
+        const { envelope } = await encryptForRecipientOrThrow({
+          senderPrivateKey: privateKey,
+          recipientPublicKeyJwkOrStr: rxData?.public_key,
+          plaintext: content,
+          includeKeyMetadata: true
+        });
+        cachedEnvelope = envelope;
+
+        // Store the exact encrypted envelope on the outbox item before network insert so retries reuse the identical ciphertext (M26)
+        setConversations((prev) => {
+          const updatedWithEnvelope = prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === newMsg.id ? { ...m, encryptedEnvelope: envelope, clientMessageId: newMsg.id } : m
+                  )
+                }
+              : c
+          );
+          saveLocalData(updatedWithEnvelope);
+          return updatedWithEnvelope;
+        });
 
         const { error } = await supabase.from("messages").insert({
           sender_id: currentUserId,
           receiver_id: activeId,
-          content: payload,
+          content: envelope,
           type,
-          is_read: false
+          is_read: false,
+          client_message_id: newMsg.id
         });
 
         if (error) {
-          console.warn("Database insert message failed (handled gracefully):", error);
-        } else {
-          loadChatData(); // Reload from db to overwrite temp message with db version
+          if (error.code === '23505') {
+            // Reconcile with existing server record to verify this exact message delivery
+            const { data: existingMsg } = await supabase
+              .from("messages")
+              .select("id, sender_id, receiver_id, content")
+              .eq("client_message_id", newMsg.id)
+              .maybeSingle();
+
+            if (
+              !existingMsg ||
+              existingMsg.sender_id !== currentUserId ||
+              existingMsg.receiver_id !== activeId ||
+              existingMsg.content !== envelope
+            ) {
+              throw new Error("Message client identifier conflict. Delivery could not be verified.");
+            }
+          } else {
+            throw error;
+          }
         }
-      } catch (err) {
-        console.warn("Error inserting message to database:", err);
+        loadChatData();
+      } catch (err: any) {
+        console.warn("Message delivery halted / failed:", err);
+        toast({
+          variant: "destructive",
+          title: "Message Delivery Failed",
+          description: err.message || "Message could not be encrypted or saved to the server."
+        });
+        setConversations((prev) => {
+          const updated = prev.map((c) =>
+            c.id === activeId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === newMsg.id
+                      ? { ...m, failed: true, encryptedEnvelope: cachedEnvelope ?? m.encryptedEnvelope, clientMessageId: newMsg.id }
+                      : m
+                  )
+                }
+              : c
+          );
+          saveLocalData(updated);
+          return updated;
+        });
+        return;
       }
     }
-
   };
 
-    // 3. Simulate smart typing response from Seed contacts
+  const handleRetryMessage = async (msgToRetry: ChatMessage) => {
+    if (!activeId || !user) return;
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    if (isGuestSession) return;
+
+    if (keyRotationRequired || !e2eeReady || !privateKey) {
+      toast({
+        variant: "destructive",
+        title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+        description: keyRotationRequired
+          ? "Please confirm encryption key rotation before retrying this message."
+          : "Your sender encryption key is not published on the server yet."
+      });
+      return;
+    }
+
+    // Optimistically reset failed state to pending
+    setConversations((prev) => {
+      const updated = prev.map((c) =>
+        c.id === activeId
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.id === msgToRetry.id ? { ...m, failed: false } : m
+              )
+            }
+          : c
+      );
+      saveLocalData(updated);
+      return updated;
+    });
+
+    let envelopeToSend = msgToRetry.encryptedEnvelope;
+    try {
+      const { data: rxData } = await supabase.from("public_profiles").select("public_key").eq("id", activeId).single();
+
+      // Reuse the cached encryptedEnvelope from the initial send attempt when present so 23505 reconciliation is deterministic (M26)
+      if (!envelopeToSend || !envelopeToSend.startsWith("ENCRYPTED:")) {
+        const { envelope } = await encryptForRecipientOrThrow({
+          senderPrivateKey: privateKey,
+          recipientPublicKeyJwkOrStr: rxData?.public_key,
+          plaintext: msgToRetry.content,
+          includeKeyMetadata: true
+        });
+        envelopeToSend = envelope;
+      }
+
+      const { error } = await supabase.from("messages").insert({
+        sender_id: currentUserId,
+        receiver_id: activeId,
+        content: envelopeToSend,
+        type: msgToRetry.type,
+        is_read: false,
+        client_message_id: msgToRetry.id
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          const { data: existingMsg } = await supabase
+            .from("messages")
+            .select("id, sender_id, receiver_id, content")
+            .eq("client_message_id", msgToRetry.id)
+            .maybeSingle();
+
+          let contentVerified = existingMsg?.content === envelopeToSend;
+          if (!contentVerified && existingMsg?.content?.startsWith("ENCRYPTED:") && privateKey && rxData?.public_key) {
+            try {
+              const decryptedExisting = await decryptEnvelopeWithKeyring({
+                envelope: existingMsg.content,
+                recipientProfileId: currentUserId,
+                primaryPrivateKey: privateKey,
+                senderPublicKeyJwkOrStr: rxData.public_key
+              });
+              contentVerified = decryptedExisting === msgToRetry.content;
+            } catch {
+              contentVerified = false;
+            }
+          }
+
+          if (
+            !existingMsg ||
+            existingMsg.sender_id !== currentUserId ||
+            existingMsg.receiver_id !== activeId ||
+            !contentVerified
+          ) {
+            throw new Error("Message client identifier conflict on retry. Delivery could not be verified.");
+          }
+        } else {
+          throw error;
+        }
+      }
+
+      // Clear failed state from local outbox on verified delivery
+      setConversations((prev) => {
+        const cleaned = prev.map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgToRetry.id ? { ...m, failed: false, encryptedEnvelope: envelopeToSend, clientMessageId: msgToRetry.id } : m
+                )
+              }
+            : c
+        );
+        saveLocalData(cleaned);
+        return cleaned;
+      });
+
+      toast({
+        title: "Message sent",
+        description: "Your message has been delivered."
+      });
+      loadChatData();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Retry failed",
+        description: err?.message || "Could not deliver encrypted message."
+      });
+      setConversations((prev) => {
+        const updated = prev.map((c) =>
+          c.id === activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgToRetry.id ? { ...m, failed: true, encryptedEnvelope: envelopeToSend ?? m.encryptedEnvelope } : m
+                )
+              }
+            : c
+        );
+        saveLocalData(updated);
+        return updated;
+      });
+    }
+  };
+
   // Handle local attachment real file upload & convert to base64
   const triggerAttachmentSelection = (type: MessageType) => {
+    const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+    if (user && !isGuestSession && isUuid(currentUserId) && isUuid(activeId) && (keyRotationRequired || !e2eeReady || !privateKey)) {
+      toast({
+        variant: "destructive",
+        title: keyRotationRequired ? "Encryption Key Rotation Required" : "Encryption Key Not Ready",
+        description: keyRotationRequired
+          ? "Please confirm encryption key rotation before sending attachments."
+          : "Your sender encryption key is not published on the server yet."
+      });
+      return;
+    }
     setPendingFileType(type);
     fileInputRef.current?.click();
   };
@@ -728,13 +1134,21 @@ export default function MessagesPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const base64Data = reader.result as string;
-      sendMessage(pendingFileType, base64Data, file.name);
-      toast({
-        title: "Attachment sent",
-        description: `Successfully sent ${file.name}`
-      });
+      try {
+        await sendMessage(pendingFileType, base64Data, file.name);
+        toast({
+          title: "Attachment processed",
+          description: `Sending ${file.name}...`
+        });
+      } catch (err: any) {
+        toast({
+          variant: "destructive",
+          title: "File error",
+          description: err?.message || "Failed to send attachment."
+        });
+      }
     };
     reader.onerror = () => {
       toast({
@@ -751,22 +1165,110 @@ export default function MessagesPage() {
     }
   };
 
-  // Load older mock history simulation
-  function loadOlder() {
-    if (!activeConv) return;
+  // Load older messages pagination from Supabase
+  const loadOlder = async () => {
+    if (!activeConv || loadingOlder) return;
     setLoadingOlder(true);
-    setTimeout(() => {
-      const older: ChatMessage[] = [
-        { id: "old-" + Date.now(), sender: "them", type: "text", content: "Hey! Just wanted to share our project proposal outline. Glad to connect here.", timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3, read: true },
-        { id: "old-" + (Date.now() + 1), sender: "me", type: "text", content: "Absolutely. Looking forward to reviewing the project coordinates.", timestamp: Date.now() - 1000 * 60 * 60 * 24 * 3 + 60000, read: true },
-      ];
-      setConversations((prev) =>
-        prev.map((c) => (c.id === activeConv.id ? { ...c, messages: [...older, ...c.messages] } : c))
-      );
+    try {
+      const isGuestSession = !profile?.id || profile.id === "guest-profile-id" || profile.id === "admin-guest-profile" || !!localStorage.getItem("guest_session");
+      if (user && !isGuestSession && isUuid(activeConv.id) && isUuid(currentUserId)) {
+        const oldestMsg = activeConv.messages[0];
+        const oldestTimestamp = oldestMsg ? new Date(oldestMsg.timestamp).toISOString() : new Date().toISOString();
+
+        const { data: olderDbMessages, error: olderErr } = await supabase
+          .from("messages")
+          .select("*")
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${activeConv.id}),and(sender_id.eq.${activeConv.id},receiver_id.eq.${currentUserId})`)
+          .lt("created_at", oldestTimestamp)
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        if (olderErr) {
+          throw olderErr;
+        }
+
+        if (!olderDbMessages || olderDbMessages.length === 0) {
+          toast({
+            title: "End of conversation history",
+            description: "No earlier messages exist in this conversation."
+          });
+          setLoadingOlder(false);
+          return;
+        }
+
+        // Fetch peer public key and key history from public_profiles (R7-08)
+        let peerPublicKey: string | null | undefined = profilesCacheRef.current.get(activeConv.id)?.public_key;
+        let peerPublicKeyHistory: unknown[] | null | undefined = profilesCacheRef.current.get(activeConv.id)?.public_key_history;
+        try {
+          const { data: otherP } = await supabase
+            .from("public_profiles" as any)
+            .select("public_key, public_key_history")
+            .eq("id", activeConv.id)
+            .maybeSingle();
+
+          const typedOther = otherP as unknown as { public_key?: string | null; public_key_history?: unknown[] | null } | null;
+          if (typedOther?.public_key) {
+            peerPublicKey = typedOther.public_key;
+            peerPublicKeyHistory = typedOther.public_key_history;
+          }
+        } catch (e) {
+          console.debug("E2EE key lookup failed for older msgs:", e);
+        }
+
+        const mappedOlder: ChatMessage[] = await Promise.all(
+          olderDbMessages.reverse().map(async (m) => {
+            let content = m.content;
+            if (content && typeof content === "string" && content.startsWith("ENCRYPTED:")) {
+              try {
+                content = await decryptEnvelopeWithKeyring({
+                  envelope: content,
+                  recipientProfileId: currentUserId,
+                  primaryPrivateKey: privateKey,
+                  senderPublicKeyJwkOrStr: peerPublicKey,
+                  peerPublicKeyHistory
+                });
+              } catch {
+                content = privateKey
+                  ? "🔒 [Encrypted Message - Unable to decrypt]"
+                  : "🔒 [Encrypted Message - Key missing]";
+              }
+            }
+            return {
+              id: m.id,
+              sender: m.sender_id === currentUserId ? "me" : "them",
+              type: (m.type as MessageType) || "text",
+              content,
+              timestamp: new Date(m.created_at).getTime(),
+              read: m.is_read
+            };
+          })
+        );
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeConv.id
+              ? { ...c, messages: [...mappedOlder, ...c.messages] }
+              : c
+          )
+        );
+        chatBodyRef.current?.scrollTo({ top: 120, behavior: "smooth" });
+      } else {
+        toast({
+          title: "End of history",
+          description: "No earlier messages available."
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to load older messages:", err);
+      toast({
+        variant: "destructive",
+        title: "Could not load older messages",
+        description: err?.message || "Error retrieving earlier messages."
+      });
+    } finally {
       setLoadingOlder(false);
-      chatBodyRef.current?.scrollTo({ top: 120, behavior: "smooth" });
-    }, 800);
-  }
+    }
+  };
 
   // Delete/Clear conversation
   const clearConversation = (id: string) => {
@@ -802,15 +1304,13 @@ export default function MessagesPage() {
       });
       setReportReason("");
       setReportModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to submit report:", err);
-      // Fallback for offline / seed user testing
       toast({
-        title: "Report submitted",
-        description: `Your report for ${activeConv.username} has been recorded.`
+        variant: "destructive",
+        title: "Report failed",
+        description: err?.message || `Could not submit report for ${activeConv.username}. Please try again.`
       });
-      setReportReason("");
-      setReportModalOpen(false);
     } finally {
       setSubmittingReport(false);
     }
@@ -835,23 +1335,36 @@ export default function MessagesPage() {
         />
 
         {/* Left column: Directory Sidebar */}
-        <Card id="messages-sidebar" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-sm border border-border ${
+        <Card id="messages-sidebar" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 ${
           isMobileChatOpen ? "hidden lg:flex" : "flex"
         }`}>
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b border-border/80 bg-surface-elevated/30">
             <div className="flex items-center justify-between mb-2">
-              <h1 className="text-xl font-bold tracking-tight text-foreground">Messages</h1>
+              <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Messages</h1>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
               Chat with connected film professionals
             </p>
+            {keyRotationRequired && (
+              <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+                <span>New device detected. Rotate encryption key for this browser?</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleConfirmKeyRotation}
+                  className="h-7 px-2.5 text-[11px] border-amber-500/40 text-amber-100 hover:bg-amber-500/20"
+                >
+                  Rotate Key
+                </Button>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search messages..."
                 value={convSearch}
                 onChange={(e) => setConvSearch(e.target.value)}
-                className="pl-9 h-9 border-border bg-background text-foreground rounded-lg focus-visible:ring-yellow-500 text-sm"
+                className="pl-9 h-9 border-border/80 bg-surface-elevated/60 text-foreground rounded-lg focus-visible:ring-primary text-sm"
               />
             </div>
           </div>
@@ -859,7 +1372,7 @@ export default function MessagesPage() {
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin text-yellow-500 mb-2" />
+                <Loader2 className="w-6 h-6 animate-spin text-primary mb-2" />
                 <span className="text-xs">Loading conversations...</span>
               </div>
             ) : (
@@ -874,8 +1387,8 @@ export default function MessagesPage() {
                       key={c.id}
                       className={`group w-full rounded-xl p-3 flex items-start gap-3 transition-all relative ${
                         isActive 
-                          ? "bg-yellow-500/10 border-l-4 border-yellow-500" 
-                          : "hover:bg-muted/40 border-l-4 border-transparent"
+                          ? "bg-primary/10 border-l-4 border-primary" 
+                          : "hover:bg-surface-hover border-l-4 border-transparent"
                       }`}
                     >
                       <button
@@ -886,7 +1399,7 @@ export default function MessagesPage() {
                           {c.avatarUrl ? (
                             <img src={c.avatarUrl} alt={c.username} className="w-11 h-11 rounded-full object-cover border border-border" />
                           ) : (
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
+                            <div className="w-11 h-11 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center justify-center text-sm font-semibold shadow-sm">
                               {c.avatar}
                             </div>
                           )}
@@ -894,7 +1407,7 @@ export default function MessagesPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="font-semibold text-foreground text-sm truncate">{c.username}</span>
-                            <span className="text-[10px] text-muted-foreground font-medium">
+                            <span className="font-mono text-[10px] text-muted-foreground font-medium">
                               {lastTs ? formatTime(lastTs) : ""}
                             </span>
                           </div>
@@ -903,7 +1416,7 @@ export default function MessagesPage() {
                               {last}
                             </p>
                             {c.unread > 0 && (
-                              <span className="bg-yellow-600 text-white text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center flex-shrink-0">
+                              <span className="bg-primary text-primary-foreground font-mono text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center flex-shrink-0">
                                 {c.unread}
                               </span>
                             )}
@@ -926,13 +1439,13 @@ export default function MessagesPage() {
         </Card>
 
         {/* Right column: Chat Window */}
-        <Card id="messages-chat-window" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-sm border border-border ${
+        <Card id="messages-chat-window" className={`flex flex-col overflow-hidden bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 ${
           isMobileChatOpen ? "flex" : "hidden lg:flex"
         }`}>
           {activeConv ? (
             <>
               {/* Chat Header */}
-              <div className="border-b border-border p-4 flex items-center justify-between bg-card z-10 shadow-xs">
+              <div className="border-b border-border/80 p-4 flex items-center justify-between bg-surface-elevated/30 z-10 shadow-xs">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setIsMobileChatOpen(false)}
@@ -947,15 +1460,15 @@ export default function MessagesPage() {
                   >
                     <div className="relative">
                       {activeConv.avatarUrl ? (
-                        <img src={activeConv.avatarUrl} alt={activeConv.username} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 group-hover:ring-yellow-500 transition-all" />
+                        <img src={activeConv.avatarUrl} alt={activeConv.username} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 group-hover:ring-primary transition-all" />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm group-hover:ring-2 group-hover:ring-yellow-500 transition-all">
+                        <div className="w-10 h-10 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center justify-center text-sm font-semibold shadow-sm group-hover:ring-2 group-hover:ring-primary transition-all">
                           {activeConv.avatar}
                         </div>
                       )}
                     </div>
                     <div>
-                      <h2 className="font-bold text-foreground leading-tight text-sm md:text-base group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition-colors">{activeConv.username}</h2>
+                      <h2 className="font-bold text-foreground leading-tight text-sm md:text-base group-hover:text-primary transition-colors">{activeConv.username}</h2>
                     </div>
                   </div>
                 </div>
@@ -991,14 +1504,14 @@ export default function MessagesPage() {
               </div>
 
               {/* Chat Body messages stream */}
-              <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
+              <div ref={chatBodyRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/60">
                 <div className="text-center pb-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={loadOlder}
                     disabled={loadingOlder}
-                    className="border-border text-foreground hover:bg-card hover:border-yellow-500 text-xs h-7 rounded-lg transition-colors"
+                    className="border-border/80 text-foreground hover:bg-surface-hover hover:border-primary/40 text-xs h-7 rounded-lg transition-colors"
                   >
                     {loadingOlder ? (
                       <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
@@ -1021,7 +1534,7 @@ export default function MessagesPage() {
                       <React.Fragment key={m.id}>
                         {showDateHeader && (
                           <div className="flex justify-center my-4">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-card border border-border rounded-full px-2.5 py-1 shadow-2xs">
+                            <span className="font-mono text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-surface-elevated border border-border/80 rounded-full px-3 py-1 shadow-2xs">
                               {dateStr}
                             </span>
                           </div>
@@ -1032,8 +1545,8 @@ export default function MessagesPage() {
                             <div
                               className={`rounded-2xl px-4 py-2.5 text-sm shadow-2xs border ${
                                 isMe
-                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-transparent rounded-tr-none"
-                                  : "bg-card text-card-foreground border-border rounded-tl-none"
+                                  ? "bg-primary text-primary-foreground border-transparent rounded-tr-none"
+                                  : "bg-surface-elevated text-foreground border-border/70 rounded-tl-none"
                               }`}
                             >
                               {m.type === "text" && <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>}
@@ -1063,7 +1576,7 @@ export default function MessagesPage() {
 
                               {m.type === "document" && (
                                 <div className="flex items-center gap-3 py-1">
-                                  <div className="p-2 bg-yellow-100 rounded-lg text-yellow-700">
+                                  <div className="p-2 bg-primary/15 rounded-lg text-primary">
                                     <FileText className="w-5 h-5" />
                                   </div>
                                   <div className="min-w-0 text-left">
@@ -1093,16 +1606,30 @@ export default function MessagesPage() {
                               )}
 
                               <div className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] ${
-                                isMe ? "text-yellow-100" : "text-muted-foreground"
+                                isMe ? "text-primary-foreground/80 font-mono" : "text-muted-foreground font-mono"
                               }`}>
                                 <span>{formatTime(m.timestamp)}</span>
                                 {isMe && (
-                                  m.id.startsWith('msg_temp_') ? (
-                                    <Check className="w-3.5 h-3.5 text-yellow-200/70" />
+                                  m.failed ? (
+                                    <span className="text-destructive font-sans font-medium text-[10px] flex items-center gap-1.5">
+                                      <span>Delivery failed</span>
+                                      <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRetryMessage(m);
+                                        }}
+                                        className="underline hover:text-destructive/80 font-semibold cursor-pointer"
+                                      >
+                                        Retry
+                                      </button>
+                                    </span>
+                                  ) : m.id.startsWith('msg_temp_') ? (
+                                    <Check className="w-3.5 h-3.5 text-primary-foreground/70" />
                                   ) : m.read ? (
-                                    <CheckCheck className="w-3.5 h-3.5 text-yellow-100" />
+                                    <CheckCheck className="w-3.5 h-3.5 text-primary-foreground" />
                                   ) : (
-                                    <CheckCheck className="w-3.5 h-3.5 text-yellow-200/70" />
+                                    <CheckCheck className="w-3.5 h-3.5 text-primary-foreground/70" />
                                   )
                                 )}
                               </div>
@@ -1119,9 +1646,9 @@ export default function MessagesPage() {
                   <div className="flex justify-start">
                     <div className="bg-card border border-border rounded-2xl rounded-tl-none px-4 py-2 text-xs text-muted-foreground flex items-center gap-1.5 shadow-2xs">
                       <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-bounce" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
                       </div>
                       <span>{activeConv.username} is typing...</span>
                     </div>
@@ -1141,7 +1668,7 @@ export default function MessagesPage() {
                     
                     <button
                       onClick={() => triggerAttachmentSelection("image")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <ImageIcon className="w-4 h-4 text-blue-500" />
                       Image File
@@ -1149,7 +1676,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("video")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <VideoIcon className="w-4 h-4 text-red-500" />
                       Video File
@@ -1157,7 +1684,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("document")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <FileText className="w-4 h-4 text-green-500" />
                       Document
@@ -1165,7 +1692,7 @@ export default function MessagesPage() {
 
                     <button
                       onClick={() => triggerAttachmentSelection("audio")}
-                      className="flex items-center gap-2 p-2 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 rounded-lg text-xs font-medium text-foreground transition-all text-left"
+                      className="flex items-center gap-2 p-2 hover:bg-surface-hover hover:text-primary rounded-lg text-xs font-medium text-foreground transition-all text-left"
                     >
                       <Music className="w-4 h-4 text-purple-500" />
                       Audio File
@@ -1173,15 +1700,30 @@ export default function MessagesPage() {
                   </div>
                 )}
 
+                {keyRotationRequired && (
+                  <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 flex items-center justify-between gap-2">
+                    <span>New device detected. Confirm encryption key rotation before sending messages.</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleConfirmKeyRotation}
+                      className="h-7 px-2.5 text-[11px] border-amber-500/40 text-amber-100 hover:bg-amber-500/20"
+                    >
+                      Rotate Key
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="icon"
+                    disabled={keyRotationRequired || (!e2eeReady && isUuid(currentUserId) && isUuid(activeId))}
                     onClick={() => setAttachMenuOpen((s) => !s)}
                     className={`h-10 w-10 rounded-xl flex-shrink-0 transition-all ${
                       attachMenuOpen
-                        ? "bg-yellow-50 border-yellow-300 text-yellow-600"
-                        : "border-border text-muted-foreground hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60"
+                        ? "bg-primary/15 border-primary/40 text-primary"
+                        : "border-border/80 text-muted-foreground hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
                     }`}
                   >
                     {attachMenuOpen ? <X className="w-4 h-4" /> : <Paperclip className="w-4 h-4" />}
@@ -1191,18 +1733,22 @@ export default function MessagesPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && input.trim()) {
+                      if (e.key === "Enter" && input.trim() && !keyRotationRequired && (e2eeReady || !isUuid(currentUserId) || !isUuid(activeId))) {
                         sendMessage();
                       }
                     }}
-                    placeholder={`Message ${activeConv.username}...`}
-                    className="flex-1 h-10 border-border bg-background text-foreground rounded-xl focus-visible:ring-yellow-500 text-sm px-4"
+                    placeholder={
+                      keyRotationRequired
+                        ? "Confirm encryption key rotation above to send messages..."
+                        : `Message ${activeConv.username}...`
+                    }
+                    className="flex-1 h-10 border-border/80 bg-surface-elevated/60 text-foreground rounded-xl focus-visible:ring-primary text-sm px-4"
                   />
 
                   <Button
                     onClick={() => sendMessage()}
-                    disabled={!input.trim()}
-                    className="h-10 px-5 rounded-xl bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all"
+                    disabled={!input.trim() || keyRotationRequired || (!e2eeReady && isUuid(currentUserId) && isUuid(activeId))}
+                    className="h-10 px-5 rounded-xl bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline text-xs font-semibold">Send</span>
@@ -1212,9 +1758,9 @@ export default function MessagesPage() {
             </>
           ) : (
             // Empty State
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-muted/20">
-              <div className="max-w-md p-6 bg-card border border-border rounded-2xl shadow-xs">
-                <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-background/60">
+              <div className="max-w-md p-6 bg-card border border-border/80 rounded-2xl shadow-noir">
+                <div className="w-12 h-12 bg-primary/15 text-primary border border-primary/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-6 h-6" />
                 </div>
                 <h3 className="text-base font-bold text-foreground mb-1">Start a Conversation</h3>
@@ -1257,7 +1803,7 @@ export default function MessagesPage() {
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value)}
                   placeholder="Provide specific details about harassment, spam, or inappropriate behavior..."
-                  className="w-full min-h-[100px] p-3 text-sm border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-background text-foreground"
+                  className="w-full min-h-[100px] p-3 text-sm border border-border/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-surface-elevated/50 text-foreground"
                 />
               </div>
             </div>

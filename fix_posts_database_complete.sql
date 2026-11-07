@@ -271,14 +271,30 @@ FOR INSERT WITH CHECK (
 
 CREATE POLICY "post_media_update_policy" ON storage.objects
 FOR UPDATE USING (
-    bucket_id = 'post-media' AND 
-    auth.role() = 'authenticated'
+    bucket_id IN ('post-media', 'post_media') AND (
+        auth.uid() = owner
+        OR (storage.foldername(name))[1] = auth.uid()::text
+        OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.user_id = auth.uid()
+              AND (storage.foldername(storage.objects.name))[1] = p.id::text
+        )
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    )
 );
 
 CREATE POLICY "post_media_delete_policy" ON storage.objects
 FOR DELETE USING (
-    bucket_id = 'post-media' AND 
-    auth.role() = 'authenticated'
+    bucket_id IN ('post-media', 'post_media') AND (
+        auth.uid() = owner
+        OR (storage.foldername(name))[1] = auth.uid()::text
+        OR EXISTS (
+            SELECT 1 FROM public.profiles p
+            WHERE p.user_id = auth.uid()
+              AND (storage.foldername(storage.objects.name))[1] = p.id::text
+        )
+        OR auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin')
+    )
 );
 
 -- 16. Test the setup

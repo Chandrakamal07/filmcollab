@@ -1,5 +1,5 @@
 import { AdminLayout } from "@/components/layout/admin-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +11,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Eye, 
   Trash2,
   CheckCircle,
   X,
@@ -19,7 +18,6 @@ import {
   Play,
   Search,
   Tags,
-  User,
   Check,
   Building2,
   MapPin,
@@ -44,7 +42,6 @@ export default function AdminJobs() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [dateTo, setDateTo] = useState("");
   const { toast } = useToast();
 
   // Notification states
@@ -69,7 +66,7 @@ export default function AdminJobs() {
       const { data, error } = await supabase.from("global_tags").select("name").order("name");
       if (error && error.code !== '42P01') throw error;
       if (data) {
-        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-gray-100 text-gray-800" })));
+        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-surface-elevated text-foreground border border-border/80" })));
       }
     } catch (error) {
       console.error("Error fetching global tags:", error);
@@ -145,54 +142,48 @@ export default function AdminJobs() {
     }
   };
 
-  const handleViewJob = (jobId: string) => {
-    window.open(`/jobs/${jobId}`, '_blank');
-  };
-
-  const handleApproveJob = async (jobId: string) => {
-    try {
-      await supabase.from("jobs").update({ status: "Active" }).eq("id", jobId);
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "Active" } : j));
-      toast({ title: "Job approved" });
-    } catch (e) {}
-  };
-
-  const handleRejectJob = async (jobId: string) => {
-    try {
-      await supabase.from("jobs").update({ status: "Rejected" }).eq("id", jobId);
-      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "Rejected" } : j));
-      toast({ title: "Job rejected" });
-    } catch (e) {}
-  };
-
   const handleDeleteJob = async (jobId: string) => {
     if (!confirm("Are you sure you want to delete this job?")) return;
     try {
-      await supabase.from("jobs").delete().eq("id", jobId);
+      const { data, error } = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", jobId)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was deleted. Permission denied or record not found.");
+      }
       setJobs(prev => prev.filter(j => j.id !== jobId));
       toast({ title: "Job deleted" });
-    } catch (e) {}
+    } catch (e: any) {
+      toast({ title: "Failed to delete job", description: e?.message || "Operation failed", variant: "destructive" });
+    }
   };
 
   const handleUpdateStatus = async (jobId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("jobs")
         .update({ status: newStatus })
-        .eq("id", jobId);
+        .eq("id", jobId)
+        .select("id");
       
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was updated. Permission denied or record not found.");
+      }
       
       setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: newStatus } : j));
       toast({
         title: "Status Updated",
         description: `Job status changed to ${newStatus}.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating status:", error);
       toast({
         title: "Update Failed",
-        description: "Could not change the job status.",
+        description: error?.message || "Could not change the job status.",
         variant: "destructive"
       });
     }
@@ -232,14 +223,13 @@ export default function AdminJobs() {
         return;
       }
 
-      const { error } = await supabase.from('notifications').insert({
-        user_id: targetUserId,
-        title: notificationTitle.trim(),
-        description: fullDescription,
-        type: "job",
-        priority: "high",
-        status: "unread",
-        action_url: `/jobs/${notifyJob.id}`
+      const { error } = await supabase.rpc('send_authorized_notification', {
+        p_recipient_id: targetUserId,
+        p_title: notificationTitle.trim(),
+        p_description: fullDescription,
+        p_type: "job",
+        p_priority: "high",
+        p_action_url: `/jobs/${notifyJob.id}`
       });
       if (error) throw error;
       toast({
@@ -266,7 +256,7 @@ export default function AdminJobs() {
   const handleSaveJobTags = async (jobId: string) => {
     try {
       if (!editingTags) return;
-      const { error } = await supabase.rpc('admin_update_job_tags', { 
+      const { error } = await (supabase.rpc as any)('admin_update_job_tags', { 
         p_job_id: jobId, 
         p_tags: editingTags.tags 
       });
@@ -294,8 +284,8 @@ export default function AdminJobs() {
     });
   };
 
-  const getTagBadgeStyle = (tag: string): string => {
-    return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+  const getTagBadgeStyle = (_tag: string): string => {
+    return "bg-surface-elevated text-foreground border border-border/80";
   };
 
   // Filter jobs based on search and filters
@@ -321,10 +311,11 @@ export default function AdminJobs() {
     <AdminLayout pageTitle="Jobs Management" pageName="Jobs">
       <div className="space-y-6">
         {/* Page Header with Search & Filters */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Jobs Management</h1>
-            <p className="text-muted-foreground mt-1">Approve or reject job listings</p>
+            <p className="noir-eyebrow mb-1">Casting & Crew Calls</p>
+            <h1 className="text-3xl font-display font-bold text-foreground">Jobs Management</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Approve or reject job listings</p>
           </div>
           
           {/* Search and Filter Bar */}
@@ -335,13 +326,13 @@ export default function AdminJobs() {
                 placeholder="Search jobs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-9"
+                className="pl-9 h-9 bg-surface-elevated border-border/80"
               />
             </div>
             
             <div className="flex gap-2 items-center">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[140px] h-9">
+                <SelectTrigger className="w-[140px] h-9 bg-surface-elevated border-border/80">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -355,7 +346,7 @@ export default function AdminJobs() {
               </Select>
               
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[120px] h-9">
+                <SelectTrigger className="w-[120px] h-9 bg-surface-elevated border-border/80">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -371,14 +362,14 @@ export default function AdminJobs() {
         </div>
 
         {/* Main Content Card */}
-        <Card>
+        <Card className="noir-card border-border/80 bg-card">
           <CardContent className="space-y-6 pt-6">
 
             {/* Jobs Table */}
-            <div className="border rounded-lg">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Job ID</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Category</TableHead>
@@ -391,7 +382,7 @@ export default function AdminJobs() {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8">Loading jobs...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading jobs...</TableCell></TableRow>
                   ) : filteredJobs.map((job) => {
                     const StatusIcon = getStatusIcon(job.status || "Active");
                     const jobTags = Array.isArray(job.job_tags) ? job.job_tags : [];
@@ -399,33 +390,33 @@ export default function AdminJobs() {
                     const creatorUsername = job.creator?.username || "";
                     
                     return (
-                      <TableRow key={job.id}>
-                        <TableCell className="font-medium text-muted-foreground whitespace-nowrap">
+                      <TableRow key={job.id} className="border-border/60 hover:bg-surface-hover/50">
+                        <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                           {generateJobId(job.id)}
                         </TableCell>
                         <TableCell className="max-w-[200px]">
-                          <span className="font-medium truncate block" title={job.job_title}>{job.job_title}</span>
+                          <span className="font-medium text-foreground truncate block" title={job.job_title}>{job.job_title}</span>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 hover:bg-yellow-100">
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                             {job.industry || "General"}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                              <Building2 className="h-4 w-4 text-yellow-600" />
+                            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                              <Building2 className="h-4 w-4 text-primary" />
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium">{creatorName}</span>
-                              {creatorUsername && <span className="text-xs text-muted-foreground">@{creatorUsername}</span>}
+                              <span className="text-sm font-medium text-foreground">{creatorName}</span>
+                              {creatorUsername && <span className="text-xs font-mono text-muted-foreground">@{creatorUsername}</span>}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            <span>{job.location}</span>
+                            <MapPin className="h-4 w-4 text-primary" />
+                            <span className="text-sm">{job.location}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -461,13 +452,13 @@ export default function AdminJobs() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 flex-shrink-0 hover:bg-yellow-50"
+                                  className="h-7 w-7 flex-shrink-0 hover:bg-primary/10"
                                 >
-                                  <Tags className="h-4 w-4 text-yellow-600" />
+                                  <Tags className="h-4 w-4 text-primary" />
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-80 p-0" align="end">
-                                <Command>
+                              <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                                <Command className="bg-card">
                                   <CommandInput placeholder="Search tags..." />
                                   <CommandEmpty>No tags found.</CommandEmpty>
                                   <CommandGroup>
@@ -481,9 +472,9 @@ export default function AdminJobs() {
                                         >
                                           <div className={cn(
                                             "flex h-4 w-4 items-center justify-center rounded border",
-                                            isSelected ? "bg-yellow-500 border-yellow-500" : "border-gray-200"
+                                            isSelected ? "bg-primary border-primary" : "border-border"
                                           )}>
-                                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                                            {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                                           </div>
                                           <Badge 
                                             variant="secondary"
@@ -495,10 +486,10 @@ export default function AdminJobs() {
                                       );
                                     })}
                                   </CommandGroup>
-                                  <div className="border-t p-2">
+                                  <div className="border-t border-border/60 p-2">
                                     <Button
                                       size="sm"
-                                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white"
+                                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                                       onClick={() => handleSaveJobTags(job.id)}
                                     >
                                       Save Changes
@@ -514,30 +505,30 @@ export default function AdminJobs() {
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
                                 <span className="sr-only">Open menu</span>
-                                <MoreVertical className="h-4 w-4 text-gray-500" />
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-card border-border/80">
                               <DropdownMenuItem onClick={() => handleOpenNotify(job, job.creator)}>
-                                <Bell className="mr-2 h-4 w-4 text-blue-500" />
+                                <Bell className="mr-2 h-4 w-4 text-primary" />
                                 Notify Creator
                               </DropdownMenuItem>
                               
                               {job.status !== 'blocked' ? (
                                 <DropdownMenuItem onClick={() => handleUpdateStatus(job.id, 'blocked')}>
-                                  <Ban className="mr-2 h-4 w-4 text-orange-500" />
+                                  <Ban className="mr-2 h-4 w-4 text-amber-500" />
                                   Block Job
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem onClick={() => handleUpdateStatus(job.id, 'Active')}>
-                                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                  <CheckCircle className="mr-2 h-4 w-4 text-emerald-500" />
                                   Unblock Job
                                 </DropdownMenuItem>
                               )}
                               
                               <DropdownMenuItem 
                                 onClick={() => handleDeleteJob(job.id)}
-                                className="text-red-600 focus:text-red-700"
+                                className="text-destructive focus:text-destructive"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete Job
@@ -557,7 +548,7 @@ export default function AdminJobs() {
               <span>Showing {jobs.length} jobs</span>
               <div className="flex items-center gap-2">
                 <span>Rows per page:</span>
-                <select className="w-16 h-8 px-2 border rounded text-sm">
+                <select className="w-16 h-8 px-2 border border-border/80 bg-surface-elevated text-foreground rounded text-sm">
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
@@ -570,29 +561,30 @@ export default function AdminJobs() {
         
         {/* Notify Dialog */}
         <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
             <DialogHeader>
-              <DialogTitle>Send Notification</DialogTitle>
+              <DialogTitle className="font-display">Send Notification</DialogTitle>
               <DialogDescription>
                 Send a direct notification to {notifyUser?.full_name || notifyUser?.username || notifyUser?.company_name || 'the creator'}.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Title</label>
+                <label className="text-sm font-medium text-foreground">Title</label>
                 <Input
                   placeholder="Notification title..."
                   value={notificationTitle}
                   onChange={(e) => setNotificationTitle(e.target.value)}
+                  className="bg-surface-elevated border-border/80"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Message</label>
+                <label className="text-sm font-medium text-foreground">Message</label>
                 <Textarea
                   placeholder="Type your message here..."
                   value={notificationMessage}
                   onChange={(e) => setNotificationMessage(e.target.value)}
-                  className="min-h-[100px]"
+                  className="min-h-[100px] bg-surface-elevated border-border/80"
                 />
               </div>
             </div>
@@ -601,7 +593,7 @@ export default function AdminJobs() {
                 Cancel
               </Button>
               <Button 
-                className="bg-yellow-500 hover:bg-yellow-600" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
                 onClick={handleSendNotification}
                 disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}
               >

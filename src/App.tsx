@@ -1,63 +1,82 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
+import { MotionConfig } from "motion/react";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import Index from "./pages/Index";
-import Features from "./pages/Features";
-import Pricing from "./pages/Pricing";
-import About from "./pages/About";
-import ContactUs from "./pages/ContactUs";
-import SignIn from "./pages/auth/SignIn";
-import SignUp from "./pages/auth/SignUp";
-import AdminSignIn from "./pages/auth/AdminSignIn";
-import AdminSignUp from "./pages/auth/AdminSignUp";
-import Dashboard from "./pages/Dashboard";
-import AdminDashboard from "./pages/AdminDashboard";
-import Jobs from "./pages/Jobs";
-import JobDetails from "./pages/JobDetails";
-import CastingCalls from "./pages/casting-calls/page";
-import CastingCallDetails from "./pages/casting-calls/details";
-import NewCastingCall from "./pages/casting-calls/new";
-import ProjectDetails from "./pages/ProjectDetails";
-import IndustryHub from "./pages/industry-hub/page";
-import NewIndustryHubPost from "./pages/industry-hub/new";
-import Projects from "./pages/projects/page";
-import Posts from "./pages/posts/page";
-import Directory from "./pages/directory/page";
-import StudiosDirectory from "./pages/StudiosDirectory";
-import Community from "./pages/community/page";
-import Locations from "./pages/locations/page";
-import NewLocation from "./pages/locations/new";
-import LocationDetails from "./pages/locations/details";
-import GroupDetails from "./pages/community/GroupDetails";
-import JoinedGroupDetails from "./pages/community/JoinedGroupDetails";
-import Discover from "./pages/discover/page";
-import Messages from "./pages/messages/page";
-import Connections from "./pages/connections/page";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings";
-import Billing from "./pages/Billing";
-import Support from "./pages/Support";
-import UserTicketDetail from "./pages/UserTicketDetail";
-import Notifications from "./pages/Notifications";
-import AdminAnalytics from "./pages/AdminAnalytics";
-import AdminUsers from "./pages/AdminUsers";
-import AdminPosts from "./pages/AdminPosts";
-import AdminProjects from "./pages/AdminProjects";
-import AdminJobs from "./pages/AdminJobs";
-import AdminDirectory from "./pages/AdminDirectory";
-import AdminTeam from "./pages/AdminTeam";
-import AdminTickets from "./pages/AdminTickets";
-import AdminTicketDetail from "./pages/AdminTicketDetail";
-import AdminCommunities from "./pages/AdminCommunities";
-import AdminNotifications from "./pages/AdminNotifications";
-import AdminLocations from "./pages/AdminLocations";
-import AdminLocationDetail from "./pages/AdminLocationDetail";
-import AdminSettings from "./pages/AdminSettings";
-import NotFound from "./pages/NotFound";
+
+const Features = lazy(() => import("./pages/Features"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const About = lazy(() => import("./pages/About"));
+const ContactUs = lazy(() => import("./pages/ContactUs"));
+const SignIn = lazy(() => import("./pages/auth/SignIn"));
+const SignUp = lazy(() => import("./pages/auth/SignUp"));
+const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
+const AdminSignIn = lazy(() => import("./pages/auth/AdminSignIn"));
+const AdminSignUp = lazy(() => import("./pages/auth/AdminSignUp"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminProfile = lazy(() => import("./pages/AdminProfile"));
+const Jobs = lazy(() => import("./pages/Jobs"));
+const JobDetails = lazy(() => import("./pages/JobDetails"));
+const CastingCalls = lazy(() => import("./pages/casting-calls/page"));
+const CastingCallDetails = lazy(() => import("./pages/casting-calls/details"));
+const NewCastingCall = lazy(() => import("./pages/casting-calls/new"));
+const ProjectDetails = lazy(() => import("./pages/ProjectDetails"));
+const IndustryHub = lazy(() => import("./pages/industry-hub/page"));
+const NewIndustryHubPost = lazy(() => import("./pages/industry-hub/new"));
+const Projects = lazy(() => import("./pages/projects/page"));
+const Posts = lazy(() => import("./pages/posts/page"));
+const Directory = lazy(() => import("./pages/directory/page"));
+const StudiosDirectory = lazy(() => import("./pages/StudiosDirectory"));
+const Community = lazy(() => import("./pages/community/page"));
+const Locations = lazy(() => import("./pages/locations/page"));
+const NewLocation = lazy(() => import("./pages/locations/new"));
+const LocationDetails = lazy(() => import("./pages/locations/details"));
+const GroupDetails = lazy(() => import("./pages/community/GroupDetails"));
+const JoinedGroupDetails = lazy(() => import("./pages/community/JoinedGroupDetails"));
+const Discover = lazy(() => import("./pages/discover/page"));
+const Messages = lazy(() => import("./pages/messages/page"));
+const Connections = lazy(() => import("./pages/connections/page"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Support = lazy(() => import("./pages/Support"));
+const UserTicketDetail = lazy(() => import("./pages/UserTicketDetail"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminPosts = lazy(() => import("./pages/AdminPosts"));
+const AdminProjects = lazy(() => import("./pages/AdminProjects"));
+const AdminJobs = lazy(() => import("./pages/AdminJobs"));
+const AdminDirectory = lazy(() => import("./pages/AdminDirectory"));
+const AdminTeam = lazy(() => import("./pages/AdminTeam"));
+const AdminTickets = lazy(() => import("./pages/AdminTickets"));
+const AdminTicketDetail = lazy(() => import("./pages/AdminTicketDetail"));
+const AdminCommunities = lazy(() => import("./pages/AdminCommunities"));
+const AdminNotifications = lazy(() => import("./pages/AdminNotifications"));
+const AdminLocations = lazy(() => import("./pages/AdminLocations"));
+const AdminLocationDetail = lazy(() => import("./pages/AdminLocationDetail"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+function NoirLoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+        <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Loading Studio...</p>
+      </div>
+    </div>
+  );
+}
 
 const queryClient = new QueryClient();
 
@@ -70,8 +89,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground tracking-wide">Loading...</p>
         </div>
       </div>
     );
@@ -92,8 +111,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-destructive border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground tracking-wide">Loading...</p>
         </div>
       </div>
     );
@@ -111,23 +130,32 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Public Route Component (redirect if already authenticated)
+// Public Route Component (redirect if already authenticated, honoring return location)
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, isAdmin } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground tracking-wide">Loading...</p>
         </div>
       </div>
     );
   }
   
-  // If user exists, redirect based on role
+  // If user exists, redirect to requested 'from' destination or default dashboard
   if (user) {
+    const from = (location.state as { from?: { pathname?: string; search?: string; hash?: string } | string })?.from;
+    if (from) {
+      const destination =
+        typeof from === "string"
+          ? from
+          : `${from.pathname || ""}${from.search || ""}${from.hash || ""}` || "/dashboard";
+      return <Navigate to={destination} replace />;
+    }
     if (isAdmin()) {
       return <Navigate to="/admin-dashboard" replace />;
     }
@@ -137,15 +165,33 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Seamless alias redirects for /signin and /signup preserving search & state
+function RedirectToSignIn() {
+  const location = useLocation();
+  return <Navigate to={`/auth/signin${location.search}${location.hash}`} state={location.state} replace />;
+}
+
+function RedirectToSignUp() {
+  const location = useLocation();
+  return <Navigate to={`/auth/signup${location.search}${location.hash}`} state={location.state} replace />;
+}
+
 function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<NoirLoadingFallback />}>
+      <Routes>
       {/* Public routes */}
       <Route path="/" element={<Index />} />
       <Route path="/features" element={<Features />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<ContactUs />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      {/* Compatibility alias routes */}
+      <Route path="/signin" element={<RedirectToSignIn />} />
+      <Route path="/login" element={<RedirectToSignIn />} />
+      <Route path="/signup" element={<RedirectToSignUp />} />
       <Route
         path="/auth/signin"
         element={
@@ -161,6 +207,18 @@ function AppRoutes() {
             <SignUp />
           </PublicRoute>
         }
+      />
+      <Route
+        path="/auth/forgot-password"
+        element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/auth/reset-password"
+        element={<ResetPassword />}
       />
 
       {/* Admin routes */}
@@ -224,14 +282,6 @@ function AppRoutes() {
       />
         <Route
           path="/jobs/:jobId"
-          element={
-            <ProtectedRoute>
-              <JobDetails />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/jobs/:id"
           element={
             <ProtectedRoute>
               <JobDetails />
@@ -544,25 +594,36 @@ function AppRoutes() {
           </AdminRoute>
         } 
       />
+      <Route 
+        path="/admin-dashboard/profile" 
+        element={
+          <AdminRoute>
+            <AdminProfile />
+          </AdminRoute>
+        } 
+      />
 
       {/* Catch all route */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 }
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <MotionConfig reducedMotion="user">
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </MotionConfig>
     </ThemeProvider>
   </QueryClientProvider>
 );

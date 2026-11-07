@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Search, 
+import {
+  Search,
   Trash2,
   Check,
   Tags,
@@ -20,11 +20,9 @@ import {
   Globe,
   Briefcase,
   Calendar,
-  Clock,
   Phone,
   Bell,
   UserCheck,
-  UserX,
   ShieldCheck,
   AlertTriangle,
   Instagram,
@@ -36,7 +34,7 @@ import {
   Star,
   Users,
   MessageSquare,
-  Plus
+  FileText
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -61,6 +59,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -77,6 +76,7 @@ interface UserProfile {
   skills?: string[] | null;
   tags?: string[] | null;
   role?: string | null;
+  account_status?: string | null;
 }
 
 interface ExperienceEntry {
@@ -162,22 +162,30 @@ const getUserDisplayId = (userId: string) => {
 };
 
 export default function AdminUsers() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
+  const [searchTerm, setSearchTerm] = useState(urlQuery);
+
+  useEffect(() => {
+    if (urlQuery) {
+      setSearchTerm(urlQuery);
+    }
+  }, [urlQuery]);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedFilterTags, setSelectedFilterTags] = useState<string[]>([]);
-  const [globalTags, setGlobalTags] = useState<{label: string, color: string}[]>([]);
+  const [globalTags, setGlobalTags] = useState<{ label: string, color: string }[]>([]);
   const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
-  
+
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Tag editing popover state
   const [editingTags, setEditingTags] = useState<{ id: string; tags: string[] } | null>(null);
-  
+
   // Direct details view in place of table
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<UserProfileDetails | null>(null);
@@ -192,8 +200,10 @@ export default function AdminUsers() {
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [isSendingNotification, setIsSendingNotification] = useState(false);
-  
+
   const { toast } = useToast();
+
+  const availableTags = globalTags.map(t => ({ value: t.label.toLowerCase(), label: t.label }));
 
   // Fetch users from database
   const fetchUsers = useCallback(async () => {
@@ -223,7 +233,7 @@ export default function AdminUsers() {
       const { data, error } = await supabase.from("global_tags").select("name").order("name");
       if (error && error.code !== '42P01') throw error;
       if (data) {
-        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-gray-100 text-gray-800" })));
+        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-surface-elevated text-foreground border border-border/80" })));
       }
     } catch (error) {
       console.error("Error fetching global tags:", error);
@@ -265,10 +275,10 @@ export default function AdminUsers() {
       setSelectedUserDirectoryFiles([]);
       return;
     }
-    
+
     // Reset to overview tab when changing users
     setActiveProfileTab("overview");
-    
+
     const fetchSingleProfile = async () => {
       try {
         setLoadingProfile(true);
@@ -278,30 +288,35 @@ export default function AdminUsers() {
           .eq("id", selectedUserId)
           .maybeSingle();
         if (error) throw error;
-        setSelectedProfile(data);
+        setSelectedProfile(data as any);
 
         // Fetch user projects
+        const authUserId = data?.user_id || selectedUserId;
         const { data: projData, error: projError } = await supabase
           .from("projects")
           .select("*")
-          .eq("created_by", selectedUserId)
+          .eq("created_by", authUserId)
           .order("created_at", { ascending: false });
         if (!projError && projData) {
           setSelectedUserProjects(projData);
         }
 
-        // Fetch user directory files from localStorage
-        const savedFiles = localStorage.getItem(`directory_${selectedUserId}`);
-        if (savedFiles) {
-          try {
-            setSelectedUserDirectoryFiles(JSON.parse(savedFiles));
-          } catch (e) {
-            console.error("Failed to parse directory files in admin panel", e);
-            setSelectedUserDirectoryFiles([]);
-          }
-        } else {
-          setSelectedUserDirectoryFiles([]);
-        }
+        // Fetch user directory files from database
+        const profileId = data?.id || selectedUserId;
+        const { data: dbFiles } = await supabase
+          .from("directory_files")
+          .select("*")
+          .or(`user_id.eq.${selectedUserId},user_id.eq.${profileId}${authUserId !== profileId ? `,user_id.eq.${authUserId}` : ''}`)
+          .order("created_at", { ascending: false });
+
+        const mappedFiles: DirectoryFile[] = (dbFiles || []).map((f: any) => ({
+          id: f.id,
+          name: f.title || "Untitled File",
+          type: f.file_type || "file",
+          url: f.file_url || "",
+          uploadDate: f.created_at || new Date().toISOString()
+        }));
+        setSelectedUserDirectoryFiles(mappedFiles);
 
       } catch (err) {
         console.error("Error fetching single profile:", err);
@@ -314,7 +329,7 @@ export default function AdminUsers() {
         setLoadingProfile(false);
       }
     };
-    
+
     fetchSingleProfile();
   }, [selectedUserId, toast]);
 
@@ -328,19 +343,21 @@ export default function AdminUsers() {
 
     // Search query matches
     const matchesSearch = username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      email.toLowerCase().includes(searchTerm.toLowerCase());
+
     // Category match
     const matchesCategory = categoryFilter === "all" || category.toLowerCase() === categoryFilter.toLowerCase();
-    
+
+    const isBlocked = user.account_status === "blocked" || userRole === "blocked";
+
     // Status match (Verified, Unverified, Blocked)
     let matchesStatus = true;
     if (statusFilter === "verified") {
-      matchesStatus = isVerified;
+      matchesStatus = isVerified && !isBlocked;
     } else if (statusFilter === "unverified") {
-      matchesStatus = !isVerified && userRole !== "blocked";
+      matchesStatus = !isVerified && !isBlocked;
     } else if (statusFilter === "blocked") {
-      matchesStatus = userRole === "blocked";
+      matchesStatus = isBlocked;
     }
 
     // Date range matches
@@ -367,24 +384,24 @@ export default function AdminUsers() {
       const userTags = Array.isArray(user.tags) ? user.tags : [];
       matchesTags = selectedFilterTags.every(tag => userTags.includes(tag));
     }
-    
+
     return matchesSearch && matchesCategory && matchesStatus && matchesDate && matchesTags;
   });
 
   const getStatusBadge = (user: UserProfile) => {
-    if (user.role === 'blocked') {
+    if (user.account_status === 'blocked' || user.role === 'blocked') {
       return (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 font-medium">
+        <Badge className="bg-destructive/15 text-destructive border border-destructive/30 font-medium">
           Blocked
         </Badge>
       );
     }
     return user.is_verified ? (
-      <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-green-200 font-medium">
+      <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-medium">
         Verified
       </Badge>
     ) : (
-      <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200 font-medium">
+      <Badge className="bg-surface-elevated text-muted-foreground border border-border/80 font-medium">
         Unverified
       </Badge>
     );
@@ -393,53 +410,65 @@ export default function AdminUsers() {
   const handleToggleVerification = async (user: UserProfile) => {
     const currentStatus = user.is_verified === true;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ is_verified: !currentStatus })
-        .eq("id", user.id);
-      
+        .eq("id", user.id)
+        .select("id");
+
       if (error) throw error;
-      
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
+
       setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, is_verified: !currentStatus } : u));
       toast({
         title: !currentStatus ? "User Account Verified" : "User Account Unverified",
         description: `Successfully ${!currentStatus ? "verified" : "unverified"} ${user.username || user.full_name || 'the user'}.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user verification:", error);
       toast({
         title: "Operation failed",
-        description: "Could not update user verification in the database.",
+        description: error?.message || "Could not update user verification in the database.",
         variant: "destructive"
       });
     }
   };
 
   const handleBlockUser = async (user: UserProfile) => {
-    const isCurrentlyBlocked = user.role === 'blocked';
+    const isCurrentlyBlocked = user.account_status === 'blocked' || user.role === 'blocked';
     const actionText = isCurrentlyBlocked ? "unblock" : "block";
     if (!window.confirm(`Are you sure you want to ${actionText} this user?`)) {
       return;
     }
     try {
+      const targetAccountStatus = isCurrentlyBlocked ? 'active' : 'blocked';
       const targetRole = isCurrentlyBlocked ? 'user' : 'blocked';
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .update({ role: targetRole })
-        .eq("id", user.id);
-      
+        .update({ account_status: targetAccountStatus, role: targetRole } as any)
+        .eq("id", user.id)
+        .select("id, role, account_status");
+
       if (error) throw error;
-      
-      setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole } : u));
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
+
+      setProfiles(prev => prev.map(u => u.id === user.id ? { ...u, role: targetRole, account_status: targetAccountStatus } : u));
+      if (selectedProfile && selectedProfile.id === user.id) {
+        setSelectedProfile(prev => prev ? { ...prev, role: targetRole, account_status: targetAccountStatus } : prev);
+      }
       toast({
         title: isCurrentlyBlocked ? "User Unblocked" : "User Blocked",
         description: `Successfully ${isCurrentlyBlocked ? "unblocked" : "blocked"} user ${user.username || user.full_name || ''}.`
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling block state:", error);
       toast({
         title: "Block failed",
-        description: "Could not modify block state in database.",
+        description: error?.message || "Could not modify block state in database.",
         variant: "destructive"
       });
     }
@@ -450,23 +479,27 @@ export default function AdminUsers() {
       return;
     }
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .delete()
-        .eq("id", userId);
-      
+        .eq("id", userId)
+        .select("id");
+
       if (error) throw error;
-      
+      if (!data || data.length === 0) {
+        throw new Error("No profile was deleted. Permission denied.");
+      }
+
       setProfiles(prev => prev.filter(u => u.id !== userId));
       toast({
         title: "User deleted",
         description: "User profile deleted from the system.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error);
       toast({
         title: "Delete failed",
-        description: "Could not remove user profile from database.",
+        description: error?.message || "Could not remove user profile from database.",
         variant: "destructive"
       });
     }
@@ -479,25 +512,28 @@ export default function AdminUsers() {
   const handleSaveUserTags = async (userId: string) => {
     if (!editingTags) return;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .update({ tags: editingTags.tags })
-        .eq("id", userId);
-      
+        .eq("id", userId)
+        .select("id");
+
       if (error) throw error;
-      
-      
+      if (!data || data.length === 0) {
+        throw new Error("No profile was updated. Permission denied.");
+      }
+
       setProfiles(prev => prev.map(u => u.id === userId ? { ...u, tags: editingTags.tags } : u));
       setEditingTags(null);
       toast({
         title: "Tags updated",
         description: "User tags successfully synchronized with their profile page."
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving tags:", error);
       toast({
         title: "Failed to save tags",
-        description: "Error persisting tags to the database.",
+        description: error?.message || "Error persisting tags to the database.",
         variant: "destructive"
       });
     }
@@ -519,7 +555,7 @@ export default function AdminUsers() {
 
   const getTagBadgeStyle = (tag: string): string => {
     const tagConfig = globalTags.find(t => t.label === tag);
-    if (!tagConfig) return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+    if (!tagConfig) return "bg-surface-elevated text-foreground border border-border/80";
     return tagConfig.color;
   };
 
@@ -534,19 +570,16 @@ export default function AdminUsers() {
     if (!notifyUser || !notificationTitle.trim() || !notificationMessage.trim()) return;
     try {
       setIsSendingNotification(true);
-      const { error } = await supabase
-        .from("notifications")
-        .insert({
-          user_id: notifyUser.id,
-          title: notificationTitle.trim(),
-          description: notificationMessage.trim(),
-          type: "system",
-          priority: "high",
-          status: "unread"
-        });
-        
+      const { error } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: notifyUser.id,
+        p_title: notificationTitle.trim(),
+        p_description: notificationMessage.trim(),
+        p_type: "system",
+        p_priority: "high"
+      });
+
       if (error) throw error;
-      
+
       toast({
         title: "Notification Sent",
         description: `Successfully sent notification to ${notifyUser.username || notifyUser.full_name || 'the user'}.`
@@ -570,18 +603,18 @@ export default function AdminUsers() {
       return (
         <AdminLayout pageTitle="User Profile">
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-yellow-600" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <span className="text-sm text-muted-foreground">Loading user profile...</span>
           </div>
         </AdminLayout>
       );
     }
-    
+
     if (!selectedProfile) {
       return (
         <AdminLayout pageTitle="User Profile">
           <div className="space-y-4">
-            <Button variant="ghost" onClick={() => setSelectedUserId(null)} className="flex items-center gap-2 hover:bg-yellow-50">
+            <Button variant="ghost" onClick={() => setSelectedUserId(null)} className="flex items-center gap-2 hover:bg-surface-hover">
               <ArrowLeft className="h-4 w-4" />
               Back to Users Management
             </Button>
@@ -595,9 +628,7 @@ export default function AdminUsers() {
 
     const experiences = Array.isArray(selectedProfile.experiences) ? selectedProfile.experiences : [];
     const education = Array.isArray(selectedProfile.education) ? selectedProfile.education : [];
-    const displayId = getUserDisplayId(selectedProfile.id);
     const selectedUserTags = Array.isArray(selectedProfile.tags) ? selectedProfile.tags : [];
-    const creativeSkills = Array.isArray(selectedProfile.skills) ? selectedProfile.skills : [];
 
     const onToggleVerification = async () => {
       await handleToggleVerification(selectedProfile);
@@ -623,14 +654,14 @@ export default function AdminUsers() {
         if (username.startsWith("@")) {
           username = username.substring(1);
         }
-        
+
         let hash = 0;
         const str = `${username}-${platform}`;
         for (let i = 0; i < str.length; i++) {
           hash = str.charCodeAt(i) + ((hash << 5) - hash);
         }
         hash = Math.abs(hash);
-        
+
         if (hash % 4 === 0) {
           return `${((hash % 900) / 10 + 10).toFixed(1)}K`;
         } else if (hash % 4 === 1) {
@@ -647,161 +678,161 @@ export default function AdminUsers() {
 
     return (
       <AdminLayout pageTitle={`Profile - ${selectedProfile.username || selectedProfile.full_name || 'Creator'}`}>
-        <div className="space-y-4 bg-yellow-50 min-h-screen p-4 -m-4">
+        <div className="space-y-6">
           {/* Back Button */}
-          <Button variant="ghost" onClick={() => setSelectedUserId(null)} className="flex items-center gap-2 hover:bg-yellow-100 font-semibold text-yellow-600 hover:text-yellow-700">
+          <Button variant="ghost" onClick={() => setSelectedUserId(null)} className="flex items-center gap-2 hover:bg-primary/10 font-semibold text-primary">
             <ArrowLeft className="h-4 w-4" />
             Back to Users Management
           </Button>
 
           {/* Profile Card Header */}
-          <Card className="relative overflow-hidden border-yellow-200 shadow-md bg-white">
+          <Card className="relative overflow-hidden noir-card border-border/80 bg-card">
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <div className="flex flex-col md:flex-row md:items-center gap-4 flex-1">
-                  <Avatar className="w-24 h-24 border-4 border-white shadow-lg flex-shrink-0 bg-yellow-100">
+                  <Avatar className="w-24 h-24 border-2 border-primary/40 shadow-lg flex-shrink-0 bg-surface-elevated">
                     <AvatarImage src={selectedProfile.avatar_url || ""} referrerPolicy="no-referrer" />
-                    <AvatarFallback className="text-xl font-semibold bg-gradient-to-r from-yellow-500 to-yellow-600 text-white flex items-center justify-center">
+                    <AvatarFallback className="text-xl font-semibold bg-primary/20 text-primary flex items-center justify-center">
                       {(selectedProfile.full_name || selectedProfile.username || "CR").slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-1.5">
+                      <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-1.5">
                         {selectedProfile.full_name || selectedProfile.username || "Creative Creator"}
                         {selectedProfile.is_verified && (
-                          <span className="w-4 h-4 rounded-full bg-blue-500 border border-white inline-block relative top-[1px]" title="Verified Creator" />
+                          <span className="w-4 h-4 rounded-full bg-primary border border-background inline-block relative top-[1px]" title="Verified Creator" />
                         )}
                         {selectedProfile.role === 'blocked' && (
-                          <Badge className="bg-red-100 text-red-700 border-red-200 text-xs py-0.5">
+                          <Badge className="bg-destructive/15 text-destructive border border-destructive/30 text-xs py-0.5">
                             Blocked
                           </Badge>
                         )}
                       </h1>
-                      <div className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0" title="Online" />
+                      <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full flex-shrink-0" title="Online" />
                     </div>
                     <div className="flex items-center gap-2 text-sm mb-2">
-                      <span className="text-gray-600">@{selectedProfile.username || "creator"}</span>
-                      <span className="text-gray-300">•</span>
-                      <span className="text-gray-700 font-medium">{selectedProfile.category || selectedProfile.role || "Creator"}</span>
+                      <span className="text-muted-foreground font-mono">@{selectedProfile.username || "creator"}</span>
+                      <span className="text-border">•</span>
+                      <span className="text-primary font-medium">{selectedProfile.category || selectedProfile.role || "Creator"}</span>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
                       <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 flex-shrink-0" />
+                        <MapPin className="w-3 h-3 flex-shrink-0 text-primary" />
                         {selectedProfile.location || "Remote"}
                       </div>
                       <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 flex-shrink-0" />
+                        <Calendar className="w-3 h-3 flex-shrink-0 text-primary" />
                         Joined {selectedProfile.created_at ? new Date(selectedProfile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : "Recently"}
                       </div>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Social Media Follower Counts */}
                 <div className="flex flex-col items-center md:items-end gap-3 flex-shrink-0">
                   <div className="flex items-center gap-3">
                     {/* Instagram */}
                     <div className="flex flex-col items-center gap-1">
-                      <div className="p-2 rounded-full text-pink-600 bg-pink-50 dark:bg-pink-950/30 dark:text-pink-400">
+                      <div className="p-2 rounded-full text-pink-500 bg-pink-500/10 border border-pink-500/20">
                         <Instagram className="w-5 h-5" />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                      <span className="text-[11px] font-mono font-semibold text-muted-foreground">
                         {selectedProfile.instagram_url ? extractFollowersFromUrl(selectedProfile.instagram_url, 'instagram') : "12.2K"}
                       </span>
                     </div>
 
                     {/* YouTube */}
                     <div className="flex flex-col items-center gap-1">
-                      <div className="p-2 rounded-full text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400">
+                      <div className="p-2 rounded-full text-red-500 bg-red-500/10 border border-red-500/20">
                         <Youtube className="w-5 h-5" />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                      <span className="text-[11px] font-mono font-semibold text-muted-foreground">
                         {selectedProfile.youtube_url ? extractFollowersFromUrl(selectedProfile.youtube_url, 'youtube') : "4.18M"}
                       </span>
                     </div>
 
                     {/* Facebook */}
                     <div className="flex flex-col items-center gap-1">
-                      <div className="p-2 rounded-full text-blue-600 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400">
+                      <div className="p-2 rounded-full text-blue-500 bg-blue-500/10 border border-blue-500/20">
                         <Facebook className="w-5 h-5" />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                      <span className="text-[11px] font-mono font-semibold text-muted-foreground">
                         {selectedProfile.github_url ? extractFollowersFromUrl(selectedProfile.github_url, 'facebook') : "250K"}
                       </span>
                     </div>
 
                     {/* Twitter */}
                     <div className="flex flex-col items-center gap-1">
-                      <div className="p-2 rounded-full text-sky-500 bg-sky-50 dark:bg-sky-950/30 dark:text-sky-400">
+                      <div className="p-2 rounded-full text-sky-400 bg-sky-500/10 border border-sky-500/20">
                         <Twitter className="w-5 h-5" />
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                      <span className="text-[11px] font-mono font-semibold text-muted-foreground">
                         {selectedProfile.twitter_url ? extractFollowersFromUrl(selectedProfile.twitter_url, 'twitter') : "158K"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               {/* Statistics & Admin Actions Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 pt-4 border-t border-border/60">
+                <div className="flex items-center gap-6 font-mono">
                   <div className="flex items-center gap-1" title="Connections">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-900">{selectedProfile.followers_count ?? 0}</span>
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{selectedProfile.followers_count ?? 0}</span>
                   </div>
                   <div className="flex items-center gap-1" title="Projects">
-                    <Briefcase className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-900">{selectedProfile.projects_count ?? 0}</span>
+                    <Briefcase className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{selectedProfile.projects_count ?? 0}</span>
                   </div>
                   <div className="flex items-center gap-1" title="Posts">
-                    <MessageSquare className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-900">{selectedProfile.posts_count ?? 0}</span>
+                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{selectedProfile.posts_count ?? 0}</span>
                   </div>
                   <div className="flex items-center gap-1" title="Followers">
-                    <UserCheck className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm font-medium text-gray-900">{selectedProfile.followers_count ?? 0}</span>
+                    <UserCheck className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{selectedProfile.followers_count ?? 0}</span>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="bg-white hover:bg-yellow-50 border-yellow-200 text-yellow-700"
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-surface-elevated hover:bg-primary/10 border-primary/30 text-primary"
                     onClick={() => handleOpenNotify(selectedProfile)}
                   >
                     <Bell className="w-4 h-4 mr-1" />
                     Notify
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className={cn(
-                      "border-yellow-200 bg-white", 
-                      selectedProfile.is_verified ? "text-amber-700 hover:bg-amber-50" : "text-green-700 hover:bg-green-50"
+                      "border-border/80 bg-surface-elevated",
+                      selectedProfile.is_verified ? "text-amber-500 hover:bg-amber-500/10" : "text-emerald-500 hover:bg-emerald-500/10"
                     )}
                     onClick={onToggleVerification}
                   >
                     <ShieldCheck className="w-4 h-4 mr-1" />
                     {selectedProfile.is_verified ? "Unverify" : "Verify"}
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className={cn(
-                      "border-yellow-200 bg-white", 
-                      selectedProfile.role === 'blocked' ? "text-green-700 hover:bg-green-50" : "text-red-700 hover:bg-red-50"
+                      "border-border/80 bg-surface-elevated",
+                      (selectedProfile.account_status === 'blocked' || selectedProfile.role === 'blocked') ? "text-emerald-500 hover:bg-emerald-500/10" : "text-destructive hover:bg-destructive/10"
                     )}
                     onClick={onBlockUser}
                   >
                     <AlertTriangle className="w-4 h-4 mr-1" />
-                    {selectedProfile.role === 'blocked' ? "Unblock" : "Block"}
+                    {(selectedProfile.account_status === 'blocked' || selectedProfile.role === 'blocked') ? "Unblock" : "Block"}
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="destructive"
                     onClick={() => handleDeleteUser(selectedProfile.id)}
                   >
@@ -816,40 +847,40 @@ export default function AdminUsers() {
           {/* Profile Tabs */}
           <div className="w-full space-y-4">
             <Tabs value={activeProfileTab} onValueChange={setActiveProfileTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-6 bg-yellow-50/50 border border-yellow-100 rounded-md p-1">
-                <TabsTrigger 
-                  value="overview" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+              <TabsList className="grid w-full grid-cols-6 bg-surface-elevated border border-border/80 rounded-xl p-1">
+                <TabsTrigger
+                  value="overview"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Overview
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="experience" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+                <TabsTrigger
+                  value="experience"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Experience
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="projects" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+                <TabsTrigger
+                  value="projects"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Projects
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="achievements" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+                <TabsTrigger
+                  value="achievements"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Achievements
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="education" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+                <TabsTrigger
+                  value="education"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Education
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="directory" 
-                  className="text-xs font-semibold py-2 data-[state=active]:bg-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-sm rounded"
+                <TabsTrigger
+                  value="directory"
+                  className="text-xs font-semibold py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm rounded-lg"
                 >
                   Directory
                 </TabsTrigger>
@@ -857,45 +888,45 @@ export default function AdminUsers() {
 
               <TabsContent value="overview" className="space-y-4 mt-4">
                 {/* About Bio */}
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">About</CardTitle>
+                    <CardTitle className="text-lg font-display">About</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                       {selectedProfile.bio || "No biography provided yet."}
                     </p>
                   </CardContent>
                 </Card>
 
                 {/* Contact Information */}
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Contact Information</CardTitle>
+                    <CardTitle className="text-lg font-display">Contact Information</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="truncate" title={selectedProfile.email || ""}>{selectedProfile.email || "No email listed"}</span>
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <Mail className="w-4 h-4 text-primary shrink-0" />
+                      <span className="truncate font-mono" title={selectedProfile.email || ""}>{selectedProfile.email || "No email listed"}</span>
                     </div>
                     {selectedProfile.phone && (
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Phone className="w-4 h-4 text-gray-400 shrink-0" />
-                        <span>{selectedProfile.phone}</span>
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        <Phone className="w-4 h-4 text-primary shrink-0" />
+                        <span className="font-mono">{selectedProfile.phone}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <MapPin className="w-4 h-4 text-primary shrink-0" />
                       <span>{selectedProfile.location || "Remote"}</span>
                     </div>
                     {selectedProfile.website && (
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <Globe className="w-4 h-4 text-gray-400 shrink-0" />
-                        <a 
-                          href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="text-blue-600 hover:underline text-sm truncate"
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        <Globe className="w-4 h-4 text-primary shrink-0" />
+                        <a
+                          href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline text-sm truncate"
                         >
                           {selectedProfile.website}
                         </a>
@@ -905,15 +936,15 @@ export default function AdminUsers() {
                 </Card>
 
                 {/* Skills */}
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Skills</CardTitle>
+                    <CardTitle className="text-lg font-display">Skills</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {Array.isArray(selectedProfile.skills) && selectedProfile.skills.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {selectedProfile.skills.map((skill, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs bg-gray-100 text-gray-700 border-gray-200">
+                          <Badge key={index} variant="secondary" className="text-xs bg-surface-elevated text-foreground border border-border/80">
                             {skill}
                           </Badge>
                         ))}
@@ -925,9 +956,9 @@ export default function AdminUsers() {
                 </Card>
 
                 {/* Admin Tags */}
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Admin Status Tags</CardTitle>
+                    <CardTitle className="text-lg font-display">Admin Status Tags</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {selectedUserTags.length === 0 ? (
@@ -935,9 +966,9 @@ export default function AdminUsers() {
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {selectedUserTags.map((tag: string, index: number) => (
-                          <Badge 
-                            key={index} 
-                            variant="secondary" 
+                          <Badge
+                            key={index}
+                            variant="secondary"
                             className={cn("text-xs font-semibold", getTagBadgeStyle(tag) || "")}
                           >
                             {tag}
@@ -950,9 +981,9 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="experience" className="space-y-4 mt-4">
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Experience</CardTitle>
+                    <CardTitle className="text-lg font-display">Experience</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {experiences.length === 0 ? (
@@ -960,14 +991,14 @@ export default function AdminUsers() {
                     ) : (
                       <div className="space-y-6">
                         {experiences.map((exp: ExperienceEntry, index: number) => (
-                          <div key={index} className="flex gap-4 items-start relative pb-6 border-l-2 border-slate-100 last:border-none pl-5 last:pb-0">
-                            <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-yellow-500 border-2 border-white" />
+                          <div key={index} className="flex gap-4 items-start relative pb-6 border-l-2 border-border/80 last:border-none pl-5 last:pb-0">
+                            <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-primary border-2 border-card" />
                             <div className="space-y-1">
-                              <h4 className="font-bold text-gray-800 text-sm">{exp.role || exp.title}</h4>
-                              <p className="text-xs text-yellow-600 font-medium">{exp.company}</p>
-                              <p className="text-xs text-gray-400">{exp.duration || `${exp.start_date || ''} - ${exp.end_date || 'Present'}`}</p>
+                              <h4 className="font-bold text-foreground text-sm">{exp.role || exp.title}</h4>
+                              <p className="text-xs text-primary font-medium">{exp.company}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{exp.duration || `${exp.start_date || ''} - ${exp.end_date || 'Present'}`}</p>
                               {exp.description && (
-                                <p className="text-xs text-gray-600 mt-1 whitespace-pre-line leading-relaxed">{exp.description}</p>
+                                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line leading-relaxed">{exp.description}</p>
                               )}
                             </div>
                           </div>
@@ -979,24 +1010,24 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="projects" className="space-y-4 mt-4">
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Projects</CardTitle>
+                    <CardTitle className="text-lg font-display">Projects</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {selectedUserProjects.length === 0 ? (
                       <div className="text-center py-8">
-                        <p className="text-sm text-gray-500">No projects created yet.</p>
+                        <p className="text-sm text-muted-foreground">No projects created yet.</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {selectedUserProjects.map((project: UserProfileProject) => (
-                          <Card key={project.id} className="hover:shadow-md transition-shadow bg-white border border-yellow-100">
+                          <Card key={project.id} className="noir-card-interactive bg-surface-elevated border-border/80">
                             <CardHeader className="pb-3">
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                  <h4 className="font-semibold text-base text-gray-900 line-clamp-1">{project.title}</h4>
-                                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                  <h4 className="font-semibold text-base text-foreground line-clamp-1">{project.title}</h4>
+                                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                                     <span className="capitalize">{project.project_type}</span>
                                     <span>•</span>
                                     <span>{project.category}</span>
@@ -1004,17 +1035,16 @@ export default function AdminUsers() {
                                 </div>
                                 <div className="flex gap-1">
                                   {project.featured && (
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-yellow-500 text-yellow-600">
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-primary text-primary">
                                       Featured
                                     </Badge>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  project.status === 'completed' ? 'bg-green-500' :
-                                  project.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
-                                }`}></div>
+                              <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                                <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'completed' ? 'bg-emerald-500' :
+                                    project.status === 'production' ? 'bg-sky-500' : 'bg-primary'
+                                  }`}></div>
                                 <span className="capitalize">{project.status}</span>
                                 {project.location && (
                                   <>
@@ -1028,18 +1058,18 @@ export default function AdminUsers() {
                               </div>
                             </CardHeader>
                             <CardContent className="space-y-3 pb-4">
-                              <p className="text-xs text-gray-600 line-clamp-2">
+                              <p className="text-xs text-muted-foreground line-clamp-2">
                                 {project.description}
                               </p>
                               <div className="flex flex-wrap gap-1 pt-1">
                                 {Array.isArray(project.skills_required) && project.skills_required.map((skill: string, i: number) => (
-                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-gray-100 text-gray-600">
+                                  <Badge key={i} variant="secondary" className="text-[10px] py-0 px-1.5 bg-card text-muted-foreground border border-border/80">
                                     {skill}
                                   </Badge>
                                 ))}
                               </div>
-                              <div className="flex justify-between items-center pt-2 text-xs border-t border-gray-100">
-                                <span className="font-medium text-gray-700">
+                              <div className="flex justify-between items-center pt-2 text-xs border-t border-border/60">
+                                <span className="font-mono font-medium text-foreground">
                                   Budget: {project.budget_min ? `${project.budget_currency || "₹"}${project.budget_min.toLocaleString()}` : ""}
                                   {project.budget_min && project.budget_max ? " - " : ""}
                                   {project.budget_max ? `${project.budget_currency || "₹"}${project.budget_max.toLocaleString()}` : ""}
@@ -1056,9 +1086,9 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="achievements" className="space-y-4 mt-4">
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Achievements & Awards</CardTitle>
+                    <CardTitle className="text-lg font-display">Achievements & Awards</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {(!Array.isArray(selectedProfile.achievements) || selectedProfile.achievements.length === 0) ? (
@@ -1066,23 +1096,23 @@ export default function AdminUsers() {
                     ) : (
                       <div className="space-y-4">
                         {selectedProfile.achievements.map((achievement: AchievementEntry, index: number) => (
-                          <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                          <div key={index} className="border border-border/80 rounded-xl p-4 bg-surface-elevated">
                             <div className="flex items-start gap-3">
-                              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                {achievement.type === 'award' && <Award className="w-4 h-4 text-yellow-600" />}
-                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-yellow-600" />}
-                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-yellow-600" />}
-                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-yellow-600" />}
+                              <div className="w-8 h-8 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center flex-shrink-0">
+                                {achievement.type === 'award' && <Award className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'certification' && <GraduationCap className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'publication' && <FileText className="w-4 h-4 text-primary" />}
+                                {achievement.type === 'recognition' && <Star className="w-4 h-4 text-primary" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-medium text-sm text-gray-900">{achievement.title}</h4>
+                                  <h4 className="font-medium text-sm text-foreground">{achievement.title}</h4>
                                   <Badge variant="secondary" className="text-xs">
                                     {achievement.type ? (achievement.type.charAt(0).toUpperCase() + achievement.type.slice(1)) : "Achievement"}
                                   </Badge>
                                 </div>
-                                <p className="text-xs text-gray-600 mb-1">{achievement.description}</p>
-                                <p className="text-xs text-gray-500">{achievement.date}</p>
+                                <p className="text-xs text-muted-foreground mb-1">{achievement.description}</p>
+                                <p className="text-xs font-mono text-muted-foreground">{achievement.date}</p>
                               </div>
                             </div>
                           </div>
@@ -1094,9 +1124,9 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="education" className="space-y-4 mt-4">
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Education</CardTitle>
+                    <CardTitle className="text-lg font-display">Education</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {education.length === 0 ? (
@@ -1104,14 +1134,14 @@ export default function AdminUsers() {
                     ) : (
                       <div className="space-y-6">
                         {education.map((edu: EducationEntry, index: number) => (
-                          <div key={index} className="flex gap-4 items-start relative pb-6 border-l-2 border-slate-100 last:border-none pl-5 last:pb-0">
-                            <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-yellow-500 border-2 border-white" />
+                          <div key={index} className="flex gap-4 items-start relative pb-6 border-l-2 border-border/80 last:border-none pl-5 last:pb-0">
+                            <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-primary border-2 border-card" />
                             <div className="space-y-1">
-                              <h4 className="font-bold text-gray-800 text-sm">{edu.degree || edu.field}</h4>
-                              <p className="text-xs text-yellow-600 font-medium">{edu.school || edu.institution}</p>
-                              <p className="text-xs text-gray-400">{edu.duration || `${edu.start_date || ''} - ${edu.end_date || 'Completed'}`}</p>
+                              <h4 className="font-bold text-foreground text-sm">{edu.degree || edu.field}</h4>
+                              <p className="text-xs text-primary font-medium">{edu.school || edu.institution}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{edu.duration || `${edu.start_date || ''} - ${edu.end_date || 'Completed'}`}</p>
                               {edu.description && (
-                                <p className="text-xs text-gray-600 mt-1 whitespace-pre-line leading-relaxed">{edu.description}</p>
+                                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line leading-relaxed">{edu.description}</p>
                               )}
                             </div>
                           </div>
@@ -1123,9 +1153,9 @@ export default function AdminUsers() {
               </TabsContent>
 
               <TabsContent value="directory" className="space-y-4 mt-4">
-                <Card className="border-yellow-100">
+                <Card className="noir-card border-border/80 bg-card">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg">Directory Files</CardTitle>
+                    <CardTitle className="text-lg font-display">Directory Files</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {selectedUserDirectoryFiles.length === 0 ? (
@@ -1133,20 +1163,20 @@ export default function AdminUsers() {
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {selectedUserDirectoryFiles.map((file: DirectoryFile) => (
-                          <div key={file.id} className="border rounded-md p-3 flex flex-col gap-2 hover:bg-gray-50 bg-white">
+                          <div key={file.id} className="border border-border/80 rounded-xl p-3 flex flex-col gap-2 hover:bg-surface-hover bg-surface-elevated">
                             {file.type === 'image' ? (
-                              <img src={file.url} alt={file.name} className="w-full h-32 object-cover rounded" />
+                              <img src={file.url} alt={file.name} className="w-full h-32 object-cover rounded-lg" />
                             ) : file.type === 'video' ? (
-                              <video src={file.url} className="w-full h-32 object-cover rounded" controls />
+                              <video src={file.url} className="w-full h-32 object-cover rounded-lg" controls />
                             ) : file.type === 'audio' ? (
                               <audio src={file.url} className="w-full mt-auto" controls />
                             ) : (
-                              <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded">
-                                <FileText className="w-8 h-8 text-gray-400" />
+                              <div className="w-full h-32 bg-card flex items-center justify-center rounded-lg">
+                                <FileText className="w-8 h-8 text-muted-foreground" />
                               </div>
                             )}
-                            <p className="text-sm font-medium truncate" title={file.name}>{file.name}</p>
-                            <p className="text-xs text-gray-500">{new Date(file.uploadDate).toLocaleDateString()}</p>
+                            <p className="text-sm font-medium text-foreground truncate" title={file.name}>{file.name}</p>
+                            <p className="text-xs font-mono text-muted-foreground">{new Date(file.uploadDate).toLocaleDateString()}</p>
                           </div>
                         ))}
                       </div>
@@ -1165,12 +1195,13 @@ export default function AdminUsers() {
     <AdminLayout pageTitle="Users Management" pageName="Users">
       <div className="space-y-6">
         {/* Page Header Row with integrated Search and Filter Button */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Users Management</h1>
-            <p className="text-muted-foreground mt-1">Manage registered user accounts, manage tags, and configure access.</p>
+            <p className="noir-eyebrow mb-1">Directory Administration</p>
+            <h1 className="text-3xl font-display font-bold text-foreground">Users Management</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Manage registered user accounts, manage tags, and configure access.</p>
           </div>
-          
+
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -1178,31 +1209,31 @@ export default function AdminUsers() {
                 placeholder="Search username or email"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-10 w-full bg-white border-yellow-200 focus-visible:ring-yellow-500"
+                className="pl-10 h-10 w-full bg-surface-elevated border-border/80"
               />
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsFilterSidebarOpen(true)}
-              className="flex items-center gap-2 border-yellow-500 hover:bg-yellow-50 text-yellow-700 h-10 px-4 shrink-0 font-semibold"
+              className="flex items-center gap-2 border-primary/30 hover:bg-primary/10 text-primary h-10 px-4 shrink-0 font-semibold"
             >
               <Filter className="h-4 w-4" />
               Filter
               {(categoryFilter !== "all" || statusFilter !== "all" || dateFrom || dateTo || selectedFilterTags.length > 0) && (
-                <span className="flex h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+                <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
               )}
             </Button>
           </div>
         </div>
 
         {/* Main Content Card */}
-        <Card className="border-border/50 shadow-soft">
+        <Card className="noir-card border-border/80 bg-card">
           <CardContent className="space-y-6 pt-6">
             {/* Users Table */}
-            <div className="border rounded-lg overflow-hidden bg-white">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-16 space-y-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-yellow-600" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Loading users from database...</span>
                 </div>
               ) : filteredUsers.length === 0 ? (
@@ -1211,16 +1242,16 @@ export default function AdminUsers() {
                 </div>
               ) : (
                 <Table>
-                  <TableHeader className="bg-gray-50">
-                    <TableRow>
-                      <TableHead className="font-semibold text-gray-700">User ID</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Username</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Email</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Category</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Status</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Joined</TableHead>
-                      <TableHead className="font-semibold text-gray-700">Tags (Synced to Profile)</TableHead>
-                      <TableHead className="text-right font-semibold text-gray-700">Actions</TableHead>
+                  <TableHeader className="bg-surface-elevated">
+                    <TableRow className="border-border/70">
+                      <TableHead className="font-semibold">User ID</TableHead>
+                      <TableHead className="font-semibold">Username</TableHead>
+                      <TableHead className="font-semibold">Email</TableHead>
+                      <TableHead className="font-semibold">Category</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
+                      <TableHead className="font-semibold">Joined</TableHead>
+                      <TableHead className="font-semibold">Tags (Synced to Profile)</TableHead>
+                      <TableHead className="text-right font-semibold">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1228,30 +1259,30 @@ export default function AdminUsers() {
                       const userTags = Array.isArray(user.tags) ? user.tags : [];
                       const displayUsername = user.username || user.full_name || user.email?.split("@")[0] || "creative_user";
                       const displayId = getUserDisplayId(user.id);
-                      
+
                       return (
-                        <TableRow key={user.id} className="hover:bg-slate-50/50">
-                          <TableCell className="font-mono text-xs text-slate-500 font-medium">
+                        <TableRow key={user.id} className="border-border/60 hover:bg-surface-hover/50">
+                          <TableCell className="font-mono text-xs text-muted-foreground font-medium">
                             {displayId}
                           </TableCell>
                           <TableCell className="font-semibold">
-                            <button 
+                            <button
                               onClick={() => setSelectedUserId(user.id)}
-                              className="text-yellow-600 hover:text-yellow-700 hover:underline text-left font-semibold"
+                              className="text-primary hover:underline text-left font-semibold"
                             >
                               {displayUsername}
                             </button>
                           </TableCell>
-                          <TableCell className="text-gray-600 text-sm">{user.email || "N/A"}</TableCell>
+                          <TableCell className="text-muted-foreground font-mono text-xs">{user.email || "N/A"}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="bg-yellow-50 text-yellow-800 hover:bg-yellow-100 border-yellow-200">
+                            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                               {user.category || "Unassigned"}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {getStatusBadge(user)}
                           </TableCell>
-                          <TableCell className="text-gray-500 text-sm">
+                          <TableCell className="text-muted-foreground font-mono text-xs">
                             {user.created_at ? new Date(user.created_at).toLocaleDateString() : "N/A"}
                           </TableCell>
                           <TableCell>
@@ -1261,9 +1292,9 @@ export default function AdminUsers() {
                                   <span className="text-xs text-muted-foreground italic">No tags</span>
                                 ) : (
                                   userTags.map((tag: string, index: number) => (
-                                    <Badge 
+                                    <Badge
                                       key={index}
-                                      variant="secondary" 
+                                      variant="secondary"
                                       className={cn("text-[10px] px-2 py-0.5 font-semibold", getTagBadgeStyle(tag) || "")}
                                     >
                                       {tag}
@@ -1271,7 +1302,7 @@ export default function AdminUsers() {
                                   ))
                                 )}
                               </div>
-                              <Popover 
+                              <Popover
                                 open={editingTags?.id === user.id}
                                 onOpenChange={(open) => {
                                   if (open) {
@@ -1285,15 +1316,15 @@ export default function AdminUsers() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 rounded-full hover:bg-yellow-50 shrink-0"
+                                    className="h-7 w-7 rounded-full hover:bg-primary/10 shrink-0"
                                     title="Edit Tags"
                                   >
-                                    <Tags className="h-3.5 w-3.5 text-yellow-600" />
+                                    <Tags className="h-3.5 w-3.5 text-primary" />
                                   </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-80 p-0" align="end">
-                                  <Command>
-                                    <CommandInput placeholder="Search tags..." className="focus:ring-yellow-500" />
+                                <PopoverContent className="w-80 p-0 bg-card border-border/80" align="end">
+                                  <Command className="bg-card">
+                                    <CommandInput placeholder="Search tags..." />
                                     <CommandEmpty>No tags found.</CommandEmpty>
                                     <CommandGroup className="max-h-[220px] overflow-y-auto">
                                       {globalTags.map((tag) => {
@@ -1302,15 +1333,15 @@ export default function AdminUsers() {
                                           <CommandItem
                                             key={tag.label}
                                             onSelect={() => toggleTag(tag.label)}
-                                            className="flex items-center gap-2 cursor-pointer py-2 hover:bg-yellow-50"
+                                            className="flex items-center gap-2 cursor-pointer py-2"
                                           >
                                             <div className={cn(
                                               "flex h-4 w-4 items-center justify-center rounded border transition-colors",
-                                              isSelected ? "bg-yellow-500 border-yellow-500" : "border-gray-200"
+                                              isSelected ? "bg-primary border-primary" : "border-border"
                                             )}>
-                                              {isSelected && <Check className="h-3 w-3 text-white" />}
+                                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                                             </div>
-                                            <Badge 
+                                            <Badge
                                               variant="secondary"
                                               className={cn("text-xs font-semibold", getTagBadgeStyle(tag.label) || "")}
                                             >
@@ -1320,10 +1351,10 @@ export default function AdminUsers() {
                                         );
                                       })}
                                     </CommandGroup>
-                                    <div className="border-t p-2">
+                                    <div className="border-t border-border/60 p-2">
                                       <Button
                                         size="sm"
-                                        className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
+                                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                                         onClick={() => handleSaveUserTags(user.id)}
                                       >
                                         Save Changes
@@ -1337,35 +1368,35 @@ export default function AdminUsers() {
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-yellow-50 rounded-full">
-                                  <MoreVertical className="h-4 w-4 text-gray-500" />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-surface-hover rounded-full">
+                                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40 bg-white shadow-md border rounded-md">
-                                <DropdownMenuItem 
+                              <DropdownMenuContent align="end" className="w-44 bg-card border-border/80 shadow-noir">
+                                <DropdownMenuItem
                                   onClick={() => handleToggleVerification(user)}
-                                  className="cursor-pointer hover:bg-yellow-50 flex items-center gap-2 text-sm"
+                                  className="cursor-pointer flex items-center gap-2 text-sm"
                                 >
-                                  <ShieldCheck className="h-4 w-4 text-green-600" />
+                                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
                                   {user.is_verified ? "Unverify User" : "Verify User"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleOpenNotify(user)}
-                                  className="cursor-pointer hover:bg-yellow-50 flex items-center gap-2 text-sm"
+                                  className="cursor-pointer flex items-center gap-2 text-sm"
                                 >
-                                  <Bell className="h-4 w-4 text-yellow-600" />
+                                  <Bell className="h-4 w-4 text-primary" />
                                   Notify User
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleBlockUser(user)}
-                                  className="cursor-pointer hover:bg-yellow-50 flex items-center gap-2 text-sm text-amber-700"
+                                  className="cursor-pointer flex items-center gap-2 text-sm text-amber-500"
                                 >
-                                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                  {user.role === 'blocked' ? "Unblock User" : "Block User"}
+                                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                                  {(user.account_status === 'blocked' || user.role === 'blocked') ? "Unblock User" : "Block User"}
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleDeleteUser(user.id)}
-                                  className="cursor-pointer hover:bg-red-50 flex items-center gap-2 text-sm text-red-600"
+                                  className="cursor-pointer flex items-center gap-2 text-sm text-destructive"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                   Delete User
@@ -1383,7 +1414,7 @@ export default function AdminUsers() {
 
             {/* Results Summary */}
             {!loading && (
-              <div className="flex justify-between items-center text-sm text-muted-foreground">
+              <div className="flex justify-between items-center text-sm text-muted-foreground font-mono">
                 <span>Showing {filteredUsers.length} of {profiles.length} users</span>
               </div>
             )}
@@ -1395,36 +1426,36 @@ export default function AdminUsers() {
       {isFilterSidebarOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop overlay */}
-          <div 
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsFilterSidebarOpen(false)}
           />
-          
+
           <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white p-6 shadow-2xl flex flex-col h-full">
+            <div className="w-screen max-w-md bg-card border-l border-border/80 p-6 shadow-2xl flex flex-col h-full">
               {/* Header */}
-              <div className="flex items-center justify-between border-b pb-4 mb-6">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-yellow-600" />
+              <div className="flex items-center justify-between border-b border-border/60 pb-4 mb-6">
+                <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-primary" />
                   Filter Users
                 </h2>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setIsFilterSidebarOpen(false)}
-                  className="rounded-full hover:bg-gray-100 h-8 w-8"
+                  className="rounded-full hover:bg-surface-hover h-8 w-8"
                 >
-                  <X className="h-4 w-4 text-gray-500" />
+                  <X className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </div>
-              
+
               {/* Scrollable Filters Content */}
               <div className="flex-1 overflow-y-auto space-y-6 pr-1">
                 {/* Category Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Category</label>
+                  <label className="text-sm font-semibold text-foreground">Category</label>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full bg-surface-elevated border-border/80">
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1437,12 +1468,12 @@ export default function AdminUsers() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Status Filter */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Verification / Status</label>
+                  <label className="text-sm font-semibold text-foreground">Verification / Status</label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full bg-surface-elevated border-border/80">
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1453,35 +1484,35 @@ export default function AdminUsers() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Date Joined Filter Range */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700 block">Date Joined Range</label>
+                  <label className="text-sm font-semibold text-foreground block">Date Joined Range</label>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <span className="text-xs text-gray-500">From</span>
-                      <Input 
-                        type="date" 
-                        value={dateFrom} 
+                      <span className="text-xs text-muted-foreground">From</span>
+                      <Input
+                        type="date"
+                        value={dateFrom}
                         onChange={(e) => setDateFrom(e.target.value)}
-                        className="w-full"
+                        className="w-full bg-surface-elevated border-border/80"
                       />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-xs text-gray-500">To</span>
-                      <Input 
-                        type="date" 
-                        value={dateTo} 
+                      <span className="text-xs text-muted-foreground">To</span>
+                      <Input
+                        type="date"
+                        value={dateTo}
                         onChange={(e) => setDateTo(e.target.value)}
-                        className="w-full"
+                        className="w-full bg-surface-elevated border-border/80"
                       />
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Tags Multiselect Grid */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-gray-700 block">Filter by Tags (Matches All)</label>
+                  <label className="text-sm font-semibold text-foreground block">Filter by Tags (Matches All)</label>
                   <div className="flex flex-wrap gap-2">
                     {availableTags.map((tag) => {
                       const isSelected = selectedFilterTags.includes(tag.label);
@@ -1489,7 +1520,7 @@ export default function AdminUsers() {
                         <button
                           key={tag.value}
                           onClick={() => {
-                            setSelectedFilterTags(prev => 
+                            setSelectedFilterTags(prev =>
                               prev.includes(tag.label)
                                 ? prev.filter(t => t !== tag.label)
                                 : [...prev, tag.label]
@@ -1497,9 +1528,9 @@ export default function AdminUsers() {
                           }}
                           className={cn(
                             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                            isSelected 
-                              ? "bg-yellow-500 text-white border-yellow-500 shadow-sm font-semibold" 
-                              : "bg-gray-50 hover:bg-gray-100 text-gray-600 border-gray-200"
+                            isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold"
+                              : "bg-surface-elevated hover:bg-surface-hover text-muted-foreground border-border/80"
                           )}
                         >
                           {isSelected && <Check className="h-3 w-3" />}
@@ -1511,18 +1542,18 @@ export default function AdminUsers() {
                   {selectedFilterTags.length > 0 && (
                     <button
                       onClick={() => setSelectedFilterTags([])}
-                      className="text-xs text-yellow-600 hover:text-yellow-700 hover:underline flex items-center gap-1 mt-1 font-semibold"
+                      className="text-xs text-primary hover:underline flex items-center gap-1 mt-1 font-semibold"
                     >
                       Clear tags selection
                     </button>
                   )}
                 </div>
               </div>
-              
+
               {/* Footer actions */}
-              <div className="border-t pt-4 mt-6 flex gap-3">
-                <Button 
-                  variant="outline" 
+              <div className="border-t border-border/60 pt-4 mt-6 flex gap-3">
+                <Button
+                  variant="outline"
                   className="flex-1 font-semibold"
                   onClick={() => {
                     setCategoryFilter("all");
@@ -1534,8 +1565,8 @@ export default function AdminUsers() {
                 >
                   Reset All
                 </Button>
-                <Button 
-                  className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
+                <Button
+                  className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                   onClick={() => setIsFilterSidebarOpen(false)}
                 >
                   Apply Filters
@@ -1548,10 +1579,10 @@ export default function AdminUsers() {
 
       {/* Notification Dialog popup */}
       <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-white">
+        <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-              <Bell className="h-5 w-5 text-yellow-600" />
+            <DialogTitle className="flex items-center gap-2 text-xl font-display font-bold">
+              <Bell className="h-5 w-5 text-primary" />
               Send Direct Notification
             </DialogTitle>
             <DialogDescription>
@@ -1560,22 +1591,22 @@ export default function AdminUsers() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Notification Title</label>
+              <label className="text-sm font-semibold text-foreground">Notification Title</label>
               <Input
                 placeholder="e.g. Creator Profile Verified!"
                 value={notificationTitle}
                 onChange={(e) => setNotificationTitle(e.target.value)}
-                className="focus-visible:ring-yellow-500"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Notification Message</label>
+              <label className="text-sm font-semibold text-foreground">Notification Message</label>
               <Textarea
                 placeholder="e.g. Congratulations! Your profile has been thoroughly reviewed and marked as verified by our administration team."
                 value={notificationMessage}
                 onChange={(e) => setNotificationMessage(e.target.value)}
                 rows={4}
-                className="focus-visible:ring-yellow-500"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
           </div>
@@ -1583,10 +1614,10 @@ export default function AdminUsers() {
             <Button variant="outline" onClick={() => setIsNotifyDialogOpen(false)} className="font-semibold">
               Cancel
             </Button>
-            <Button 
-              onClick={handleSendNotification} 
+            <Button
+              onClick={handleSendNotification}
               disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}
-              className="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
             >
               {isSendingNotification ? (
                 <>

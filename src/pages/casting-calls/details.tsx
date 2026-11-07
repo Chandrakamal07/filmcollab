@@ -49,27 +49,27 @@ export default function CastingCallDetails() {
   const renderActionSection = () => {
     if (isOwner) {
       return (
-        <div className="bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 rounded-lg p-4 flex items-center justify-between mt-4">
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between mt-4">
           <div>
-            <h3 className="font-bold text-blue-900 dark:text-blue-200">You are the creator</h3>
-            <p className="text-xs text-blue-700 dark:text-blue-300">Manage your applicants below.</p>
+            <h3 className="font-bold text-primary">You are the creator</h3>
+            <p className="text-xs text-muted-foreground">Manage your applicants below.</p>
           </div>
-          <Button variant="outline" size="sm">Edit Call</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/casting-calls/new?edit=${call.id}`)}>Edit Call</Button>
         </div>
       );
     }
 
     if (appStatus === "Interested") {
       return (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between mt-4">
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between mt-4">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-blue-600" />
+            <CheckCircle2 className="w-5 h-5 text-primary" />
             <div>
               <h3 className="font-bold text-foreground text-sm">Interest Submitted</h3>
               <p className="text-xs text-muted-foreground">Under review.</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 dark:text-red-300" onClick={handleWithdraw}>
+          <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleWithdraw}>
             Withdraw
           </Button>
         </div>
@@ -78,11 +78,11 @@ export default function CastingCallDetails() {
 
     if (appStatus === "Confirmed") {
       return (
-        <div className="bg-green-50/80 dark:bg-green-950/30 border border-green-200 dark:border-green-900/40 rounded-lg p-4 flex items-center gap-3 mt-4">
-          <CheckCircle2 className="w-5 h-5 text-green-600" />
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3 mt-4">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           <div>
-            <h3 className="font-bold text-green-900 dark:text-green-200 text-sm">Application Confirmed!</h3>
-            <p className="text-xs text-green-700 dark:text-green-300">You have been selected.</p>
+            <h3 className="font-bold text-emerald-400 text-sm">Application Confirmed!</h3>
+            <p className="text-xs text-muted-foreground">You have been selected.</p>
           </div>
         </div>
       );
@@ -90,16 +90,16 @@ export default function CastingCallDetails() {
 
     if (appStatus === "Rejected") {
       return (
-        <div className="bg-red-50/80 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-lg p-4 mt-4">
-          <h3 className="font-bold text-red-900 dark:text-red-200 text-sm">Not Selected</h3>
-          <p className="text-xs text-red-700">Your profile wasn't a match this time.</p>
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 mt-4">
+          <h3 className="font-bold text-destructive text-sm">Not Selected</h3>
+          <p className="text-xs text-muted-foreground">Your profile wasn't a match this time.</p>
         </div>
       );
     }
 
     if (call.status === "Closed" || call.status === "Applications Full") {
       return (
-        <div className="bg-muted border border-border rounded-lg p-4 mt-4">
+        <div className="bg-surface-elevated border border-border/80 rounded-xl p-4 mt-4">
           <h3 className="font-bold text-foreground text-sm">Applications Closed</h3>
           <p className="text-xs text-muted-foreground">Not accepting new applicants.</p>
         </div>
@@ -107,9 +107,9 @@ export default function CastingCallDetails() {
     }
 
     return (
-      <div className="mt-6 border-t pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="mt-6 border-t border-border/80 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-xs text-muted-foreground">Ensure your profile is up to date before expressing interest.</p>
-        <Button size="lg" className="w-full sm:w-auto text-base font-bold px-8 h-12 ml-auto" onClick={handleInterested}>
+        <Button size="lg" className="w-full sm:w-auto text-base font-bold px-8 h-12 ml-auto bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm" onClick={handleInterested}>
           I'm Interested
         </Button>
       </div>
@@ -120,17 +120,17 @@ export default function CastingCallDetails() {
     <AppLayout pageTitle={call.title}>
       <div className="bg-background">
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 pb-20">
-          <Link to="/casting-calls" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6 font-medium text-sm transition-colors">
+          <Link to="/casting-calls" className="inline-flex items-center text-muted-foreground hover:text-primary mb-6 font-medium text-sm transition-colors">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Casting Calls
           </Link>
 
           {/* Top Section (Basic Info & Image) */}
-          <div className="bg-card text-card-foreground rounded-xl shadow-sm border p-6 md:p-8 flex flex-col md:flex-row gap-8 mb-8">
+          <div className="bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 p-6 md:p-8 flex flex-col md:flex-row gap-8 mb-8">
             {/* Left Column (Poster) */}
             <div className="w-full md:w-1/3 xl:w-1/4 shrink-0">
               <Dialog>
                 <DialogTrigger asChild>
-                  <div className="aspect-[4/5] rounded-xl overflow-hidden bg-gray-900 shadow-md cursor-zoom-in hover:opacity-90 transition-opacity">
+                  <div className="aspect-[4/5] rounded-xl overflow-hidden bg-surface-elevated border border-border/80 shadow-md cursor-zoom-in hover:opacity-90 transition-opacity">
                     <img src={call.poster} alt={call.title} className="w-full h-full object-cover" />
                   </div>
                 </DialogTrigger>
@@ -143,11 +143,11 @@ export default function CastingCallDetails() {
             {/* Right Column (Basic Details) */}
             <div className="w-full md:w-2/3 xl:w-3/4 flex flex-col">
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <Badge variant="secondary" className="bg-primary/10 text-primary">{call.category}</Badge>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/25">{call.category}</Badge>
                 {call.status !== "Open" && <Badge variant="outline">{call.status}</Badge>}
               </div>
               
-              <h1 className="text-2xl md:text-3xl font-black text-foreground leading-tight mb-2">
+              <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground tracking-tight leading-tight mb-2">
                 {call.title}
               </h1>
               <p className="text-base md:text-lg text-muted-foreground font-medium mb-1">
@@ -158,7 +158,7 @@ export default function CastingCallDetails() {
               </p>
 
               {/* Quick Details Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 p-4 rounded-xl bg-surface-elevated/60 border border-border/80 mb-2">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Role</p>
                   <p className="font-bold text-foreground">{call.roleName}</p>
@@ -185,7 +185,7 @@ export default function CastingCallDetails() {
           </div>
 
           {/* Bottom Section (Main Content) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-card text-card-foreground rounded-xl shadow-sm border p-6 md:p-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-card text-card-foreground rounded-xl shadow-noir border border-border/80 p-6 md:p-8">
                 {/* About & Requirements */}
                 <div className="space-y-8">
                   <section>
@@ -227,7 +227,7 @@ export default function CastingCallDetails() {
 
                 {/* Specs & Info */}
                 <div className="space-y-8">
-                  <section className="bg-card rounded-xl p-6 border border-border">
+                  <section className="bg-surface-elevated/60 rounded-xl p-6 border border-border/80">
                     <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
                       <Users className="w-5 h-5 text-muted-foreground" /> Casting Profile
                     </h3>
@@ -257,7 +257,7 @@ export default function CastingCallDetails() {
                     </div>
                   </section>
 
-                  <section className="bg-card rounded-xl p-6 border border-border">
+                  <section className="bg-surface-elevated/60 rounded-xl p-6 border border-border/80">
                     <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-muted-foreground" /> Schedule
                     </h3>
@@ -274,7 +274,7 @@ export default function CastingCallDetails() {
                         <p className="text-sm text-muted-foreground mb-1">Audition Venue</p>
                         <p className="font-medium text-foreground">{call.auditionVenue}</p>
                         {call.googleMapsLink && (
-                          <a href={call.googleMapsLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mt-1">
+                          <a href={call.googleMapsLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-1">
                             <MapPin className="w-3 h-3" /> View on Maps <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
@@ -282,11 +282,11 @@ export default function CastingCallDetails() {
                     </div>
                   </section>
 
-                  <section className="bg-card rounded-xl p-6 border border-border">
+                  <section className="bg-surface-elevated/60 rounded-xl p-6 border border-border/80">
                     <h3 className="font-bold text-foreground mb-4">Contact Info</h3>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3 text-muted-foreground">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/25">
                           <Users className="w-4 h-4 text-muted-foreground" />
                         </div>
                         <div>
@@ -295,7 +295,7 @@ export default function CastingCallDetails() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-muted-foreground">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/25">
                           <Mail className="w-4 h-4 text-muted-foreground" />
                         </div>
                         <div>
@@ -305,7 +305,7 @@ export default function CastingCallDetails() {
                       </div>
                       {call.phone && (
                         <div className="flex items-center gap-3 text-muted-foreground">
-                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/25">
                             <Phone className="w-4 h-4 text-muted-foreground" />
                           </div>
                           <div>
@@ -322,7 +322,7 @@ export default function CastingCallDetails() {
                       <h3 className="font-bold text-foreground mb-3">Attachments</h3>
                       <div className="space-y-2">
                         {call.attachments.map((file, idx) => (
-                          <a key={idx} href={file.url} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/40 transition-colors">
+                          <a key={idx} href={file.url} className="flex items-center justify-between p-3 border border-border/80 bg-surface-elevated/50 rounded-xl hover:border-primary/40 hover:bg-surface-hover transition-colors">
                             <div className="flex items-center gap-3">
                               <FileText className="w-5 h-5 text-muted-foreground" />
                               <span className="text-sm font-medium text-muted-foreground">{file.name}</span>

@@ -120,32 +120,40 @@ export default function AdminTicketDetail() {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ status: newStatus })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
+      }
       setTicket({ ...ticket, status: newStatus });
       toast({ title: "Status updated" });
-    } catch (error) {
-      toast({ title: "Failed to update status", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: error?.message || "Failed to update status", variant: "destructive" });
     }
   };
 
   const handleAssigneeChange = async (newAssigneeId: string) => {
     try {
       const val = newAssigneeId === "unassigned" ? null : newAssigneeId;
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ assigned_to: val })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
+      }
       setTicket({ ...ticket, assigned_to: val });
       toast({ title: "Assignee updated" });
-    } catch (error) {
-      toast({ title: "Failed to reassign ticket", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: error?.message || "Failed to reassign ticket", variant: "destructive" });
     }
   };
 
@@ -205,14 +213,18 @@ export default function AdminTicketDetail() {
   const toggleChatEnabled = async () => {
     const newValue = !ticket.chat_enabled;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tickets")
         .update({ chat_enabled: newValue })
-        .eq("id", ticketId);
+        .eq("id", ticketId)
+        .select("id");
 
       if (error) {
         console.error("Error toggling chat:", error);
         throw error;
+      }
+      if (!data || data.length === 0) {
+        throw new Error("No ticket was updated. Permission denied.");
       }
       setTicket({ ...ticket, chat_enabled: newValue });
       toast({ title: `Chat ${newValue ? "enabled" : "disabled"}` });
@@ -225,11 +237,11 @@ export default function AdminTicketDetail() {
   const getStatusBadgeStyle = (status: string) => {
     const s = status?.toLowerCase() || "";
     switch (s) {
-      case "open": return "bg-blue-50 text-blue-700 hover:bg-blue-100";
-      case "in-progress": return "bg-yellow-50 text-yellow-700 hover:bg-yellow-100";
+      case "open": return "bg-sky-500/15 text-sky-400 border border-sky-500/30";
+      case "in-progress": return "bg-amber-500/15 text-amber-400 border border-amber-500/30";
       case "resolved":
-      case "closed": return "bg-green-50 text-green-700 hover:bg-green-100";
-      default: return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+      case "closed": return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30";
+      default: return "bg-surface-elevated text-muted-foreground border border-border/70";
     }
   };
 
@@ -269,13 +281,14 @@ export default function AdminTicketDetail() {
               variant="ghost"
               size="sm"
               onClick={() => navigate("/admin-dashboard/tickets")}
-              className="h-8 w-8 p-0"
+              className="h-9 w-9 p-0 border border-border/70 bg-surface-elevated hover:bg-surface-hover"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Ticket Details</h1>
-              <p className="text-muted-foreground mt-1">View and manage ticket #{ticket.ticket_number}</p>
+              <span className="noir-eyebrow">Support Resolution</span>
+              <h1 className="font-display text-3xl font-bold text-foreground mt-0.5">Ticket Details</h1>
+              <p className="text-muted-foreground mt-1 font-mono text-xs">View and manage ticket #{ticket.ticket_number}</p>
             </div>
           </div>
           <Button
@@ -283,7 +296,7 @@ export default function AdminTicketDetail() {
             size="sm"
             onClick={() => fetchData(true)}
             disabled={isRefreshing}
-            className="h-9 border-yellow-200 hover:bg-yellow-50 hover:text-yellow-700"
+            className="h-9 border-primary/30 bg-surface-elevated hover:bg-primary/10 hover:text-primary"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -291,37 +304,37 @@ export default function AdminTicketDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-2xl flex items-center justify-between">
-                <span>{ticket.subject}</span>
-                <Badge variant="secondary" className={getStatusBadgeStyle(ticket.status)}>
+          <Card className="lg:col-span-2 noir-card border-border/80 bg-card">
+            <CardHeader className="border-b border-border/60">
+              <CardTitle className="font-display text-2xl flex items-center justify-between gap-4">
+                <span className="text-foreground">{ticket.subject}</span>
+                <Badge variant="secondary" className={cn("capitalize", getStatusBadgeStyle(ticket.status))}>
                   {StatusIcon(ticket.status)}
                   {ticket.status}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Created By</Label>
-                    <p className="mt-1 font-medium">{ticket.creator?.full_name || "Unknown"}</p>
+                    <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Created By</Label>
+                    <p className="mt-1 font-medium text-foreground">{ticket.creator?.full_name || "Unknown"}</p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground">Created Date</Label>
-                    <p className="mt-1">{new Date(ticket.created_at).toLocaleString()}</p>
+                    <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Created Date</Label>
+                    <p className="mt-1 font-mono text-sm text-foreground">{new Date(ticket.created_at).toLocaleString()}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                    <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Status</Label>
                     <Select value={ticket.status?.toLowerCase()} onValueChange={handleStatusChange}>
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-surface-elevated border-border/80">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-card border-border/80">
                         <SelectItem value="open">Open</SelectItem>
                         <SelectItem value="in-progress">In Progress</SelectItem>
                         <SelectItem value="resolved">Resolved</SelectItem>
@@ -331,12 +344,12 @@ export default function AdminTicketDetail() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-muted-foreground">Assigned To</Label>
+                    <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Assigned To</Label>
                     <Select value={ticket.assigned_to || "unassigned"} onValueChange={handleAssigneeChange}>
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-surface-elevated border-border/80">
                         <SelectValue placeholder="Unassigned" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-card border-border/80">
                         <SelectItem value="unassigned">Unassigned</SelectItem>
                         {teamMembers.map(tm => (
                           <SelectItem key={tm.id} value={tm.id}>{tm.full_name}</SelectItem>
@@ -346,13 +359,15 @@ export default function AdminTicketDetail() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t">
-                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
-                  <div className="mt-2 p-4 bg-gray-50 rounded-md whitespace-pre-wrap">{ticket.description}</div>
+                <div className="pt-4 border-t border-border/60">
+                  <Label className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Description</Label>
+                  <div className="mt-2 p-4 bg-surface-elevated border border-border/70 rounded-lg whitespace-pre-wrap text-sm text-foreground leading-relaxed">
+                    {ticket.description}
+                  </div>
                 </div>
                 
-                <div className="pt-4 border-t space-y-4">
-                  <Label className="text-lg font-semibold text-foreground">Official Updates</Label>
+                <div className="pt-4 border-t border-border/60 space-y-4">
+                  <Label className="font-display text-lg font-semibold text-foreground">Official Updates</Label>
                   <div className="space-y-4">
                     <div className="flex gap-2">
                       <Input
@@ -360,8 +375,13 @@ export default function AdminTicketDetail() {
                         onChange={(e) => setNewUpdate(e.target.value)}
                         placeholder="Add an official update (visible to user)..."
                         disabled={isSendingUpdate}
+                        className="bg-surface-elevated border-border/80"
                       />
-                      <Button onClick={handleSendUpdate} disabled={isSendingUpdate || !newUpdate.trim()}>
+                      <Button
+                        onClick={handleSendUpdate}
+                        disabled={isSendingUpdate || !newUpdate.trim()}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
                         Post Update
                       </Button>
                     </div>
@@ -371,14 +391,14 @@ export default function AdminTicketDetail() {
                         <p className="text-sm text-muted-foreground italic">No official updates posted yet.</p>
                       ) : (
                         ticketUpdates.map((update) => (
-                          <div key={update.id} className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                          <div key={update.id} className="bg-primary/10 border border-primary/25 p-4 rounded-lg">
                             <div className="flex justify-between items-start mb-2">
-                              <span className="font-semibold text-blue-900 text-sm">{update.author?.full_name}</span>
-                              <span className="text-xs text-blue-600 font-medium">
+                              <span className="font-semibold text-primary text-sm">{update.author?.full_name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">
                                 {new Date(update.created_at).toLocaleString()}
                               </span>
                             </div>
-                            <p className="text-sm text-blue-800 whitespace-pre-wrap">{update.content}</p>
+                            <p className="text-sm text-foreground whitespace-pre-wrap">{update.content}</p>
                           </div>
                         ))
                       )}
@@ -389,25 +409,25 @@ export default function AdminTicketDetail() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-1 flex flex-col h-[600px]">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-xl">Interaction Chat</CardTitle>
+          <Card className="lg:col-span-1 flex flex-col h-[600px] noir-card border-border/80 bg-card">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border/60">
+              <CardTitle className="font-display text-xl text-foreground">Interaction Chat</CardTitle>
               <div className="flex items-center space-x-2">
                 <Switch
                   checked={ticket.chat_enabled || false}
                   onCheckedChange={toggleChatEnabled}
                   id="chat-toggle"
                 />
-                <Label htmlFor="chat-toggle" className="text-sm">
+                <Label htmlFor="chat-toggle" className="text-xs font-mono text-muted-foreground">
                   {ticket.chat_enabled ? "Enabled" : "Disabled"}
                 </Label>
               </div>
             </CardHeader>
-            <CardContent className="flex flex-col flex-1 overflow-hidden space-y-4">
+            <CardContent className="flex flex-col flex-1 overflow-hidden space-y-4 pt-4">
               <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
                 <div className="space-y-4 pb-4">
                   {messages.length === 0 ? (
-                    <div className="text-center text-muted-foreground text-sm py-4">No messages yet.</div>
+                    <div className="text-center text-muted-foreground text-sm py-8">No messages yet.</div>
                   ) : messages.map((msg) => {
                     const isAdmin = msg.author?.role === "admin";
                     const isMe = msg.author_id === profile?.id;
@@ -421,17 +441,19 @@ export default function AdminTicketDetail() {
                       >
                         <div
                           className={cn(
-                            "max-w-[85%] rounded-lg p-3",
+                            "max-w-[85%] rounded-xl p-3.5 border",
                             isMe
-                              ? "bg-yellow-500 text-white ml-auto"
-                              : isAdmin ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-900"
+                              ? "bg-primary text-primary-foreground border-primary/40 ml-auto"
+                              : isAdmin
+                              ? "bg-surface-elevated text-foreground border-primary/30"
+                              : "bg-surface-elevated text-foreground border-border/70"
                           )}
                         >
-                          <div className="flex items-center gap-1 mb-1">
-                            {isAdmin && !isMe && <UserCog className="w-3 h-3 text-gray-400" />}
+                          <div className="flex items-center gap-1.5 mb-1">
+                            {isAdmin && !isMe && <UserCog className="w-3.5 h-3.5 text-primary" />}
                             <span className={cn(
                               "text-xs font-semibold", 
-                              isMe ? "text-yellow-100" : isAdmin ? "text-gray-300" : "text-gray-600"
+                              isMe ? "text-primary-foreground/90" : isAdmin ? "text-primary" : "text-muted-foreground"
                             )}>
                               {isMe ? "You" : msg.author?.full_name || "User"}
                             </span>
@@ -439,8 +461,8 @@ export default function AdminTicketDetail() {
                           <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                           <div
                             className={cn(
-                              "text-[10px] mt-1 text-right",
-                              isMe ? "text-yellow-100" : isAdmin ? "text-gray-400" : "text-gray-500"
+                              "text-[10px] font-mono mt-1.5 text-right",
+                              isMe ? "text-primary-foreground/80" : "text-muted-foreground"
                             )}
                           >
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -452,12 +474,12 @@ export default function AdminTicketDetail() {
                 </div>
               </ScrollArea>
 
-              <div className="flex gap-2 pt-2 border-t">
+              <div className="flex gap-2 pt-3 border-t border-border/60">
                 <Input
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   placeholder="Type an update..."
-                  className="flex-1"
+                  className="flex-1 bg-surface-elevated border-border/80"
                   disabled={isSending}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -469,7 +491,7 @@ export default function AdminTicketDetail() {
                 <Button
                   onClick={handleSendMessage}
                   disabled={isSending || !newMessage.trim()}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-white"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Send

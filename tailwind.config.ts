@@ -14,15 +14,53 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: [
+          "Inter",
+          "ui-sans-serif",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"Segoe UI"',
+          "Roboto",
+          '"Helvetica Neue"',
+          "Arial",
+          "sans-serif",
+        ],
+        display: [
+          '"Playfair Display"',
+          '"Iowan Old Style"',
+          '"Palatino Linotype"',
+          '"URW Palladio L"',
+          "P052",
+          "Georgia",
+          "serif",
+        ],
+        mono: [
+          '"JetBrains Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          "monospace",
+        ],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        surface: {
+          canvas: "hsl(var(--surface-canvas))",
+          base: "hsl(var(--surface-base))",
+          elevated: "hsl(var(--surface-elevated))",
+          hover: "hsl(var(--surface-hover))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -31,6 +69,18 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -60,9 +110,19 @@ export default {
         },
       },
       borderRadius: {
+        xl: "calc(var(--radius) + 2px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        elegant: "var(--shadow-elegant)",
+        noir: "var(--shadow-noir)",
+        "noir-lg": "var(--shadow-noir-lg)",
+      },
+      transitionTimingFunction: {
+        noir: "cubic-bezier(0.22, 1, 0.36, 1)",
       },
       keyframes: {
         "accordion-down": {
@@ -83,8 +143,8 @@ export default {
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
+        "accordion-down": "accordion-down 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
+        "accordion-up": "accordion-up 0.2s cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },

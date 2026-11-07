@@ -28,10 +28,12 @@ import {
   User,
   Mail,
   Phone,
-  GraduationCap
+  GraduationCap,
+  Loader2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Job {
   id: string;
@@ -60,13 +62,16 @@ export default function JobDetails() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [isApplied, setIsApplied] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Job>>({});
+
+  const isOwner = Boolean(user?.id && job?.user_id && user.id === job.user_id);
+  const canManage = isOwner || Boolean(isAdmin && isAdmin());
 
   // Hardcoded jobs data (same as in Jobs.tsx)
   const hardcodedJobs: Job[] = [
@@ -198,45 +203,49 @@ export default function JobDetails() {
     }
   ];
 
-  // Hardcoded applicants data
-  const applicants = [
-    {
-      id: "app-1",
-      name: "Sarah Johnson",
-      email: "sarah.johnson@email.com",
-      phone: "+1 (555) 123-4567",
-      experience: "8 years",
-      skills: ["Film Direction", "Storytelling", "Leadership", "Project Management"],
-      appliedDate: "2024-01-16",
-      status: "Under Review",
-      resume: "sarah_johnson_resume.pdf",
-      portfolio: "sarahjohnson.com"
-    },
-    {
-      id: "app-2", 
-      name: "Michael Chen",
-      email: "michael.chen@email.com",
-      phone: "+1 (555) 234-5678",
-      experience: "6 years",
-      skills: ["Film Direction", "Creative Vision", "Team Management", "Post-Production"],
-      appliedDate: "2024-01-17",
-      status: "Interview Scheduled",
-      resume: "michael_chen_resume.pdf",
-      portfolio: "michaelchenfilms.com"
-    },
-    {
-      id: "app-3",
-      name: "Emily Rodriguez",
-      email: "emily.rodriguez@email.com", 
-      phone: "+1 (555) 345-6789",
-      experience: "10 years",
-      skills: ["Film Direction", "Budget Management", "Leadership", "Creative Vision"],
-      appliedDate: "2024-01-18",
-      status: "Under Review",
-      resume: "emily_rodriguez_resume.pdf",
-      portfolio: "emilyrodriguez.com"
-    }
-  ];
+  // Real applicants data loaded from database
+  const [applicants, setApplicants] = useState<any[]>([]);
+  const [isLoadingApplicants, setIsLoadingApplicants] = useState(false);
+
+  useEffect(() => {
+    if (!jobId || !canManage) return;
+    const fetchApplicants = async () => {
+      setIsLoadingApplicants(true);
+      try {
+        const { data, error } = await supabase
+          .from("job_applications")
+          .select(`
+            id,
+            job_id,
+            user_id,
+            profile_id,
+            name,
+            email,
+            phone,
+            experience,
+            skills,
+            resume_url,
+            portfolio_url,
+            cover_letter,
+            status,
+            created_at,
+            profiles:profile_id (id, full_name, email, avatar_url)
+          `)
+          .eq("job_id", jobId)
+          .order("created_at", { ascending: false });
+
+        if (error && error.code !== "42P01") {
+          console.error("Could not fetch applicants:", error);
+        }
+        setApplicants(data || []);
+      } catch (err) {
+        console.warn("Error fetching applicants:", err);
+      } finally {
+        setIsLoadingApplicants(false);
+      }
+    };
+    fetchApplicants();
+  }, [jobId, canManage]);
 
   const handleEdit = () => {
     if (job) {
@@ -248,81 +257,273 @@ export default function JobDetails() {
     }
   };
 
-  const handleDelete = () => {
-    if (job) {
+  const handleDelete = async () => {
+    if (!job) return;
+    if (!canManage) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You do not have permission to delete this job posting.",
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", job.id)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job was deleted. Please verify your permissions.");
+      }
+
       toast({
         title: "Job deleted",
         description: "The job has been deleted successfully."
       });
       navigate("/jobs");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete job.";
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: msg,
+      });
     }
   };
 
-  const handleUpdateJob = () => {
-    if (job && editForm) {
-      const skillsArray = typeof editForm.skills_required === 'string' 
-        ? editForm.skills_required.split(',').map(s => s.trim())
-        : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
-      
+  const handleUpdateJob = async () => {
+    if (!job || !editForm) return;
+    if (!canManage) {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: "You do not have permission to modify this job posting.",
+      });
+      return;
+    }
+
+    const skillsArray = typeof editForm.skills_required === 'string' 
+      ? editForm.skills_required.split(',').map(s => s.trim()).filter(Boolean)
+      : Array.isArray(editForm.skills_required) ? editForm.skills_required : job.skills_required;
+
+    try {
+      const { data, error } = await supabase.from("jobs").update({
+        job_title: editForm.title || job.title,
+        company_name: editForm.company || job.company,
+        location: editForm.location || job.location,
+        salary_min: editForm.min_salary || job.min_salary,
+        salary_max: editForm.max_salary || job.max_salary,
+        job_description: editForm.description || job.description,
+        requirements: editForm.requirements || job.requirements,
+        benefits: editForm.benefits || job.benefits,
+        job_type: editForm.job_type || job.job_type,
+        experience_level: editForm.experience_level || job.experience_level,
+        industry: editForm.category || job.category,
+        skills_required: Array.isArray(skillsArray) ? skillsArray : [String(skillsArray)],
+      }).eq("id", job.id).select();
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No job record was updated. Please verify your permissions.");
+      }
+
       const updatedJob = {
         ...job,
         ...editForm,
         skills_required: skillsArray
       };
-      setJob(updatedJob);
+      setJob(updatedJob as Job);
       setShowEditDialog(false);
       toast({
         title: "Job updated",
         description: "The job has been updated successfully."
       });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update job details.";
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: msg
+      });
     }
   };
 
+  const mapDbJob = (dbJob: any): Job => ({
+    id: dbJob.id,
+    title: dbJob.job_title || dbJob.title || "Production Role",
+    company: dbJob.company_name || dbJob.company || "Studio",
+    location: dbJob.location || "Remote",
+    min_salary: dbJob.salary_min || dbJob.min_salary || 0,
+    max_salary: dbJob.salary_max || dbJob.max_salary || 0,
+    description: dbJob.job_description || dbJob.description || "",
+    requirements: dbJob.requirements || "",
+    skills_required: dbJob.skills_required || [],
+    benefits: dbJob.benefits || "",
+    job_type: dbJob.job_type || "Full-time",
+    experience_level: dbJob.experience_level || "Mid-Level",
+    category: dbJob.industry || dbJob.category || "Film & Media",
+    posted_date: dbJob.posted_date || dbJob.created_at || new Date().toISOString(),
+    application_deadline: dbJob.application_deadline || "",
+    status: dbJob.status || "Active",
+    user_id: dbJob.user_id || "",
+    created_at: dbJob.created_at || new Date().toISOString(),
+    updated_at: dbJob.updated_at || new Date().toISOString(),
+  });
+
   useEffect(() => {
-    const fetchJobDetails = () => {
+    const fetchJobDetails = async () => {
       console.log('JobDetails: jobId from URL:', jobId);
-      console.log('JobDetails: Available job IDs:', hardcodedJobs.map(job => job.id));
       
       if (!jobId) {
-        console.log('JobDetails: No jobId provided');
         setLoading(false);
         return;
       }
 
-      // Find the job in hardcoded data
-      const foundJob = hardcodedJobs.find(job => job.id === jobId);
-      console.log('JobDetails: Found job:', foundJob);
-      
-      if (foundJob) {
-        setJob(foundJob);
-        setLoading(false);
-      } else {
-        console.log('JobDetails: Job not found for ID:', jobId);
+      setLoading(true);
+      try {
+        // 1. Check Supabase jobs table
+        const { data, error } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("id", jobId)
+          .maybeSingle();
+
+        if (!error && data) {
+          setJob(mapDbJob(data));
+
+          // Check if current user already applied
+          if (user?.id) {
+            const { data: appData } = await supabase
+              .from("job_applications")
+              .select("id")
+              .eq("job_id", jobId)
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (appData) {
+              setIsApplied(true);
+            }
+          }
+          setLoading(false);
+          return;
+        }
+
+        // 2. Check hardcodedJobs fallback (e.g. for seed IDs)
+        const foundJob = hardcodedJobs.find(j => j.id === jobId);
+        if (foundJob) {
+          setJob(foundJob);
+          setLoading(false);
+          return;
+        }
+
+        // 3. Not found
         setLoading(false);
         toast({
           variant: "destructive",
           title: "Job not found",
           description: "The requested job could not be found."
         });
+      } catch (err) {
+        console.error("Error fetching job details:", err);
+        setLoading(false);
       }
     };
 
     fetchJobDetails();
-  }, [jobId, toast]);
+  }, [jobId, user?.id, toast]);
 
-  const handleApply = () => {
-    setIsApplied(true);
-    toast({
-      title: "Application submitted",
-      description: "Your application has been submitted successfully."
-    });
+  const handleApply = async () => {
+    if (!user) {
+      navigate("/auth/signin", { state: { from: window.location.pathname } });
+      return;
+    }
+    if (!job) return;
+
+    try {
+      const { error } = await supabase.from("job_applications").insert({
+        job_id: job.id,
+        user_id: user.id,
+        profile_id: profile?.id || null,
+        name: profile?.full_name || user.email?.split("@")[0] || "Applicant",
+        email: user.email || (profile as any)?.email || "",
+        status: "Under Review"
+      });
+
+      if (error && error.code !== "23505") {
+        throw error;
+      }
+
+      setIsApplied(true);
+      toast({
+        title: "Application Submitted",
+        description: `Your application for ${job.title} at ${job.company} has been submitted successfully.`
+      });
+
+      // Send real notification to job poster
+      if (job.user_id && job.user_id !== user.id) {
+        const { error: notifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: job.user_id,
+          p_title: "New Job Application",
+          p_description: `Someone applied for your job: ${job.title}`,
+          p_type: "job",
+          p_priority: "medium",
+          p_action_url: `/jobs/${job.id}`
+        });
+        if (notifErr) {
+          console.warn("Could not send job application notification:", notifErr);
+        }
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Application Failed",
+        description: err.message || "Could not submit application. Please try again."
+      });
+    }
   };
 
+  useEffect(() => {
+    if (user?.id && jobId) {
+      try {
+        const savedKey = `saved_jobs_${user.id}`;
+        const savedList = JSON.parse(localStorage.getItem(savedKey) || "[]");
+        setIsSaved(Array.isArray(savedList) && savedList.includes(jobId));
+      } catch {
+        setIsSaved(false);
+      }
+    }
+  }, [user?.id, jobId]);
+
   const handleSave = () => {
-    setIsSaved(!isSaved);
+    if (!user) {
+      toast({
+        variant: "destructive",
+        title: "Sign in required",
+        description: "Please sign in to save job postings to your profile.",
+      });
+      return;
+    }
+
+    const nextState = !isSaved;
+    setIsSaved(nextState);
+
+    try {
+      const savedKey = `saved_jobs_${user.id}`;
+      const savedList: string[] = JSON.parse(localStorage.getItem(savedKey) || "[]");
+      const updated = nextState
+        ? Array.from(new Set([...savedList, jobId!]))
+        : savedList.filter((id) => id !== jobId);
+      localStorage.setItem(savedKey, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not persist saved jobs:", e);
+    }
+
     toast({
-      title: isSaved ? "Job unsaved" : "Job saved",
-      description: isSaved ? "Job removed from saved jobs." : "Job added to saved jobs."
+      title: nextState ? "Job saved" : "Job unsaved",
+      description: nextState ? "Job saved to your profile collection." : "Job removed from saved jobs.",
     });
   };
 
@@ -398,7 +599,7 @@ export default function JobDetails() {
           <Button 
             variant="outline" 
             onClick={() => navigate("/jobs")}
-            className="flex items-center gap-2 border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors"
+            className="flex items-center gap-2 border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Jobs
@@ -406,11 +607,11 @@ export default function JobDetails() {
         </div>
 
         {/* Job Header */}
-        <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+        <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
           <CardHeader>
             <div className="flex justify-between items-start">
               <div className="space-y-2">
-                <CardTitle className="text-2xl font-bold text-foreground">
+                <CardTitle className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground">
                   {job.title}
                 </CardTitle>
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -423,19 +624,23 @@ export default function JobDetails() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleEdit} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button variant="outline" onClick={handleDelete} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-                <Button variant="outline" onClick={handleSave} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
-                  <Bookmark className={`h-4 w-4 mr-2 ${isSaved ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                {canManage && (
+                  <>
+                    <Button variant="outline" onClick={handleEdit} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button variant="outline" onClick={handleDelete} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </>
+                )}
+                <Button variant="outline" onClick={handleSave} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
+                  <Bookmark className={`h-4 w-4 mr-2 ${isSaved ? 'fill-primary text-primary' : ''}`} />
                   {isSaved ? 'Saved' : 'Save'}
                 </Button>
-                <Button variant="outline" onClick={handleShare} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 text-foreground transition-colors">
+                <Button variant="outline" onClick={handleShare} className="border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary text-foreground transition-colors">
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
@@ -446,10 +651,12 @@ export default function JobDetails() {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Overview</TabsTrigger>
-            <TabsTrigger value="applicants" className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white">Applicants ({applicants.length})</TabsTrigger>
-          </TabsList>
+          {canManage && (
+            <TabsList className="grid w-full grid-cols-2 bg-surface-elevated border border-border/80">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
+              <TabsTrigger value="applicants" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Applicants ({applicants.length})</TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="overview" className="space-y-6">
             {/* Job Details Grid */}
@@ -457,10 +664,10 @@ export default function JobDetails() {
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Job Description */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground">
-                      <Briefcase className="h-5 w-5 text-yellow-600" />
+                      <Briefcase className="h-5 w-5 text-primary" />
                       Job Description
                     </CardTitle>
                   </CardHeader>
@@ -472,7 +679,7 @@ export default function JobDetails() {
                 </Card>
 
                 {/* Requirements */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Requirements</CardTitle>
                   </CardHeader>
@@ -484,7 +691,7 @@ export default function JobDetails() {
                       <h4 className="font-medium text-foreground">Required Skills:</h4>
                       <div className="flex flex-wrap gap-2">
                         {(Array.isArray(job.skills_required) ? job.skills_required : [job.skills_required]).map((skill, index) => (
-                          <Badge key={index} variant="secondary" className="bg-yellow-100 text-yellow-800">
+                          <Badge key={index} variant="secondary" className="bg-primary/10 text-primary border border-primary/25">
                             {skill}
                           </Badge>
                         ))}
@@ -496,7 +703,7 @@ export default function JobDetails() {
                         <h4 className="font-medium text-foreground">Tags:</h4>
                         <div className="flex flex-wrap gap-2">
                           {job.job_tags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                               {tag}
                             </Badge>
                           ))}
@@ -507,7 +714,7 @@ export default function JobDetails() {
                 </Card>
 
                 {/* Benefits */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Benefits</CardTitle>
                   </CardHeader>
@@ -522,7 +729,7 @@ export default function JobDetails() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Job Info */}
-                <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-foreground">Job Information</CardTitle>
                   </CardHeader>
@@ -596,7 +803,7 @@ export default function JobDetails() {
                     <div className="flex items-center gap-3">
                       <Badge 
                         variant={job.status === 'Active' ? 'default' : 'secondary'}
-                        className={`w-fit ${job.status === 'Active' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 text-yellow-800'}`}
+                        className={`w-fit ${job.status === 'Active' ? 'bg-primary text-primary-foreground' : 'bg-surface-elevated text-muted-foreground border border-border/80'}`}
                       >
                         {job.status}
                       </Badge>
@@ -606,10 +813,10 @@ export default function JobDetails() {
 
                 {job.user_id !== user?.id && (
                   /* Apply Button */
-                  <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
+                  <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
                     <CardContent className="pt-6">
                       <Button 
-                        className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white" 
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary-hover font-medium" 
                         size="lg"
                         onClick={handleApply}
                         disabled={isApplied}
@@ -628,62 +835,109 @@ export default function JobDetails() {
             </div>
           </TabsContent>
 
-          <TabsContent value="applicants" className="space-y-6">
-            <Card className="border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-              <CardHeader>
-                <CardTitle className="text-foreground">Job Applicants</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {applicants.map((applicant) => (
-                    <Card key={applicant.id} className="p-4 border-yellow-200 dark:border-yellow-900/40 bg-card text-card-foreground">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <h3 className="font-semibold text-foreground">{applicant.name}</h3>
-                            <Badge variant="outline" className="border-yellow-200 dark:border-yellow-900/40">{applicant.status}</Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {applicant.email}
+          {canManage && (
+            <TabsContent value="applicants" className="space-y-6">
+              <Card className="border-border/80 bg-card text-card-foreground shadow-noir rounded-xl">
+                <CardHeader>
+                  <CardTitle className="text-foreground">Job Applicants</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingApplicants ? (
+                    <div className="flex h-32 items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : applicants.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground space-y-2">
+                      <User className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                      <p className="font-medium text-foreground">No applications yet</p>
+                      <p className="text-sm">When candidates apply to this position, their dossiers will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {applicants.map((applicant) => {
+                        const applicantName = applicant.name || applicant.profiles?.full_name || "Applicant";
+                        const applicantEmail = applicant.email || applicant.profiles?.email || "No email";
+                        const applicantPhone = applicant.phone || "Not provided";
+                        const applicantExp = applicant.experience || "Not specified";
+                        const applicantSkills: string[] = Array.isArray(applicant.skills) ? applicant.skills : [];
+                        const appliedDateStr = applicant.created_at || applicant.appliedDate || new Date().toISOString();
+
+                        return (
+                          <Card key={applicant.id} className="p-4 border-border/80 bg-surface-elevated/40 text-card-foreground rounded-xl">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-muted-foreground" />
+                                  <h3 className="font-semibold text-foreground">{applicantName}</h3>
+                                  <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10">{applicant.status || "Under Review"}</Badge>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Mail className="h-3 w-3" />
+                                    {applicantEmail}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="h-3 w-3" />
+                                    {applicantPhone}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <GraduationCap className="h-3 w-3" />
+                                    {applicantExp}
+                                  </div>
+                                </div>
+                                {applicantSkills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {applicantSkills.map((skill, index) => (
+                                      <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary border border-primary/25">
+                                        {skill}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="text-xs text-muted-foreground">
+                                  Applied on {formatDate(appliedDateStr)}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    if (applicant.resume_url) {
+                                      window.open(applicant.resume_url, '_blank', 'noopener,noreferrer');
+                                    } else {
+                                      toast({ title: "No resume attached", description: "The applicant did not provide a direct resume link." });
+                                    }
+                                  }}
+                                  className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
+                                >
+                                  View Resume
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    if (applicant.portfolio_url) {
+                                      window.open(applicant.portfolio_url, '_blank', 'noopener,noreferrer');
+                                    } else {
+                                      toast({ title: "No portfolio attached", description: "The applicant did not link a portfolio website." });
+                                    }
+                                  }}
+                                  className="border-border/80 bg-surface-elevated hover:border-primary/40 hover:bg-surface-hover hover:text-primary"
+                                >
+                                  View Portfolio
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {applicant.phone}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <GraduationCap className="h-3 w-3" />
-                              {applicant.experience}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {applicant.skills.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
-                                {skill}
-                              </Badge>
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Applied on {formatDate(applicant.appliedDate)}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
-                            View Resume
-                          </Button>
-                          <Button variant="outline" size="sm" className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
-                            View Portfolio
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Edit Dialog */}
@@ -700,7 +954,7 @@ export default function JobDetails() {
                     id="title"
                     value={editForm.title || ''}
                     onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div>
@@ -709,7 +963,7 @@ export default function JobDetails() {
                     id="company"
                     value={editForm.company || ''}
                     onChange={(e) => setEditForm({...editForm, company: e.target.value})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -719,7 +973,7 @@ export default function JobDetails() {
                   id="location"
                   value={editForm.location || ''}
                   onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -730,7 +984,7 @@ export default function JobDetails() {
                     type="number"
                     value={editForm.min_salary || ''}
                     onChange={(e) => setEditForm({...editForm, min_salary: parseInt(e.target.value)})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
                 <div>
@@ -740,7 +994,7 @@ export default function JobDetails() {
                     type="number"
                     value={editForm.max_salary || ''}
                     onChange={(e) => setEditForm({...editForm, max_salary: parseInt(e.target.value)})}
-                    className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                    className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                   />
                 </div>
               </div>
@@ -751,7 +1005,7 @@ export default function JobDetails() {
                   value={editForm.description || ''}
                   onChange={(e) => setEditForm({...editForm, description: e.target.value})}
                   rows={4}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -761,7 +1015,7 @@ export default function JobDetails() {
                   value={editForm.requirements || ''}
                   onChange={(e) => setEditForm({...editForm, requirements: e.target.value})}
                   rows={3}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -770,7 +1024,7 @@ export default function JobDetails() {
                   id="skills_required"
                   value={editForm.skills_required || ''}
                   onChange={(e) => setEditForm({...editForm, skills_required: e.target.value})}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div>
@@ -780,14 +1034,14 @@ export default function JobDetails() {
                   value={editForm.benefits || ''}
                   onChange={(e) => setEditForm({...editForm, benefits: e.target.value})}
                   rows={3}
-                  className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                  className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="job_type" className="text-foreground">Job Type</Label>
                   <Select value={editForm.job_type || ''} onValueChange={(value) => setEditForm({...editForm, job_type: value})}>
-                    <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Select job type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -801,7 +1055,7 @@ export default function JobDetails() {
                 <div>
                   <Label htmlFor="experience_level" className="text-foreground">Experience Level</Label>
                   <Select value={editForm.experience_level || ''} onValueChange={(value) => setEditForm({...editForm, experience_level: value})}>
-                    <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                    <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                       <SelectValue placeholder="Select experience level" />
                     </SelectTrigger>
                     <SelectContent>
@@ -814,10 +1068,10 @@ export default function JobDetails() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30">
+                <Button variant="outline" onClick={() => setShowEditDialog(false)} className="border-border/80 hover:border-primary/40 hover:bg-surface-hover">
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateJob} className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white">
+                <Button onClick={handleUpdateJob} className="bg-primary text-primary-foreground hover:bg-primary-hover">
                   Update Job
                 </Button>
               </div>

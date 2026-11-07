@@ -100,6 +100,7 @@ export default function NewCastingCall() {
       }
 
       await addCastingCall({
+        creatorId: "user",
         title: form.title,
         projectName: form.projectName,
         productionHouse: form.productionHouse,
@@ -144,13 +145,14 @@ export default function NewCastingCall() {
   return (
     <AppLayout pageTitle="Post a Casting Call">
       <div className="w-full max-w-4xl mx-auto py-2 md:py-6 px-1 sm:px-4">
-        <Link to="/casting-calls" className="inline-flex items-center text-muted-foreground hover:text-yellow-600 dark:hover:text-yellow-400 mb-6 font-medium text-sm transition-colors">
+        <Link to="/casting-calls" className="inline-flex items-center text-muted-foreground hover:text-primary mb-6 font-medium text-sm transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Casting Calls
         </Link>
 
-        <div className="w-full bg-card text-card-foreground rounded-2xl shadow-sm border p-4 sm:p-6 md:p-8 box-border overflow-hidden">
-          <div className="mb-8 border-b pb-6">
-            <h1 className="text-2xl sm:text-3xl font-black text-foreground">Post a Casting Call</h1>
+        <div className="w-full bg-card text-card-foreground rounded-2xl shadow-noir border border-border/80 p-4 sm:p-6 md:p-8 box-border overflow-hidden">
+          <div className="mb-8 border-b border-border/80 pb-6">
+            <p className="noir-eyebrow mb-1">Production Casting</p>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Post a Casting Call</h1>
             <p className="text-muted-foreground mt-2 text-sm">Create a detailed listing to attract the best talent for your project.</p>
           </div>
 
@@ -159,14 +161,14 @@ export default function NewCastingCall() {
             {/* Basic Info */}
             <div className="space-y-6 min-w-0">
               <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm">1</span>
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary border border-primary/30 font-mono text-sm">1</span>
                 Project Information
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 min-w-0">
                 <div className="space-y-2 md:col-span-2 min-w-0">
                   <Label htmlFor="poster">Casting Call Poster / Cover Image</Label>
-                  <div className="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer relative w-full">
+                  <div className="border-2 border-dashed border-border/80 rounded-xl p-6 flex flex-col items-center justify-center text-center bg-surface-elevated/40 hover:bg-surface-hover hover:border-primary/40 transition-colors cursor-pointer relative w-full">
                     <input 
                       type="file" 
                       id="poster"
@@ -176,7 +178,7 @@ export default function NewCastingCall() {
                     />
                     {posterFile ? (
                       <div className="flex flex-col items-center gap-2">
-                        <ImageIcon className="w-8 h-8 text-blue-500" />
+                        <ImageIcon className="w-8 h-8 text-primary" />
                         <span className="font-medium text-foreground">{posterFile.name}</span>
                         <span className="text-xs text-muted-foreground">Click or drag to replace</span>
                       </div>
@@ -219,7 +221,7 @@ export default function NewCastingCall() {
             {/* Role Info */}
             <div className="space-y-6 pt-6 border-t min-w-0">
               <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm">2</span>
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary border border-primary/30 font-mono text-sm">2</span>
                 Role Details
               </h3>
               
@@ -279,7 +281,7 @@ export default function NewCastingCall() {
                   </div>
                   <div className="space-y-2 md:col-span-2 mt-4 min-w-0">
                     <Label htmlFor="script">Script Attachment (Optional)</Label>
-                    <div className="border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center text-center bg-muted/40 hover:bg-muted transition-colors cursor-pointer relative h-32 w-full">
+                    <div className="border-2 border-dashed border-border/80 rounded-xl p-4 flex flex-col items-center justify-center text-center bg-surface-elevated/40 hover:bg-surface-hover hover:border-primary/40 transition-colors cursor-pointer relative h-32 w-full">
                       <input 
                         type="file" 
                         id="script"
@@ -289,7 +291,7 @@ export default function NewCastingCall() {
                       />
                       {scriptFile ? (
                         <div className="flex flex-col items-center gap-2">
-                          <FileText className="w-6 h-6 text-blue-500" />
+                          <FileText className="w-6 h-6 text-primary" />
                           <span className="font-medium text-foreground text-sm">{scriptFile.name}</span>
                           <span className="text-xs text-muted-foreground">Click or drag to replace</span>
                         </div>
@@ -308,7 +310,7 @@ export default function NewCastingCall() {
               {/* Logistics */}
               <div className="space-y-6 pt-6 border-t min-w-0">
                 <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm">3</span>
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/15 text-primary border border-primary/30 font-mono text-sm">3</span>
                   Logistics & Contact
                 </h3>
                 
@@ -362,14 +364,14 @@ export default function NewCastingCall() {
                   type="button" 
                   onClick={() => navigate("/casting-calls")} 
                   disabled={isUploading}
-                  className="w-full sm:w-auto border-yellow-200 dark:border-yellow-900/40 hover:border-yellow-500 hover:bg-yellow-50 hover:text-yellow-700 dark:hover:bg-yellow-950/40 dark:hover:text-yellow-400 dark:hover:border-yellow-500/60 transition-colors"
+                  className="w-full sm:w-auto border-border/80 bg-surface-elevated/50 hover:border-primary/40 hover:bg-surface-hover hover:text-primary transition-colors"
                 >
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
                   size="lg" 
-                  className="w-full sm:w-auto px-6 sm:px-8 font-bold gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white shadow-sm" 
+                  className="w-full sm:w-auto px-6 sm:px-8 font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm" 
                   disabled={isUploading}
                 >
                   <Save className="w-4 h-4 shrink-0" /> {isUploading ? 'Publishing...' : 'Publish Casting Call'}

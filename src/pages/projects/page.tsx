@@ -1,4 +1,5 @@
 import { AppLayout } from "@/components/layout/app-layout";
+import { DimensionalCard, DimensionalLayer, ImageReveal } from "@/components/ui/motion-primitives";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,19 +11,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Heart, 
-  Share2, 
-  Eye, 
-  Users, 
-  Clock, 
-  MapPin, 
-  Film, 
-  Tv, 
-  Star, 
+import {
+  Search,
+  Filter,
+  Plus,
+  Heart,
+  Share2,
+  Eye,
+  Users,
+  Clock,
+  MapPin,
+  Film,
+  Tv,
+  Star,
   TrendingUp,
   UserPlus,
   Bookmark,
@@ -55,13 +56,14 @@ interface Project {
   episodes: number | null;
   team_size: number;
   tags: string[] | null;
+  project_tags?: string[] | null;
   skills_required: string[] | null;
   created_by: string;
   featured: boolean;
   popular: boolean;
   created_at: string;
   updated_at: string;
-   likes_count?: number;
+  likes_count?: number;
   is_liked?: boolean;
   is_member?: boolean;
   creator_username?: string;
@@ -371,7 +373,7 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch projects from Supabase dynamically
       const { data, error } = await supabase
         .from("projects")
@@ -386,7 +388,7 @@ export default function ProjectsPage() {
 
       // Fetch profiles to map created_by to usernames
       const { data: profilesData } = await supabase
-        .from("profiles")
+        .from("public_profiles")
         .select("id, username, full_name");
 
       // Fetch user's joined projects
@@ -396,7 +398,7 @@ export default function ProjectsPage() {
           .from("project_members")
           .select("project_id, role")
           .eq("user_id", user.id);
-          
+
         if (memberData) {
           memberData.forEach(m => {
             if (m.role && m.role !== "Applicant") {
@@ -446,7 +448,7 @@ export default function ProjectsPage() {
         }) => {
           const isLiked = likedProjects.includes(project.id);
           const isMember = memberOfProjects.has(project.id);
-          
+
           return {
             id: project.id,
             title: project.title,
@@ -461,7 +463,7 @@ export default function ProjectsPage() {
             budget_currency: project.budget_currency || "₹",
             duration_minutes: project.duration_minutes,
             episodes: project.episodes,
-            team_size: project.team_size || 1,
+            team_size: typeof project.team_size === "number" && project.team_size > 0 ? project.team_size : 1,
             tags: project.tags || [],
             skills_required: project.skills_required || [],
             created_by: project.created_by || "",
@@ -469,7 +471,7 @@ export default function ProjectsPage() {
             popular: project.popular || false,
             created_at: project.created_at,
             updated_at: project.updated_at || project.created_at,
-            likes_count: project.likes_count || Math.floor(Math.random() * 20) + 10,
+            likes_count: typeof project.likes_count === "number" && project.likes_count >= 0 ? project.likes_count : 0,
             is_liked: isLiked,
             is_member: isMember,
             creator_username: project.created_by ? (profileMap[project.created_by]?.username || "") : "",
@@ -492,13 +494,13 @@ export default function ProjectsPage() {
 
   const fetchLikedProjects = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from("project_likes")
         .select("project_id")
         .eq("user_id", user.id);
-      
+
       if (error) throw error;
       if (data) {
         setLikedProjects(data.map((item: { project_id: string }) => item.project_id));
@@ -510,7 +512,7 @@ export default function ProjectsPage() {
 
   const fetchSavedProjects = async () => {
     if (!user) return;
-    
+
     try {
       const saved = localStorage.getItem(`saved_projects_${user.id}`);
       if (saved) {
@@ -532,7 +534,7 @@ export default function ProjectsPage() {
         .select("project_id")
         .eq("user_id", user.id)
         .eq("role", "Applicant");
-      
+
       if (error) throw error;
       if (data) {
         setAppliedProjects(data.map((item: { project_id: string }) => item.project_id));
@@ -547,10 +549,11 @@ export default function ProjectsPage() {
     if (!user) return;
 
     try {
-      const skillsArray = data.skills_required 
+      const skillsArray = data.skills_required
         ? data.skills_required.split(',').map(skill => skill.trim()).filter(skill => skill.length > 0)
         : [];
 
+      const normalizedVisibility = (data.project_status || "Public").toLowerCase() === "public" ? "public" : "private";
       // Insert new project into Supabase table
       const { data: insertedData, error } = await supabase
         .from("projects")
@@ -561,13 +564,14 @@ export default function ProjectsPage() {
           category: data.category,
           status: data.status,
           project_status: data.project_status || "Public",
+          visibility: normalizedVisibility,
           location: data.location,
           budget_min: data.budget_min && data.budget_min > 0 ? data.budget_min : null,
           budget_max: data.budget_max && data.budget_max > 0 ? data.budget_max : null,
           budget_currency: "₹",
           duration_minutes: data.duration_minutes && data.duration_minutes > 0 ? data.duration_minutes : null,
           episodes: data.episodes && data.episodes > 0 ? data.episodes : null,
-          team_size: Math.floor(Math.random() * 10) + 5,
+          team_size: 1,
           tags: [],
           skills_required: skillsArray,
           created_by: user.id,
@@ -585,7 +589,7 @@ export default function ProjectsPage() {
         });
         return;
       }
-      
+
       toast({
         title: "Success",
         description: "Project created successfully"
@@ -695,20 +699,21 @@ export default function ProjectsPage() {
 
       // Add to applied projects
       setAppliedProjects(prev => [...prev, projectId]);
-      
+
       const project = projects.find(p => p.id === projectId);
       if (project && project.created_by && project.created_by !== user.id) {
-        supabase.from("notifications").insert({
-          user_id: project.created_by,
-          title: "New Project Application",
-          description: `Someone applied to join your project: ${project.title}`,
-          type: "project",
-          action_url: `/projects?projectId=${project.id}`
+        supabase.rpc("send_authorized_notification", {
+          p_recipient_id: project.created_by,
+          p_title: "New Project Application",
+          p_description: `Someone applied to join your project: ${project.title}`,
+          p_type: "project",
+          p_priority: "medium",
+          p_action_url: `/projects?projectId=${project.id}`
         }).then(({ error: notifError }) => {
           if (notifError) console.error("Notification error:", notifError);
         });
       }
-      
+
       toast({
         title: "Application submitted",
         description: "Your application has been submitted successfully."
@@ -727,7 +732,7 @@ export default function ProjectsPage() {
   const handleShareProject = async (project: Project) => {
     const projectUrl = `${window.location.origin}/projects/${project.id}`;
     const shareText = `Check out this project: ${project.title}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -772,7 +777,7 @@ export default function ProjectsPage() {
           role: "Director"
         },
         {
-          id: "2", 
+          id: "2",
           name: "Sarah Johnson",
           email: "sarah.j@email.com",
           avatar: "SJ",
@@ -785,7 +790,7 @@ export default function ProjectsPage() {
         {
           id: "3",
           name: "Mike Chen",
-          email: "mike.chen@email.com", 
+          email: "mike.chen@email.com",
           avatar: "MC",
           appliedDate: "2025-01-06",
           status: "shortlisted",
@@ -825,7 +830,7 @@ export default function ProjectsPage() {
         project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.project_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.skills_required?.some(skill => 
+        project.skills_required?.some(skill =>
           skill.toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
@@ -897,7 +902,7 @@ export default function ProjectsPage() {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 30) {
       if (diffDays <= 0) return "today";
       return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
@@ -931,13 +936,14 @@ export default function ProjectsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="w-full sm:w-auto">
-            <h1 className="text-3xl font-bold text-foreground">Projects</h1>
+            <p className="noir-eyebrow mb-1">Production Slate & Collaborations</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Projects</h1>
             <p className="text-muted-foreground mt-1 w-full">
               Discover and collaborate on film and entertainment projects
             </p>
           </div>
-          <Button 
-            className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white w-full sm:w-auto"
+          <Button
+            className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium w-full sm:w-auto"
             onClick={() => setIsCreateDialogOpen(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -954,15 +960,15 @@ export default function ProjectsPage() {
                 placeholder="Search projects, titles, or keywords..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500 bg-background text-foreground w-full"
+                className="pl-10 border-border/80 focus:border-primary bg-card text-foreground w-full"
               />
             </div>
-            <Button variant="outline" className="shrink-0 border-yellow-200 dark:border-yellow-900/40 text-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30" onClick={() => setShowFilters(!showFilters)}>
+            <Button variant="outline" className="shrink-0 border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover" onClick={() => setShowFilters(!showFilters)}>
               <Filter className="h-4 w-4 md:mr-2" />
               <span className="hidden md:inline">Filters</span>
             </Button>
           </div>
-          
+
           <div className="hidden md:block">
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-40 bg-background border-border text-foreground">
@@ -981,11 +987,11 @@ export default function ProjectsPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="w-full overflow-x-auto pb-2 scrollbar-none">
-            <TabsList className="inline-flex min-w-max w-full md:grid md:w-full md:grid-cols-4 bg-yellow-50/50 dark:bg-muted/40 border border-yellow-200/50 dark:border-border">
-              <TabsTrigger value="all" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-yellow-500 data-[state=active]:text-white dark:data-[state=active]:text-white text-xs sm:text-sm">All Projects ({projects.length})</TabsTrigger>
-              <TabsTrigger value="joined" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-yellow-500 data-[state=active]:text-white dark:data-[state=active]:text-white text-xs sm:text-sm">Joined ({projects.filter(p => p.is_member && p.created_by !== user?.id).length})</TabsTrigger>
-              <TabsTrigger value="created" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-yellow-500 data-[state=active]:text-white dark:data-[state=active]:text-white text-xs sm:text-sm">Created ({projects.filter(p => p.created_by === user?.id).length})</TabsTrigger>
-              <TabsTrigger value="saved" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-yellow-500 data-[state=active]:text-white dark:data-[state=active]:text-white text-xs sm:text-sm">Saved ({savedProjects.length})</TabsTrigger>
+            <TabsList className="inline-flex min-w-max w-full md:grid md:w-full md:grid-cols-4 bg-surface-elevated border border-border/80 p-1">
+              <TabsTrigger value="all" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:text-primary-foreground font-medium text-xs sm:text-sm">All Projects ({projects.length})</TabsTrigger>
+              <TabsTrigger value="joined" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:text-primary-foreground font-medium text-xs sm:text-sm">Joined ({projects.filter(p => p.is_member && p.created_by !== user?.id).length})</TabsTrigger>
+              <TabsTrigger value="created" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:text-primary-foreground font-medium text-xs sm:text-sm">Created ({projects.filter(p => p.created_by === user?.id).length})</TabsTrigger>
+              <TabsTrigger value="saved" className="flex-1 whitespace-nowrap px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground dark:data-[state=active]:text-primary-foreground font-medium text-xs sm:text-sm">Saved ({savedProjects.length})</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1007,18 +1013,18 @@ export default function ProjectsPage() {
                   <Film className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold text-foreground mb-2">No projects found</h3>
                   <p className="text-muted-foreground">
-                    {activeTab === 'created' 
+                    {activeTab === 'created'
                       ? "You haven't created any projects yet. Click 'Create Project' to get started."
                       : activeTab === 'saved'
-                      ? "You haven't saved any projects yet. Click the save icon on projects to add them here."
-                      : "Try adjusting your search criteria or check back later for new projects."
+                        ? "You haven't saved any projects yet. Click the save icon on projects to add them here."
+                        : "Try adjusting your search criteria or check back later for new projects."
                     }
                   </p>
                 </CardContent>
               </Card>
             ) : (activeTab === "joined" || activeTab === "created" || activeTab === "saved") ? (
               // Table format for joined, created, and saved tabs
-              <div className="rounded-md border border-border bg-card text-card-foreground">
+              <div className="rounded-xl border border-border/80 bg-card text-card-foreground shadow-noir overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border">
@@ -1036,7 +1042,7 @@ export default function ProjectsPage() {
                       <TableRow key={project.id} className="border-b border-border">
                         <TableCell className="font-medium">
                           <div className="space-y-1">
-                            <div 
+                            <div
                               className="font-semibold cursor-pointer hover:text-primary transition-colors text-foreground"
                               onClick={() => {
                                 handleViewProjectDetails(project);
@@ -1070,7 +1076,7 @@ export default function ProjectsPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                          <span className="text-sm font-mono font-medium text-primary">
                             {formatBudget(project.budget_min, project.budget_max, project.budget_currency)}
                           </span>
                         </TableCell>
@@ -1084,15 +1090,15 @@ export default function ProjectsPage() {
                           <div className="flex items-center justify-end gap-2">
                             {activeTab === "created" ? (
                               <>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleViewProjectDetails(project)}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleShareProject(project)}
                                 >
@@ -1101,23 +1107,23 @@ export default function ProjectsPage() {
                               </>
                             ) : (
                               <>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleViewProjectDetails(project)}
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleSaveProject(project.id)}
                                   className={savedProjects.includes(project.id) ? "text-primary" : ""}
                                 >
                                   <Bookmark className={`h-4 w-4 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => handleShareProject(project)}
                                 >
@@ -1133,136 +1139,148 @@ export default function ProjectsPage() {
                 </Table>
               </div>
             ) : (
-              // Card format for "All Projects" tab
+              // Studio Noir V2 Widescreen 16:9 Dimensional Project Slates
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProjects.map((project) => (
-                  <Card key={project.id} className="hover:shadow-md transition-shadow bg-card text-card-foreground border-yellow-200 dark:border-yellow-900/40">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg line-clamp-1 text-foreground">{project.title}</CardTitle>
-                          <div className="flex items-center gap-2 mt-1">
-                            {getTypeIcon(project.project_type)}
-                            <span className="text-sm text-muted-foreground">
+                {filteredProjects.map((project, pIdx) => {
+                  const projectBackdrops = [
+                    "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=900&q=80",
+                    "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=900&q=80",
+                  ];
+                  const backdropUrl = projectBackdrops[pIdx % projectBackdrops.length];
+                  return (
+                    <DimensionalCard key={project.id} tiltStrength={5.5} className="group relative overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-noir hover:border-primary/45 transition-all duration-300 flex flex-col justify-between">
+                      <div>
+                        <div
+                          onClick={() => handleViewProjectDetails(project)}
+                          className="aspect-[16/9] w-full bg-surface-elevated border-b border-border/60 relative overflow-hidden cursor-pointer"
+                        >
+                          <ImageReveal
+                            src={backdropUrl}
+                            alt={project.title}
+                            containerClassName="w-full h-full"
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/30 to-black/20" />
+                          <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                            <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-primary/35 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
                               {project.project_type} • {project.category}
                             </span>
+                            <span className="px-2.5 py-0.5 rounded-full bg-black/65 backdrop-blur-md border border-white/15 font-mono text-[10px] uppercase tracking-wider text-white/90 flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(project.status)}`} />
+                              {project.status}
+                            </span>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1.5">
-                            Created by: <span className="font-medium text-yellow-600 dark:text-yellow-500">@{project.creator_username || "anonymous"}</span>
-                          </p>
-                        </div>
-                        <div className="flex gap-1">
-                          {project.featured && (
-                            <Badge variant="outline" className="text-xs border-primary text-primary">
-                              <Star className="h-3 w-3 mr-1" />
-                              Featured
-                            </Badge>
-                          )}
-                          {project.popular && (
-                            <Badge variant="outline" className="text-xs border-primary text-primary">
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                              Popular
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center mt-2">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${getStatusColor(project.status)}`}></div>
-                          <span className="text-sm text-muted-foreground capitalize">{project.status}</span>
-                          <span className="text-sm text-muted-foreground">•</span>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            <span className="text-sm text-muted-foreground">{project.location}</span>
+                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2 z-10">
+                            <div>
+                              <h3 className="font-serif text-xl font-bold tracking-tight line-clamp-1 text-white group-hover:text-primary transition-colors">
+                                {project.title}
+                              </h3>
+                              <p className="text-[11px] text-white/75 mt-0.5">
+                                by <span className="font-medium text-primary">@{project.creator_username || "studio"}</span>
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleSaveProject(project.id)}
-                            className={savedProjects.includes(project.id) ? "text-primary" : ""}
-                          >
-                            <Bookmark className={`h-4 w-4 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleShareProject(project)}
-                          >
-                            <Share2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <CardHeader className="pb-2 pt-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5 text-primary/80" />
+                              <span>{project.location || "Remote / Global"}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSaveProject(project.id)}
+                                className={savedProjects.includes(project.id) ? "text-primary h-7 w-7 p-0" : "h-7 w-7 p-0"}
+                              >
+                                <Bookmark className={`h-3.5 w-3.5 ${savedProjects.includes(project.id) ? "fill-current" : ""}`} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handleShareProject(project)}
+                              >
+                                <Share2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
                       </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      <CardDescription className="line-clamp-2 text-muted-foreground">
-                        {project.description}
-                      </CardDescription>
 
-                      {project.project_tags && project.project_tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {project.project_tags.map((tag: string, index: number) => (
-                            <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-900/50">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          <span>{project.team_size} team members</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span>{formatDate(project.created_at)}</span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="font-medium text-foreground">Budget: {formatBudget(project.budget_min, project.budget_max, project.budget_currency)}</span>
-                        </div>
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">
-                            {project.duration_minutes ? `${project.duration_minutes} minutes` : 
-                             project.episodes ? `${project.episodes} episodes` : 'Duration not specified'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2 pt-2">
-                        <Button 
-                          size="sm" 
-                          className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
-                          onClick={() => handleViewProjectDetails(project)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                        {!project.is_member && project.created_by !== user?.id && project.allow_applicants !== false && (
-                          <Button 
-                            variant={appliedProjects.includes(project.id) ? "secondary" : "outline"}
-                            size="sm"
-                            className={appliedProjects.includes(project.id) 
-                              ? "bg-green-100 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-900/40 font-semibold opacity-100 disabled:opacity-100 cursor-default" 
-                              : "border-yellow-200 dark:border-yellow-900/40 text-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
-                            }
-                            onClick={() => handleJoinProject(project.id)}
-                            disabled={appliedProjects.includes(project.id)}
-                          >
-                            {appliedProjects.includes(project.id) ? (
-                              <Check className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
-                            ) : (
-                              <UserPlus className="h-4 w-4 mr-2" />
-                            )}
-                            {appliedProjects.includes(project.id) ? "Applied" : "Join Project"}
-                          </Button>
+                      <CardContent className="space-y-4">
+                        <CardDescription className="line-clamp-2 text-muted-foreground">
+                          {project.description}
+                        </CardDescription>
+
+                        {project.project_tags && project.project_tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {project.project_tags.map((tag: string, index: number) => (
+                              <Badge key={index} variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border border-primary/25">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+
+                        <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span>{project.team_size} team members</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span>{formatDate(project.created_at)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="font-mono text-xs font-medium text-primary">Budget: {formatBudget(project.budget_min, project.budget_max, project.budget_currency)}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">
+                              {project.duration_minutes ? `${project.duration_minutes} minutes` :
+                                project.episodes ? `${project.episodes} episodes` : 'Duration not specified'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
+                            onClick={() => handleViewProjectDetails(project)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                          {!project.is_member && project.created_by !== user?.id && project.allow_applicants !== false && (
+                            <Button
+                              variant={appliedProjects.includes(project.id) ? "secondary" : "outline"}
+                              size="sm"
+                              className={appliedProjects.includes(project.id)
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold opacity-100 disabled:opacity-100 cursor-default"
+                                : "border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
+                              }
+                              onClick={() => handleJoinProject(project.id)}
+                              disabled={appliedProjects.includes(project.id)}
+                            >
+                              {appliedProjects.includes(project.id) ? (
+                                <Check className="h-4 w-4 mr-2 text-green-600 dark:text-green-400" />
+                              ) : (
+                                <UserPlus className="h-4 w-4 mr-2" />
+                              )}
+                              {appliedProjects.includes(project.id) ? "Applied" : "Join Project"}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </DimensionalCard>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -1277,7 +1295,7 @@ export default function ProjectsPage() {
                 Share your creative vision and find collaborators
               </DialogDescription>
             </DialogHeader>
-            
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1288,13 +1306,13 @@ export default function ProjectsPage() {
                       <FormItem>
                         <FormLabel className="text-foreground">Project Title</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. The Silent..." className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                          <Input placeholder="e.g. The Silent..." className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="project_type"
@@ -1303,7 +1321,7 @@ export default function ProjectsPage() {
                         <FormLabel className="text-foreground">Project Type</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                            <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                               <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                           </FormControl>
@@ -1328,9 +1346,9 @@ export default function ProjectsPage() {
                     <FormItem>
                       <FormLabel className="text-foreground">Description</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Describe your project, its vision, and what you're looking for in collaborators..."
-                          className="min-h-[100px] border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                          className="min-h-[100px] border-border/80 bg-surface-elevated/50 focus:border-primary"
                           {...field}
                         />
                       </FormControl>
@@ -1348,7 +1366,7 @@ export default function ProjectsPage() {
                         <FormLabel className="text-foreground">Your Role</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                            <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                               <SelectValue placeholder="Select your role" />
                             </SelectTrigger>
                           </FormControl>
@@ -1362,7 +1380,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="status"
@@ -1371,7 +1389,7 @@ export default function ProjectsPage() {
                         <FormLabel className="text-foreground">Status</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                            <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                           </FormControl>
@@ -1397,7 +1415,7 @@ export default function ProjectsPage() {
                       <FormItem>
                         <FormLabel className="text-foreground">Location</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Los Angeles, CA" className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500" {...field} />
+                          <Input placeholder="e.g. Los Angeles, CA" className="border-border/80 bg-surface-elevated/50 focus:border-primary" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1412,7 +1430,7 @@ export default function ProjectsPage() {
                         <FormLabel className="text-foreground">Project Status</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value || "Public"}>
                           <FormControl>
-                            <SelectTrigger className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500">
+                            <SelectTrigger className="border-border/80 bg-surface-elevated/50 focus:border-primary">
                               <SelectValue placeholder="Select project status" />
                             </SelectTrigger>
                           </FormControl>
@@ -1438,7 +1456,7 @@ export default function ProjectsPage() {
                           <Input
                             type="number"
                             placeholder="e.g. 1000000"
-                            className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             value={field.value === 0 ? "" : field.value || ""}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1450,7 +1468,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="budget_max"
@@ -1461,7 +1479,7 @@ export default function ProjectsPage() {
                           <Input
                             type="number"
                             placeholder="e.g. 5000000"
-                            className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             value={field.value === 0 ? "" : field.value || ""}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1486,7 +1504,7 @@ export default function ProjectsPage() {
                           <Input
                             type="number"
                             placeholder="e.g. 120"
-                            className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             value={field.value === 0 ? "" : field.value || ""}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1498,7 +1516,7 @@ export default function ProjectsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={form.control}
                     name="episodes"
@@ -1509,7 +1527,7 @@ export default function ProjectsPage() {
                           <Input
                             type="number"
                             placeholder="e.g. 8"
-                            className="border-yellow-200 dark:border-yellow-900/40 focus:border-yellow-500"
+                            className="border-border/80 bg-surface-elevated/50 focus:border-primary"
                             value={field.value === 0 ? "" : field.value || ""}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1524,17 +1542,17 @@ export default function ProjectsPage() {
                 </div>
 
                 <div className="flex justify-end gap-4 pt-4">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="border-yellow-200 dark:border-yellow-900/40 text-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
                     onClick={() => setIsCreateDialogOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
-                    className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                  <Button
+                    type="submit"
+                    className="bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                   >
                     Create Project
                   </Button>
@@ -1551,9 +1569,9 @@ export default function ProjectsPage() {
               <div className="px-0 py-2 md:p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold">Filters & Sort</h3>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setShowFilters(false)}
                   >
                     <X className="h-5 w-5" />
@@ -1653,9 +1671,9 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="pt-4 border-t">
-                    <Button 
-                      variant="outline" 
-                      className="w-full border-yellow-200 dark:border-yellow-900/40 text-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                    <Button
+                      variant="outline"
+                      className="w-full border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover"
                       onClick={() => setFilters({
                         projectType: "all",
                         category: "all",
@@ -1682,7 +1700,7 @@ export default function ProjectsPage() {
                 {selectedProject?.description}
               </DialogDescription>
             </DialogHeader>
-            
+
             {selectedProject && (
               <div className="space-y-6">
                 {/* Tabs for created projects */}
@@ -1691,7 +1709,7 @@ export default function ProjectsPage() {
                     <TabsList className="grid w-full grid-cols-1">
                       <TabsTrigger value="details">Project Details</TabsTrigger>
                     </TabsList>
-                    
+
                     <TabsContent value="details" className="space-y-6">
                       {/* Project Details Content */}
                       <div className="space-y-6">
@@ -1720,15 +1738,15 @@ export default function ProjectsPage() {
                             <div className="space-y-3">
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Budget:</span>
-                                <span className="font-medium text-green-600">
+                                <span className="font-mono font-medium text-primary">
                                   {formatBudget(selectedProject.budget_min, selectedProject.budget_max, selectedProject.budget_currency)}
                                 </span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Duration:</span>
                                 <span className="font-medium">
-                                  {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` : 
-                                   selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
+                                  {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` :
+                                    selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
                                 </span>
                               </div>
                               <div className="flex justify-between">
@@ -1759,7 +1777,7 @@ export default function ProjectsPage() {
                             <h3 className="font-semibold mb-3 text-lg">Project Tags</h3>
                             <div className="flex flex-wrap gap-2">
                               {selectedProject.project_tags.map((tag: string, index: number) => (
-                                <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                                <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                                   {tag}
                                 </Badge>
                               ))}
@@ -1792,7 +1810,7 @@ export default function ProjectsPage() {
                         {/* Benefits */}
                         <div>
                           <h3 className="font-semibold mb-3 text-lg">Benefits & Perks</h3>
-                          <div className="bg-green-50/50 dark:bg-green-950/20 p-4 rounded-lg border border-green-200/50 dark:border-green-900/30">
+                          <div className="bg-surface-elevated/60 p-4 rounded-xl border border-border/80">
                             <p className="text-sm text-muted-foreground">Contact project creator for benefits</p>
                           </div>
                         </div>
@@ -1826,7 +1844,7 @@ export default function ProjectsPage() {
                         {/* Production Notes */}
                         <div>
                           <h3 className="font-semibold mb-3 text-lg">Production Notes</h3>
-                          <div className="bg-yellow-50/50 dark:bg-yellow-950/20 p-4 rounded-lg border border-yellow-200/50 dark:border-yellow-900/30">
+                          <div className="bg-surface-elevated/60 p-4 rounded-xl border border-border/80">
                             <p className="text-sm text-muted-foreground">No production notes available</p>
                           </div>
                         </div>
@@ -1874,15 +1892,15 @@ export default function ProjectsPage() {
                         <div className="space-y-3">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Budget:</span>
-                            <span className="font-medium text-green-600">
+                            <span className="font-mono font-medium text-primary">
                               {formatBudget(selectedProject.budget_min, selectedProject.budget_max, selectedProject.budget_currency)}
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Duration:</span>
                             <span className="font-medium">
-                              {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` : 
-                               selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
+                              {selectedProject.duration_minutes ? `${selectedProject.duration_minutes} minutes` :
+                                selectedProject.episodes ? `${selectedProject.episodes} episodes` : 'Not specified'}
                             </span>
                           </div>
                           <div className="flex justify-between">
@@ -1913,7 +1931,7 @@ export default function ProjectsPage() {
                         <h3 className="font-semibold mb-3 text-lg">Project Tags</h3>
                         <div className="flex flex-wrap gap-2">
                           {selectedProject.project_tags.map((tag: string, index: number) => (
-                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/50 border-yellow-200 dark:border-yellow-900/50">
+                            <Badge key={index} variant="secondary" className="text-sm px-3 py-1 bg-primary/10 text-primary hover:bg-primary/15 border border-primary/25">
                               {tag}
                             </Badge>
                           ))}
@@ -1943,23 +1961,23 @@ export default function ProjectsPage() {
 
                     <div className="flex gap-2 pt-4">
                       {appliedProjects.includes(selectedProject.id) ? (
-                        <Button 
+                        <Button
                           disabled
-                          className="flex-1 bg-green-100 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-300 dark:border-green-900/40 font-semibold opacity-100 disabled:opacity-100 cursor-default"
+                          className="flex-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold opacity-100 disabled:opacity-100 cursor-default"
                         >
                           <Check className="w-4 h-4 mr-2 text-green-600 dark:text-green-400" />
                           Applied
                         </Button>
                       ) : (selectedProject.created_by !== user?.id && selectedProject.allow_applicants === false) ? null : (
-                        <Button 
-                          className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white"
+                        <Button
+                          className="flex-1 bg-primary text-primary-foreground hover:bg-primary-hover font-medium"
                           onClick={() => handleJoinProject(selectedProject.id)}
                         >
                           <UserPlus className="w-4 h-4 mr-2" />
                           Join Project
                         </Button>
                       )}
-                      <Button variant="outline" className="border-yellow-200 dark:border-yellow-900/40 text-foreground hover:text-yellow-700 dark:hover:text-yellow-400 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/30" onClick={() => handleShareProject(selectedProject)}>
+                      <Button variant="outline" className="border-border/80 bg-surface-elevated/50 text-foreground hover:text-primary hover:border-primary/40 hover:bg-surface-hover" onClick={() => handleShareProject(selectedProject)}>
                         <Share2 className="w-4 h-4 mr-2" />
                         Share Project
                       </Button>

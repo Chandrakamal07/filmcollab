@@ -1,0 +1,38 @@
+name: FilmCollab Quality & Security CI
+
+on:
+  push:
+    branches: [ "main", "improvements" ]
+  pull_request:
+    branches: [ "main", "improvements" ]
+
+jobs:
+  validate:
+    name: Typecheck, Test, Build, and Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript Typecheck Gate
+        run: npx tsc -b --pretty false
+
+      - name: Execute Master Regression Test Suite
+        run: npm test
+
+      - name: Production Bundle Build
+        run: npm run build
+
+      - name: ESLint Static Analysis Gate
+        run: npm run lint
+

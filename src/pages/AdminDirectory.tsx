@@ -4,21 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { 
   Image,
   Video,
   FileText,
   Music,
-  Search,
-  Tags,
   User,
-  Check,
-  Download,
-  Eye,
   Heart,
   MoreVertical,
   Bell,
@@ -26,8 +18,8 @@ import {
   Trash2
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateDirectoryUrlCache } from "@/lib/directory-storage";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,7 +42,7 @@ export default function AdminDirectory() {
       const { data, error } = await supabase.from("global_tags").select("name").order("name");
       if (error && error.code !== '42P01') throw error;
       if (data) {
-        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-gray-100 text-gray-800" })));
+        setGlobalTags(data.map(t => ({ label: t.name, color: "bg-surface-elevated text-foreground border border-border/80" })));
       }
     } catch (error) {
       console.error("Error fetching global tags:", error);
@@ -75,7 +67,26 @@ export default function AdminDirectory() {
         return;
       }
 
-      setDirectoryItems(data || []);
+      const rows = data || [];
+      const missingCreatorIds = Array.from(
+        new Set(rows.filter((r: any) => !r.profiles && r.user_id).map((r: any) => r.user_id))
+      );
+      if (missingCreatorIds.length > 0) {
+        const { data: pubProfiles } = await supabase
+          .from("public_profiles" as any)
+          .select("id, full_name, username, avatar_url")
+          .in("id", missingCreatorIds);
+        if (Array.isArray(pubProfiles)) {
+          const map = new Map(pubProfiles.map((p: any) => [p.id, p]));
+          rows.forEach((r: any) => {
+            if (!r.profiles && r.user_id && map.has(r.user_id)) {
+              r.profiles = map.get(r.user_id);
+            }
+          });
+        }
+      }
+
+      setDirectoryItems(rows);
     } catch (error) {
       console.error("Error:", error);
     } finally {
@@ -118,60 +129,56 @@ export default function AdminDirectory() {
     return num.toString();
   };
 
-  const handleEditTags = (itemId: string, currentTags: string[]) => {
-    setEditingTags({ id: itemId, tags: currentTags || [] });
-  };
-
-  const handleSaveItemTags = async (itemId: string) => {
-    if (!editingTags) return;
-    try {
-      const { error } = await supabase
-        .from("directory_files")
-        .update({ tags: editingTags.tags })
-        .eq("id", itemId);
-      
-      if (error) throw error;
-      
-      setDirectoryItems(prev => prev.map(i => i.id === itemId ? { ...i, tags: editingTags.tags } : i));
-      setEditingTags(null);
-      toast.success("Tags updated successfully");
-    } catch (error) {
-      console.error("Error updating tags:", error);
-      toast.error("Failed to update tags");
-    }
-  };
-
-  const handleTagToggle = (tag: string) => {
-    if (!editingTags) return;
-    setEditingTags(current => {
-      if (!current) return null;
-      const newTags = current.tags.includes(tag)
-        ? current.tags.filter(t => t !== tag)
-        : [...current.tags, tag];
-      return { ...current, tags: newTags };
-    });
-  };
-
-  const getTagBadgeStyle = (tag: string): string => {
-    return "bg-gray-50 text-gray-700 hover:bg-gray-100";
-  };
-
   const handleDelete = async (itemId: string) => {
     if (window.confirm("Are you sure you want to delete this file?")) {
       try {
-        const { error } = await supabase.from("directory_files").delete().eq("id", itemId);
+        const { data, error } = await supabase
+          .from("directory_files")
+          .delete()
+          .eq("id", itemId)
+          .select("id");
         if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error("No file was deleted. Permission denied or file not found.");
+        }
+        invalidateDirectoryUrlCache();
         setDirectoryItems(prev => prev.filter(i => i.id !== itemId));
         toast.success("File deleted successfully");
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting file:", error);
-        toast.error("Failed to delete file");
+        toast.error(error?.message || "Failed to delete file");
       }
     }
   };
 
   const handleBlock = async (itemId: string) => {
-    toast.success("File blocked successfully");
+    try {
+      const item = directoryItems.find(i => i.id === itemId);
+      const isBlocked = item?.status === "blocked" || (item?.tags && item.tags.includes("Blocked"));
+      const newStatus = isBlocked ? "active" : "blocked";
+      const currentTags = item?.tags || [];
+      const updatedTags = isBlocked
+        ? currentTags.filter((t: string) => t !== "Blocked")
+        : [...currentTags, "Blocked"];
+
+      const { data, error } = await supabase
+        .from("directory_files")
+        .update({ status: newStatus, tags: updatedTags })
+        .eq("id", itemId)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("No file was updated. You may not have administrative privileges.");
+      }
+
+      invalidateDirectoryUrlCache();
+      setDirectoryItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, tags: updatedTags } : i));
+      toast.success(isBlocked ? "File unblocked successfully" : "File blocked successfully");
+    } catch (error: any) {
+      console.error("Error toggling block state for file:", error);
+      toast.error(error?.message || "Failed to update file moderation status");
+    }
   };
 
   const handleOpenNotify = (item: any) => {
@@ -193,14 +200,13 @@ export default function AdminDirectory() {
       setIsSendingNotification(true);
       const fullDescription = `${notificationMessage.trim()}\n\nFile Details:\nTitle: ${notifyFile.title}\nType: ${notifyFile.file_type}`;
       
-      const { error } = await supabase.from('notifications').insert({
-        user_id: notifyUser.id,
-        title: notificationTitle.trim(),
-        description: fullDescription,
-        type: 'system',
-        priority: 'high',
-        status: 'unread',
-        action_url: `/directory`
+      const { error } = await supabase.rpc('send_authorized_notification', {
+        p_recipient_id: notifyUser.id,
+        p_title: notificationTitle.trim(),
+        p_description: fullDescription,
+        p_type: 'system',
+        p_priority: 'high',
+        p_action_url: `/directory`
       });
 
       if (error) throw error;
@@ -228,21 +234,24 @@ export default function AdminDirectory() {
   });
 
   return (
-    <AdminLayout pageTitle="Directory Management">
+    <AdminLayout pageTitle="Directory Management" pageName="Directory">
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-3xl font-bold text-foreground">Directory Management</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/60 pb-5">
+          <div>
+            <p className="noir-eyebrow mb-1">Media Vault</p>
+            <h1 className="text-3xl font-display font-bold text-foreground">Directory Management</h1>
+          </div>
         </div>
 
         {/* Main Content Card */}
-        <Card>
+        <Card className="noir-card border-border/80 bg-card">
           <CardContent className="p-0">
             {/* Directory Table */}
-            <div className="border rounded-lg m-6">
+            <div className="border border-border/80 rounded-xl overflow-hidden m-6 bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>ID</TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Type</TableHead>
@@ -255,54 +264,54 @@ export default function AdminDirectory() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">Loading...</TableCell>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading...</TableCell>
                     </TableRow>
                   ) : directoryItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">No files found</TableCell>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No files found</TableCell>
                     </TableRow>
                   ) : directoryItems.map((item) => {
                     const TypeIcon = getTypeIcon(item.file_type);
                     const stats = item.stats || { downloads: 0, views: 0, likes: 0 };
                     return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium text-xs text-muted-foreground truncate max-w-[80px]" title={item.id}>
+                      <TableRow key={item.id} className="border-border/60 hover:bg-surface-hover/50">
+                        <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[80px]" title={item.id}>
                           {item.id.substring(0, 8)}...
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="font-medium">{item.title}</span>
+                            <span className="font-medium text-foreground">{item.title}</span>
                             <span className="text-sm text-muted-foreground truncate max-w-[150px]">{item.description}</span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getTypeBadgeVariant(item.file_type)} className="flex items-center gap-1 w-fit capitalize">
-                            <TypeIcon className="h-3 w-3" />
+                          <Badge variant={getTypeBadgeVariant(item.file_type)} className="flex items-center gap-1 w-fit capitalize bg-surface-elevated border border-border/80 text-foreground">
+                            <TypeIcon className="h-3 w-3 text-primary" />
                             {item.file_type?.replace(/s$/, '')}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center overflow-hidden">
+                            <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center overflow-hidden">
                               {item.profiles?.avatar_url ? (
                                 <img src={item.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                               ) : (
-                                <User className="h-4 w-4 text-yellow-600" />
+                                <User className="h-4 w-4 text-primary" />
                               )}
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium">{item.profiles?.full_name || "Unknown"}</span>
-                              <span className="text-xs text-muted-foreground">@{item.profiles?.username || "unknown"}</span>
+                              <span className="text-sm font-medium text-foreground">{item.profiles?.full_name || "Unknown"}</span>
+                              <span className="text-xs font-mono text-muted-foreground">@{item.profiles?.username || "unknown"}</span>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 text-sm font-medium" title="Likes">
+                          <div className="flex items-center gap-1 text-sm font-mono font-medium text-foreground" title="Likes">
                             <Heart className="h-4 w-4 text-red-500 fill-red-500" />
                             <span>{formatNumber(stats.likes)}</span>
                           </div>
                         </TableCell>
-                        <TableCell>{item.file_size || "Unknown"}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{item.file_size || "Unknown"}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -310,16 +319,16 @@ export default function AdminDirectory() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-card border-border/80">
                               <DropdownMenuItem onClick={() => handleOpenNotify(item)}>
-                                <Bell className="mr-2 h-4 w-4 text-blue-500" />
+                                <Bell className="mr-2 h-4 w-4 text-primary" />
                                 <span>Notify</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleBlock(item.id)}>
-                                <Ban className="mr-2 h-4 w-4 text-orange-500" />
+                                <Ban className="mr-2 h-4 w-4 text-amber-500" />
                                 <span>Block</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDelete(item.id)} className="text-red-600">
+                              <DropdownMenuItem onClick={() => handleDelete(item.id)} className="text-destructive">
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 <span>Delete</span>
                               </DropdownMenuItem>
@@ -334,7 +343,7 @@ export default function AdminDirectory() {
             </div>
 
             {/* Results Summary */}
-            <div className="flex justify-between items-center m-6 mt-0 text-sm text-muted-foreground">
+            <div className="flex justify-between items-center m-6 mt-0 text-sm text-muted-foreground font-mono">
               <span>Showing {filteredItems.length} items</span>
             </div>
           </CardContent>
@@ -342,36 +351,38 @@ export default function AdminDirectory() {
       </div>
 
       <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] bg-card border-border/80">
           <DialogHeader>
-            <DialogTitle>Send Notification</DialogTitle>
+            <DialogTitle className="font-display">Send Notification</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">To:</label>
-              <Input value={notifyUser ? `${notifyUser.full_name} (@${notifyUser.username})` : ''} disabled className="bg-gray-50" />
+              <label className="text-sm font-medium text-foreground">To:</label>
+              <Input value={notifyUser ? `${notifyUser.full_name} (@${notifyUser.username})` : ''} disabled className="bg-surface-elevated border-border/80" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Title:</label>
+              <label className="text-sm font-medium text-foreground">Title:</label>
               <Input 
                 value={notificationTitle} 
                 onChange={(e) => setNotificationTitle(e.target.value)}
                 placeholder="Notification Title"
+                className="bg-surface-elevated border-border/80"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Message:</label>
+              <label className="text-sm font-medium text-foreground">Message:</label>
               <Textarea 
                 value={notificationMessage} 
                 onChange={(e) => setNotificationMessage(e.target.value)}
                 placeholder="Type your message here..."
                 rows={4}
+                className="bg-surface-elevated border-border/80"
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNotifyDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSendNotification} disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}>
+            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSendNotification} disabled={isSendingNotification || !notificationTitle.trim() || !notificationMessage.trim()}>
               {isSendingNotification ? "Sending..." : "Send Notification"}
             </Button>
           </DialogFooter>

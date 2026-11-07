@@ -137,9 +137,9 @@ const Notifications = () => {
 
   const getPriorityBadge = (priority: string) => {
     const priorityConfig = {
-      high: { color: 'bg-red-150 text-red-800 dark:bg-red-950/40 dark:text-red-300', label: 'High' },
-      medium: { color: 'bg-yellow-150 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300', label: 'Medium' },
-      low: { color: 'bg-green-150 text-green-800 dark:bg-green-950/40 dark:text-green-300', label: 'Low' }
+      high: { color: 'bg-destructive/15 text-destructive border border-destructive/30', label: 'High' },
+      medium: { color: 'bg-amber-500/15 text-amber-500 border border-amber-500/30', label: 'Medium' },
+      low: { color: 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30', label: 'Low' }
     };
     const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.medium;
     return (
@@ -161,11 +161,12 @@ const Notifications = () => {
     return typeConfig[type as keyof typeof typeConfig] || Bell;
   };
 
-  const handleMarkAsRead = async (notificationId: string | number) => {    try {
+  const handleMarkAsRead = async (notificationId: string | number) => {
+    try {
       const { error } = await supabase
         .from('notifications')
         .update({ status: 'read' })
-        .eq('id', notificationId);
+        .eq('id', String(notificationId));
 
       if (error) throw error;
 
@@ -184,7 +185,8 @@ const Notifications = () => {
     }
   };
 
-  const handleMarkAllAsRead = async () => {    if (!profile?.id) return;
+  const handleMarkAllAsRead = async () => {
+    if (!profile?.id) return;
 
     try {
       const { error } = await supabase
@@ -210,11 +212,12 @@ const Notifications = () => {
     }
   };
 
-  const handleDeleteNotification = async (notificationId: string | number) => {    try {
+  const handleDeleteNotification = async (notificationId: string | number) => {
+    try {
       const { error } = await supabase
         .from('notifications')
         .delete()
-        .eq('id', notificationId);
+        .eq('id', String(notificationId));
 
       if (error) throw error;
 
@@ -245,18 +248,19 @@ const Notifications = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-5xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+            <p className="noir-eyebrow mb-1">Activity Feed</p>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground tracking-tight">Notifications</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="hidden sm:inline-flex text-xs">
-              <Bell className="w-3 h-3 mr-1" />
+            <Badge variant="outline" className="hidden sm:inline-flex text-xs font-mono border-border/80 bg-surface-elevated">
+              <Bell className="w-3.5 h-3.5 mr-1.5 text-primary" />
               {notifications.length} Total
             </Badge>
             {unreadCount > 0 && (
@@ -264,9 +268,9 @@ const Notifications = () => {
                 variant="outline" 
                 size="sm"
                 onClick={handleMarkAllAsRead}
-                className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50"
+                className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground"
               >
-                <CheckCircle className="w-4 h-4 mr-1" />
+                <CheckCircle className="w-4 h-4 mr-1.5 text-primary" />
                 Mark All Read
               </Button>
             )}
@@ -274,7 +278,7 @@ const Notifications = () => {
         </div>
 
         {/* Search and Filter */}
-        <Card>
+        <Card className="noir-card border-border/80 bg-card">
           <CardContent className="p-4">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
@@ -284,13 +288,13 @@ const Notifications = () => {
                     placeholder="Search notifications..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 bg-surface-elevated border-border/80"
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Select value={filterType} onValueChange={setFilterType}>
-                  <SelectTrigger className="w-40">
+                  <SelectTrigger className="w-40 bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -302,7 +306,7 @@ const Notifications = () => {
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-40">
+                  <SelectTrigger className="w-40 bg-surface-elevated border-border/80">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,9 +317,18 @@ const Notifications = () => {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-10 border-primary/30 hover:border-primary hover:bg-primary/10"
+                  onClick={() => {
+                    setFilterType('all');
+                    setFilterStatus('all');
+                  }}
+                  title="Reset filters"
+                >
                   <Filter className="w-4 h-4 mr-1" />
-                  Filter
+                  Reset
                 </Button>
               </div>
             </div>
@@ -323,14 +336,14 @@ const Notifications = () => {
         </Card>
 
         {/* Notifications List */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredNotifications.map((notification) => {
             const IconComponent = getTypeIcon(notification.type);
             return (
               <Card 
                 key={notification.id} 
-                className={`hover:shadow-md transition-shadow sm:cursor-default cursor-pointer ${
-                  notification.status === 'unread' ? 'border-l-4 border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-950/20' : ''
+                className={`noir-card-interactive border-border/80 bg-card sm:cursor-default cursor-pointer ${
+                  notification.status === 'unread' ? 'border-l-4 border-l-primary bg-primary/[0.04]' : ''
                 }`}
                 onClick={() => {
                   if (window.innerWidth < 640) {
@@ -344,48 +357,48 @@ const Notifications = () => {
                   }
                 }}
               >
-                <CardContent className="p-6">
+                <CardContent className="p-5 sm:p-6">
                   <div className="flex items-start gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${
                       notification.status === 'unread' 
-                        ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400' 
-                        : 'bg-muted text-muted-foreground'
+                        ? 'bg-primary/15 border-primary/30 text-primary' 
+                        : 'bg-surface-elevated border-border/80 text-muted-foreground'
                     }`}>
                       <IconComponent className="w-5 h-5" />
                     </div>
                     
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-2">
                         <div className="flex-1">
-                          <h3 className={`font-semibold text-lg ${
+                          <h3 className={`font-semibold text-base sm:text-lg ${
                             notification.status === 'unread' ? 'text-foreground' : 'text-muted-foreground'
                           }`}>
                             {notification.title}
                           </h3>
-                          <p className="text-muted-foreground text-sm mb-2 line-clamp-2">
+                          <p className="text-muted-foreground text-sm mb-2.5 line-clamp-2">
                             {notification.description || notification.message}
                           </p>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
                             <div className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {notification.created_at ? formatRelativeTime(notification.created_at) : (notification.time || "Recently")}
                             </div>
                             {getPriorityBadge(notification.priority)}
                             {notification.status === 'unread' && (
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge className="text-xs bg-primary/15 text-primary border border-primary/30">
                                 Unread
                               </Badge>
                             )}
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex items-center gap-2 sm:ml-4">
                           {notification.status === 'unread' && (
                             <Button 
                               variant="ghost" 
                               size="sm"
                               onClick={() => handleMarkAsRead(notification.id)}
-                              className="text-yellow-600 hover:text-yellow-700"
+                              className="text-primary hover:text-primary hover:bg-primary/10"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
@@ -394,14 +407,14 @@ const Notifications = () => {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleDeleteNotification(notification.id)}
-                            className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           >
                             <XCircle className="w-4 h-4" />
                           </Button>
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50"
+                            className="border-primary/30 hover:border-primary hover:bg-primary/10 text-foreground"
                             onClick={() => {
                               if (notification.action_url) {
                                 navigate(notification.action_url);
@@ -426,7 +439,7 @@ const Notifications = () => {
 
         {/* Empty State */}
         {filteredNotifications.length === 0 && (
-          <Card>
+          <Card className="noir-card border-border/80 bg-card">
             <CardContent className="p-8 text-center">
               <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">No notifications found</h3>
@@ -444,7 +457,7 @@ const Notifications = () => {
                     setFilterType('all');
                     setFilterStatus('all');
                   }}
-                  className="border-yellow-200 hover:border-yellow-500 hover:bg-yellow-50"
+                  className="border-primary/30 hover:border-primary hover:bg-primary/10"
                 >
                   Clear Filters
                 </Button>
@@ -452,8 +465,6 @@ const Notifications = () => {
             </CardContent>
           </Card>
         )}
-
-        
       </div>
     </AppLayout>
   );

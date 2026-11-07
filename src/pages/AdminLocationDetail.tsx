@@ -56,7 +56,7 @@ export default function AdminLocationDetail() {
       <AdminLayout pageTitle="Location Not Found" pageName="Locations">
         <div className="flex flex-col items-center justify-center h-64 space-y-4">
           <p className="text-muted-foreground">This location could not be found or has been deleted.</p>
-          <Button onClick={() => navigate("/admin-dashboard/locations")}>
+          <Button onClick={() => navigate("/admin-dashboard/locations")} className="bg-primary text-primary-foreground hover:bg-primary/90">
             <ArrowLeft className="h-4 w-4 mr-2" /> Back to Locations
           </Button>
         </div>
@@ -78,76 +78,82 @@ export default function AdminLocationDetail() {
     <AdminLayout pageTitle="Location Details" pageName="Locations">
       <div className="space-y-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin-dashboard/locations")}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/admin-dashboard/locations")}
+            className="border border-border/70 bg-surface-elevated hover:bg-surface-hover"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{location.name}</h1>
-            <p className="text-muted-foreground mt-1">Listed on {new Date(location.created_at).toLocaleDateString()}</p>
+            <span className="noir-eyebrow">Location Dossier</span>
+            <h1 className="font-display text-3xl font-bold text-foreground mt-0.5">{location.name}</h1>
+            <p className="text-muted-foreground font-mono text-xs mt-1">Listed on {new Date(location.created_at).toLocaleDateString()}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Details</CardTitle>
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="font-display text-xl text-foreground">Details</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-6">
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Description</h4>
-                  <p className="mt-1">{location.description}</p>
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Description</h4>
+                  <p className="mt-1.5 text-sm text-foreground leading-relaxed">{location.description}</p>
                 </div>
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground">Instructions & Rules</h4>
-                  <p className="mt-1 whitespace-pre-wrap">{location.instructions || "No specific instructions provided."}</p>
+                <div className="pt-3 border-t border-border/60">
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Instructions & Rules</h4>
+                  <p className="mt-1.5 text-sm text-foreground whitespace-pre-wrap leading-relaxed">{location.instructions || "No specific instructions provided."}</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Availability Timings</CardTitle>
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="font-display text-xl text-foreground">Availability Timings</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 {timingsList.length > 0 ? (
                   <div className="space-y-3">
                     {timingsList.map((t: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center p-3 bg-muted/50 rounded-md border border-border">
+                      <div key={idx} className="flex justify-between items-center p-3.5 bg-surface-elevated rounded-xl border border-border/70">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{t.from || "Start"} to {t.to || "End"}</span>
+                          <span className="font-mono text-sm font-medium text-foreground">{t.from || "Start"} to {t.to || "End"}</span>
                         </div>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1.5">
                           {t.days && t.days.map((day: string) => (
-                            <Badge key={day} variant="outline" className="bg-background">{day}</Badge>
+                            <Badge key={day} variant="outline" className="bg-card border-border/70 text-foreground">{day}</Badge>
                           ))}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">No timings provided.</p>
+                  <p className="text-muted-foreground text-sm">No timings provided.</p>
                 )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Media Gallery</CardTitle>
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="font-display text-xl text-foreground">Media Gallery</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-6">
                 {location.media_urls && location.media_urls.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {location.media_urls.map((url: string, index: number) => (
-                      <div key={index} className="relative aspect-video rounded-md overflow-hidden bg-muted">
+                      <div key={index} className="relative aspect-video rounded-xl overflow-hidden bg-surface-elevated border border-border/70">
                         <img src={url} alt={`Property Media ${index + 1}`} className="object-cover w-full h-full" />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center p-8 bg-muted/50 rounded-lg border border-dashed">
+                  <div className="flex flex-col items-center justify-center p-8 bg-surface-elevated/60 rounded-xl border border-dashed border-border/80">
                     <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">No media uploaded.</p>
+                    <p className="text-muted-foreground text-sm">No media uploaded.</p>
                   </div>
                 )}
               </CardContent>
@@ -155,38 +161,38 @@ export default function AdminLocationDetail() {
           </div>
 
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>At a Glance</CardTitle>
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="font-display text-xl text-foreground">At a Glance</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center border-b pb-2">
-                  <span className="text-muted-foreground">Type</span>
-                  <Badge className="capitalize">{location.type}</Badge>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex justify-between items-center border-b border-border/60 pb-3">
+                  <span className="text-sm text-muted-foreground">Type</span>
+                  <Badge className="capitalize bg-primary/15 text-primary border border-primary/30 hover:bg-primary/20">{location.type}</Badge>
                 </div>
-                <div className="flex justify-between items-center border-b pb-2">
-                  <span className="text-muted-foreground">Owner</span>
-                  <span className="font-medium">{location.owner_name || "Unknown"}</span>
+                <div className="flex justify-between items-center border-b border-border/60 pb-3">
+                  <span className="text-sm text-muted-foreground">Owner</span>
+                  <span className="font-medium text-foreground">{location.owner_name || "Unknown"}</span>
                 </div>
-                <div className="flex justify-between items-center border-b pb-2">
-                  <span className="text-muted-foreground">Price</span>
-                  <span className="font-medium flex items-center">
-                    <IndianRupee className="h-3 w-3 mr-1" /> {location.price} / {location.price_type === 'Per Day' ? 'Day' : 'Hour'}
+                <div className="flex justify-between items-center border-b border-border/60 pb-3">
+                  <span className="text-sm text-muted-foreground">Price</span>
+                  <span className="font-mono font-semibold text-primary flex items-center">
+                    <IndianRupee className="h-3.5 w-3.5 mr-0.5" /> {location.price} / {location.price_type === 'Per Day' ? 'Day' : 'Hour'}
                   </span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Location</CardTitle>
+            <Card className="noir-card border-border/80 bg-card">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="font-display text-xl text-foreground">Location</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-6">
                 <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                  <MapPin className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                   <div>
-                    <p className="font-medium">{location.city}, {location.state}</p>
-                    {location.landmark && <p className="text-sm text-muted-foreground">Near {location.landmark}</p>}
+                    <p className="font-medium text-foreground">{location.city}, {location.state}</p>
+                    {location.landmark && <p className="text-sm text-muted-foreground mt-0.5">Near {location.landmark}</p>}
                   </div>
                 </div>
               </CardContent>

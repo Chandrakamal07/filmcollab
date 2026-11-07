@@ -9,10 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
-  Search, UserPlus, UserCog, Phone, Shield, CheckCircle, XCircle, Edit, Trash2, Mail
+  Search, UserPlus, UserCog, Shield, CheckCircle, XCircle, Trash2, Mail
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -72,7 +71,7 @@ export default function AdminTeam() {
       // Find user by email
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, user_id, full_name, email')
         .eq('email', memberEmail)
         .maybeSingle();
         
@@ -82,22 +81,29 @@ export default function AdminTeam() {
         return;
       }
 
-      const { error } = await supabase
-        .from('admin_team_members')
-        .insert({
-          profile_id: profileData.id,
-          role: newMember.role,
-          status: newMember.status,
-          permissions: newMember.permissions
-        });
+      const targetAuthUserId = profileData.user_id || profileData.id;
 
-      if (error) throw error;
+      // 1. Attempt atomic provisioning via server RPC (M06)
+      const { data: provisionedMemberId, error: rpcErr } = await supabase.rpc('provision_admin_team_member', {
+        p_user_id: targetAuthUserId,
+        p_profile_id: profileData.id,
+        p_role: newMember.role,
+        p_status: newMember.status,
+        p_permissions: newMember.permissions
+      });
+
+      if (rpcErr) {
+        throw rpcErr;
+      }
+      if (!provisionedMemberId) {
+        throw new Error("Failed to provision team member. Permission denied or atomic transaction rejected.");
+      }
       
       toast({ title: "Team member added successfully!" });
       setIsAddDialogOpen(false);
       fetchTeamMembers();
-    } catch (error) {
-      toast({ title: "Failed to add team member", variant: "destructive" });
+    } catch (error: any) {
+      toast({ title: "Failed to add team member", description: error?.message || "Operation failed", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -106,11 +112,20 @@ export default function AdminTeam() {
   const handleDeleteMember = async (id: string) => {
     if (!confirm("Remove this member from the team?")) return;
     try {
-      await supabase.from('admin_team_members').delete().eq('id', id);
+      const { data: revoked, error: rpcDelErr } = await supabase.rpc('revoke_admin_team_member', {
+        p_member_id: id
+      });
+
+      if (rpcDelErr) {
+        throw rpcDelErr;
+      }
+      if (!revoked) {
+        throw new Error("Member not found or permission denied.");
+      }
       setTeamMembers(prev => prev.filter(m => m.id !== id));
       toast({ title: "Member removed" });
-    } catch (e) {
-      toast({ title: "Failed to remove member", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Failed to remove member", description: e?.message || "Operation failed", variant: "destructive" });
     }
   };
 
@@ -118,7 +133,6 @@ export default function AdminTeam() {
     setNewMember(prev => {
       const currentPerms = prev.permissions[page] || { view: false, edit: false, delete: false };
       const newPerms = { ...currentPerms, [action]: !currentPerms[action] };
-      // If editing or deleting is enabled, ensure viewing is also enabled
       if (action !== 'view' && newPerms[action]) {
         newPerms.view = true;
       }
@@ -131,16 +145,16 @@ export default function AdminTeam() {
 
   const getRoleBadgeStyle = (role: string) => {
     switch (role) {
-      case "Admin": return "bg-yellow-50 text-yellow-700 hover:bg-yellow-100";
-      case "Moderator": return "bg-blue-50 text-blue-700 hover:bg-blue-100";
-      default: return "bg-gray-50 text-gray-700 hover:bg-gray-100";
+      case "Admin": return "bg-primary/15 text-primary border border-primary/30";
+      case "Moderator": return "bg-sky-500/15 text-sky-400 border border-sky-500/30";
+      default: return "bg-surface-elevated text-muted-foreground border border-border/80";
     }
   };
 
   const getStatusBadgeStyle = (status: string) => {
     return status === "Active"
-      ? "bg-green-50 text-green-700 hover:bg-green-100"
-      : "bg-red-50 text-red-700 hover:bg-red-100";
+      ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
+      : "bg-destructive/15 text-destructive border border-destructive/30";
   };
 
   const filteredMembers = teamMembers.filter(member => {
@@ -155,24 +169,25 @@ export default function AdminTeam() {
   return (
     <AdminLayout pageTitle="Team Members" pageName="Team Members">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Team Members</h1>
-          <p className="text-muted-foreground mt-1">Manage your team members and their roles</p>
+        <div className="border-b border-border/60 pb-5">
+          <p className="noir-eyebrow mb-1">Access & Roles</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Team Members</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Manage your team members and their roles</p>
         </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-2xl">Team Members</CardTitle>
+        <Card className="noir-card border-border/80 bg-card">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/60">
+            <CardTitle className="text-2xl font-display">Team Members</CardTitle>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Add Member
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-card border-border/80">
                 <DialogHeader>
-                  <DialogTitle>Add New Team Member</DialogTitle>
+                  <DialogTitle className="font-display">Add New Team Member</DialogTitle>
                   <DialogDescription>
                     Provide the email address of an existing user and configure their page permissions.
                   </DialogDescription>
@@ -185,13 +200,14 @@ export default function AdminTeam() {
                       value={memberEmail}
                       onChange={(e) => setMemberEmail(e.target.value)}
                       placeholder="Enter user's email address"
+                      className="bg-surface-elevated border-border/80"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Role</Label>
                       <Select value={newMember.role} onValueChange={(value) => setNewMember({ ...newMember, role: value })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="bg-surface-elevated border-border/80"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Admin">Admin</SelectItem>
                           <SelectItem value="Moderator">Moderator</SelectItem>
@@ -202,7 +218,7 @@ export default function AdminTeam() {
                     <div className="space-y-2">
                       <Label>Status</Label>
                       <Select value={newMember.status} onValueChange={(value) => setNewMember({ ...newMember, status: value })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="bg-surface-elevated border-border/80"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Active">Active</SelectItem>
                           <SelectItem value="Inactive">Inactive</SelectItem>
@@ -211,24 +227,24 @@ export default function AdminTeam() {
                     </div>
                   </div>
                   
-                  <div className="mt-6 border-t pt-4">
-                    <Label className="text-lg font-semibold mb-2 block">Page Permissions</Label>
+                  <div className="mt-6 border-t border-border/60 pt-4">
+                    <Label className="text-lg font-display font-semibold mb-2 block">Page Permissions</Label>
                     <div className="space-y-3">
                       {ADMIN_PAGES.map(page => (
-                        <div key={page} className="flex items-center justify-between p-3 border rounded-md">
-                          <span className="font-medium w-32">{page}</span>
+                        <div key={page} className="flex items-center justify-between p-3 border border-border/80 bg-surface-elevated rounded-lg">
+                          <span className="font-medium w-32 text-foreground">{page}</span>
                           <div className="flex gap-4">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <Checkbox checked={newMember.permissions[page]?.view || false} onCheckedChange={() => togglePermission(page, 'view')} />
-                              <span className="text-sm">View</span>
+                              <span className="text-sm text-foreground">View</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <Checkbox checked={newMember.permissions[page]?.edit || false} onCheckedChange={() => togglePermission(page, 'edit')} />
-                              <span className="text-sm">Edit</span>
+                              <span className="text-sm text-foreground">Edit</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                               <Checkbox checked={newMember.permissions[page]?.delete || false} onCheckedChange={() => togglePermission(page, 'delete')} />
-                              <span className="text-sm text-red-600">Delete</span>
+                              <span className="text-sm text-destructive">Delete</span>
                             </label>
                           </div>
                         </div>
@@ -238,24 +254,24 @@ export default function AdminTeam() {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                  <Button className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={handleAddMember} disabled={isSaving}>
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleAddMember} disabled={isSaving}>
                     {isSaving ? 'Adding...' : 'Add Member'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-6">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative flex-1">
+              <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 bg-surface-elevated border-border/80" />
               </div>
-              <div className="flex gap-4 items-center">
+              <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">Role:</label>
+                  <label className="text-sm font-medium text-muted-foreground">Role:</label>
                   <Select value={roleFilter} onValueChange={setRoleFilter}>
-                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-[140px] bg-surface-elevated border-border/80"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
@@ -265,9 +281,9 @@ export default function AdminTeam() {
                   </Select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium">Status:</label>
+                  <label className="text-sm font-medium text-muted-foreground">Status:</label>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-[140px] bg-surface-elevated border-border/80"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
@@ -278,10 +294,10 @@ export default function AdminTeam() {
               </div>
             </div>
 
-            <div className="border rounded-lg">
+            <div className="border border-border/80 rounded-xl overflow-hidden bg-surface-elevated/40">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-surface-elevated">
+                  <TableRow className="border-border/70">
                     <TableHead>Member</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
@@ -291,24 +307,24 @@ export default function AdminTeam() {
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8">Loading...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                   ) : filteredMembers.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8">No team members found</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No team members found</TableCell></TableRow>
                   ) : filteredMembers.map((member) => (
-                    <TableRow key={member.id}>
+                    <TableRow key={member.id} className="border-border/60 hover:bg-surface-hover/50">
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                            <UserCog className="h-4 w-4 text-yellow-600" />
+                          <div className="w-8 h-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                            <UserCog className="h-4 w-4 text-primary" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-medium">{member.profile?.full_name || "Unknown User"}</span>
+                            <span className="font-medium text-foreground">{member.profile?.full_name || "Unknown User"}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Mail className="h-4 w-4" />
+                        <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs">
+                          <Mail className="h-4 w-4 text-primary" />
                           <span>{member.profile?.email || "-"}</span>
                         </div>
                       </TableCell>
@@ -330,7 +346,7 @@ export default function AdminTeam() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteMember(member.id)}
-                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -342,7 +358,7 @@ export default function AdminTeam() {
               </Table>
             </div>
             
-            <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
+            <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground font-mono">
               <span>Showing {filteredMembers.length} members</span>
             </div>
           </CardContent>

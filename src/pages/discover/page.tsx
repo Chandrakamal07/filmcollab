@@ -1,52 +1,68 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Search,
-  Filter,
   MapPin,
-  Calendar,
   User as UserIcon,
-  MessageCircle,
   UserPlus,
-  Star,
   Award,
   Briefcase,
-  GraduationCap,
   Heart,
   Users,
-  Globe,
   MoreVertical,
   Bookmark,
   Share2,
-  ChevronDown,
   X,
   Check,
   Clock,
   UserCheck,
+  SlidersHorizontal,
+  Play,
+  ArrowRight,
+  Sparkles,
+  ExternalLink,
+  Film,
+  ChevronDown,
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoryDropdown } from "@/components/ui/category-dropdown";
+import {
+  FadeInSection,
+  StaggerContainer,
+  StaggerItem,
+  DimensionalCard,
+  DimensionalLayer,
+  ImageReveal,
+} from "@/components/ui/motion-primitives";
 
 interface User {
   id: string;
+  user_id?: string;
   full_name: string;
   username?: string;
   email?: string;
@@ -81,59 +97,108 @@ interface User {
 
 type FilterType = "all" | "verified" | "new" | "popular";
 type SortType = "recent" | "popular" | "alphabetical";
-type CategoryFilter = "all" | 
-  // Film & Media Projects
-  "Short Films" | "Feature Films" | "Web Series" | "Documentaries" | "Music Videos" | "Advertisements / Commercials" | "Corporate Videos" | "Theatre / Stage Plays" |
-  // Direction & Production
-  "Director" | "Assistant Director" | "Producer" | "Executive Producer" | "Line Producer" | "Production Manager" | "Production Assistant" |
-  // Cinematography & Camera
-  "Cinematographer / DOP" | "Assistant Cameraman" | "Camera Operator" | "Steadicam Operator" | "Drone Operator" | "Gaffer" | "Lighting Technician" |
-  // Actors & Performers
-  "Lead Actor / Actress" | "Supporting Actor / Actress" | "Child Artist" | "Theatre Artist" | "Voice Over Artist" | "Dancer" | "Stunt Artist" |
-  // Writing & Creative
-  "Script Writer" | "Screenplay Writer" | "Dialogue Writer" | "Lyricist" | "Storyboard Artist" |
-  // Music & Sound
-  "Music Director" | "Background Score Composer" | "Singer / Vocalist" | "Instrumentalist" | "Sound Engineer" | "Foley Artist" | "Dubbing / Voice Artist" |
-  // Art & Design
-  "Art Director" | "Set Designer" | "Costume Designer" | "Fashion Stylist" | "Makeup Artist" | "Hair Stylist" | "Graphic Designer" | "Poster Designer" |
-  // Editing & Post Production
-  "Video Editor" | "VFX Artist" | "Motion Graphics Designer" | "Colorist" | "DI Supervisor" | "Sound Editor" |
-  // Marketing & Distribution
-  "Digital Marketer" | "Public Relations (PR)" | "Social Media Manager" | "Film Distributor" |
-  // Film Community & Support
-  "Film Festivals" | "Workshops & Training" | "Casting Calls" | "Location Scouts" | "Film Equipment Rentals";
+
+const PORTRAIT_FALLBACKS = [
+  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=700&q=80",
+  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=700&q=80",
+];
+
+const SHOWREEL_STILLS = [
+  [
+    "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=600&q=80",
+  ],
+  [
+    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?auto=format&fit=crop&w=600&q=80",
+    "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80",
+  ],
+];
+
+const DEFAULT_AVATAR_PLACEHOLDER =
+  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face";
+
+function getPortraitImage(userItem: User, idx: number): string {
+  if (
+    userItem.avatar_url &&
+    userItem.avatar_url !== DEFAULT_AVATAR_PLACEHOLDER &&
+    userItem.avatar_url.trim().length > 0
+  ) {
+    return userItem.avatar_url;
+  }
+  const hash = userItem.id
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), idx);
+  return PORTRAIT_FALLBACKS[hash % PORTRAIT_FALLBACKS.length];
+}
 
 export default function DiscoverPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || searchParams.get("search") || "");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [sortType, setSortType] = useState<SortType>("recent");
-  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [categoryFilters, setCategoryFilters] = useState<string[]>(() => {
+    const craft = searchParams.get("craft") || searchParams.get("category");
+    return craft ? [craft] : [];
+  });
+
+  // Synchronize search and craft filters whenever URL search parameters change
+  useEffect(() => {
+    const q = searchParams.get("q") || searchParams.get("search") || "";
+    if (q !== query) {
+      setQuery(q);
+    }
+    const craft = searchParams.get("craft") || searchParams.get("category");
+    if (craft && !categoryFilters.includes(craft)) {
+      setCategoryFilters([craft]);
+    }
+  }, [searchParams]);
   const [locationFilter, setLocationFilter] = useState("");
   const [minLikes, setMinLikes] = useState(0);
   const [currentTab, setCurrentTab] = useState<"discover" | "liked" | "saved">("discover");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<"about" | "showreel" | "credits" | "skills">(
+    "showreel"
+  );
   const pageSize = 12;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*, settings(privacy_settings)");
+      const [{ data: profilesData, error: profilesError }, { data: settingsData }] = await Promise.all([
+        supabase.from("public_profiles").select("*"),
+        supabase.from("settings").select("profile_id, privacy_settings, visible_to_categories")
+      ]);
 
       if (profilesError) {
         throw profilesError;
       }
 
+      const settingsByProfileId = new Map<string, any>();
+      (settingsData || []).forEach((s: any) => {
+        if (s.profile_id) settingsByProfileId.set(s.profile_id, s);
+      });
+      (profilesData || []).forEach((p: any) => {
+        if (p.id && settingsByProfileId.has(p.id)) {
+          p.settings = [settingsByProfileId.get(p.id)];
+        }
+      });
+
       let likedUserIds: string[] = [];
       let savedUserIds: string[] = [];
-      
+
       interface DBConnection {
         id: string;
         user_id: string;
@@ -151,7 +216,7 @@ export default function DiscoverPage() {
           .eq("user_id", profile.id);
 
         if (likesData) {
-          likedUserIds = likesData.map(l => l.liked_user_id);
+          likedUserIds = likesData.map((l) => l.liked_user_id);
         }
 
         const { data: savesData } = await supabase
@@ -160,7 +225,7 @@ export default function DiscoverPage() {
           .eq("user_id", profile.id);
 
         if (savesData) {
-          savedUserIds = savesData.map(s => s.saved_user_id);
+          savedUserIds = savesData.map((s) => s.saved_user_id);
         }
 
         const { data: connData } = await supabase
@@ -200,29 +265,27 @@ export default function DiscoverPage() {
         price_per_day?: number | null;
         price_per_hour?: number | null;
         price_negotiable?: boolean | null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         settings?: any[];
       }
 
-      const mappedUsers: User[] = ((profilesData as DBProfile[]) || [])
+      const mappedUsers: User[] = ((profilesData as unknown as DBProfile[]) || [])
         .filter((p: DBProfile) => {
-          // Exclude logged-in user profile from discover list
           if (profile?.id && p.id === profile.id) return false;
           if (user?.id && p.user_id === user.id) return false;
-          // Exclude admins
           const roleLower = (p.role || "").toLowerCase();
           if (roleLower === "admin") return false;
-          // Check profile visibility from settings
-          const settingsObj = Array.isArray(p.settings) 
-            ? (p.settings.length > 0 ? p.settings[0] : null)
+          const settingsObj = Array.isArray(p.settings)
+            ? p.settings.length > 0
+              ? p.settings[0]
+              : null
             : p.settings;
           const privacySettings = settingsObj?.privacy_settings;
-          const visibility = privacySettings?.profileVisibility || 'public';
-          if (visibility !== 'public') return false;
+          const visibility = privacySettings?.profileVisibility || "public";
+          if (visibility !== "public") return false;
 
-          // Restrict by category if specified
-          const visibleToCategories = settingsObj?.visible_to_categories || ['all'];
-          if (!visibleToCategories.includes('all')) {
-            // Current viewing user's category
+          const visibleToCategories = settingsObj?.visible_to_categories || ["all"];
+          if (!visibleToCategories.includes("all")) {
             const viewerCategory = profile?.category || profile?.role;
             if (!viewerCategory || !visibleToCategories.includes(viewerCategory)) {
               return false;
@@ -231,9 +294,10 @@ export default function DiscoverPage() {
           return true;
         })
         .map((p: DBProfile) => {
-          const conn = connectionsData.find(c => 
-            (c.user_id === profile?.id && c.connected_user_id === p.id) || 
-            (c.user_id === p.id && c.connected_user_id === profile?.id)
+          const conn = connectionsData.find(
+            (c) =>
+              (c.user_id === profile?.id && c.connected_user_id === p.id) ||
+              (c.user_id === p.id && c.connected_user_id === profile?.id)
           );
           return {
             id: p.id,
@@ -241,7 +305,7 @@ export default function DiscoverPage() {
             full_name: p.full_name || p.username || "Anonymous",
             username: p.username || "",
             email: p.email || "",
-            avatar_url: p.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face",
+            avatar_url: p.avatar_url || DEFAULT_AVATAR_PLACEHOLDER,
             bio: p.bio || "",
             location: p.location || "",
             role: p.category || p.role || "Creator",
@@ -262,13 +326,18 @@ export default function DiscoverPage() {
             is_saved: savedUserIds.includes(p.id),
             connection_status: conn?.status || null,
             connection_initiator: conn?.user_id || null,
-            total_experience: p.total_experience || null,
-            price_per_day: p.price_per_day || null,
-            price_per_hour: p.price_per_hour || null,
-            price_negotiable: p.price_negotiable || null,
-            allow_connections_from: Array.isArray(p.settings) 
-              ? (p.settings.length > 0 ? p.settings[0].privacy_settings?.allowConnectionRequests : null)
-              : (p.settings ? (p.settings as any).privacy_settings?.allowConnectionRequests : null),
+            total_experience: p.total_experience || undefined,
+            price_per_day: p.price_per_day || undefined,
+            price_per_hour: p.price_per_hour || undefined,
+            price_negotiable: p.price_negotiable || undefined,
+            allow_connections_from: Array.isArray(p.settings)
+              ? p.settings.length > 0
+                ? p.settings[0].privacy_settings?.allowConnectionRequests
+                : null
+              : p.settings
+                ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (p.settings as any).privacy_settings?.allowConnectionRequests
+                : null,
           };
         });
 
@@ -283,7 +352,7 @@ export default function DiscoverPage() {
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, user?.id, toast]);
+  }, [profile?.id, profile?.category, profile?.role, user?.id, toast]);
 
   useEffect(() => {
     fetchUsers();
@@ -291,9 +360,7 @@ export default function DiscoverPage() {
 
   const handleToggleCategory = (category: string) => {
     setCategoryFilters((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category]
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
     resetPaging();
   };
@@ -301,34 +368,31 @@ export default function DiscoverPage() {
   const filtered = useMemo(() => {
     let filteredUsers = [...users];
 
-    // Filter out logged-in user profile from discover list
     if (profile?.id) {
       filteredUsers = filteredUsers.filter((u) => u.id !== profile.id);
     } else if (user?.id) {
       filteredUsers = filteredUsers.filter((u) => u.user_id !== user.id);
     }
 
-    // Filter by tab
     if (currentTab === "liked") {
       filteredUsers = filteredUsers.filter((u) => u.is_liked);
     } else if (currentTab === "saved") {
       filteredUsers = filteredUsers.filter((u) => u.is_saved);
     }
 
-    // Filter by search query
     if (query.trim()) {
       const searchTerm = query.toLowerCase();
-      filteredUsers = filteredUsers.filter((u) =>
-        u.full_name.toLowerCase().includes(searchTerm) ||
-        u.username?.toLowerCase().includes(searchTerm) ||
-        u.role?.toLowerCase().includes(searchTerm) ||
-        u.bio?.toLowerCase().includes(searchTerm) ||
-        u.skills?.some(skill => skill.toLowerCase().includes(searchTerm)) ||
-        u.location?.toLowerCase().includes(searchTerm)
+      filteredUsers = filteredUsers.filter(
+        (u) =>
+          u.full_name.toLowerCase().includes(searchTerm) ||
+          u.username?.toLowerCase().includes(searchTerm) ||
+          u.role?.toLowerCase().includes(searchTerm) ||
+          u.bio?.toLowerCase().includes(searchTerm) ||
+          u.skills?.some((skill) => skill.toLowerCase().includes(searchTerm)) ||
+          u.location?.toLowerCase().includes(searchTerm)
       );
     }
 
-    // Filter by type
     if (filterType !== "all") {
       filteredUsers = filteredUsers.filter((u) => {
         switch (filterType) {
@@ -347,25 +411,23 @@ export default function DiscoverPage() {
       });
     }
 
-    // Filter by category (multi-select)
     if (categoryFilters.length > 0) {
-      filteredUsers = filteredUsers.filter((u) => u.category && categoryFilters.includes(u.category));
-    }
-
-    // Filter by location
-    if (locationFilter.trim()) {
-      const loc = locationFilter.toLowerCase();
-      filteredUsers = filteredUsers.filter((u) =>
-        u.location?.toLowerCase().includes(loc)
+      filteredUsers = filteredUsers.filter(
+        (u) =>
+          (u.category && categoryFilters.includes(u.category)) ||
+          (u.role && categoryFilters.some((cat) => u.role?.toLowerCase().includes(cat.toLowerCase())))
       );
     }
 
-    // Filter by likes (slider)
+    if (locationFilter.trim()) {
+      const loc = locationFilter.toLowerCase();
+      filteredUsers = filteredUsers.filter((u) => u.location?.toLowerCase().includes(loc));
+    }
+
     if (minLikes > 0) {
       filteredUsers = filteredUsers.filter((u) => (u.likes_count || 0) >= minLikes);
     }
 
-    // Sort users
     filteredUsers.sort((a, b) => {
       switch (sortType) {
         case "popular":
@@ -379,17 +441,41 @@ export default function DiscoverPage() {
     });
 
     return filteredUsers;
-  }, [users, currentTab, query, filterType, sortType, categoryFilters, locationFilter, minLikes, profile?.id, user?.id]);
+  }, [
+    users,
+    currentTab,
+    query,
+    filterType,
+    sortType,
+    categoryFilters,
+    locationFilter,
+    minLikes,
+    profile?.id,
+    user?.id,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const selectedUser = useMemo(() => {
+    if (!pageItems.length) return null;
+    if (selectedUserId) {
+      const found = pageItems.find((u) => u.id === selectedUserId);
+      if (found) return found;
+    }
+    return pageItems[0];
+  }, [pageItems, selectedUserId]);
 
   function resetPaging() {
     setPage(1);
   }
 
-  // Handle connect with user
-  const handleConnect = async (userId: string, userName: string, currentStatus?: string | null, initiatorId?: string | null) => {
+  const handleConnect = async (
+    userId: string,
+    userName: string,
+    currentStatus?: string | null,
+    initiatorId?: string | null
+  ) => {
     try {
       if (!user?.id) {
         toast({
@@ -419,7 +505,6 @@ export default function DiscoverPage() {
 
       if (currentStatus === "pending") {
         if (initiatorId && initiatorId !== profile.id) {
-          // Accept connection request!
           const { error: updateError } = await supabase
             .from("connections")
             .update({ status: "accepted" })
@@ -431,17 +516,20 @@ export default function DiscoverPage() {
             title: "Connection Request Accepted",
             description: `You are now connected with ${userName}!`,
           });
-          
-          // Insert notification for the initiator
-          await supabase.from("notifications").insert({
-            user_id: initiatorId,
-            title: "Connection Accepted",
-            description: `${profile.full_name || profile.username || 'Someone'} accepted your connection request.`,
-            type: "connection",
-            action_url: `/profile/${profile.id}`
+
+          const { error: acceptNotifErr } = await supabase.rpc("send_authorized_notification", {
+            p_recipient_id: initiatorId,
+            p_title: "Connection Accepted",
+            p_description: `${profile.full_name || profile.username || "Someone"} accepted your connection request.`,
+            p_type: "connection",
+            p_priority: "medium",
+            p_action_url: `/profile/${profile.id}`,
           });
-          
-          fetchUsers(); // Refresh users
+          if (acceptNotifErr) {
+            console.warn("Could not send connection accepted notification:", acceptNotifErr);
+          }
+
+          fetchUsers();
           return;
         } else {
           toast({
@@ -452,11 +540,12 @@ export default function DiscoverPage() {
         }
       }
 
-      // Check if connection already exists in DB
       const { data: existingConnection, error: checkError } = await supabase
         .from("connections")
         .select("*")
-        .or(`and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`)
+        .or(
+          `and(user_id.eq.${profile.id},connected_user_id.eq.${userId}),and(user_id.eq.${userId},connected_user_id.eq.${profile.id})`
+        )
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -470,14 +559,11 @@ export default function DiscoverPage() {
         return;
       }
 
-      // Create a pending connection request
-      const { error: insertError } = await supabase
-        .from("connections")
-        .insert({
-          user_id: profile.id,
-          connected_user_id: userId,
-          status: "pending",
-        });
+      const { error: insertError } = await supabase.from("connections").insert({
+        user_id: profile.id,
+        connected_user_id: userId,
+        status: "pending",
+      });
 
       if (insertError) throw insertError;
 
@@ -485,19 +571,22 @@ export default function DiscoverPage() {
         title: "Connection Request Sent",
         description: `Connection request sent to ${userName}`,
       });
-      
-      // Insert notification for the recipient
-      await supabase.from("notifications").insert({
-        user_id: userId,
-        title: "New Connection Request",
-        description: `${profile.full_name || profile.username || 'Someone'} sent you a connection request.`,
-        type: "connection",
-        action_url: `/profile/${profile.id}`
+
+      const { error: reqNotifErr } = await supabase.rpc("send_authorized_notification", {
+        p_recipient_id: userId,
+        p_title: "New Connection Request",
+        p_description: `${profile.full_name || profile.username || "Someone"} sent you a connection request.`,
+        p_type: "connection",
+        p_priority: "medium",
+        p_action_url: `/profile/${profile.id}`,
       });
-      
-      fetchUsers(); // Refresh to update UI state
+      if (reqNotifErr) {
+        console.warn("Could not send connection request notification:", reqNotifErr);
+      }
+
+      fetchUsers();
     } catch (error) {
-      console.error('Error in handleConnect:', error);
+      console.error("Error in handleConnect:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -506,26 +595,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle message user
-  const handleMessage = async (userId: string, userName: string) => {
-    try {
-      // In production, implement messaging logic
-      // Navigate to messages or open chat
-      toast({
-        title: "Opening Chat",
-        description: `Starting conversation with ${userName}`,
-      });
-    } catch (error) {
-      console.error('Error opening chat:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to open chat. Please try again.",
-      });
-    }
-  };
-
-  // Handle like user
   const handleLike = async (userId: string, userName: string) => {
     try {
       if (!user?.id) {
@@ -546,19 +615,17 @@ export default function DiscoverPage() {
         return;
       }
 
-      const currentUserItem = users.find(u => u.id === userId);
+      const currentUserItem = users.find((u) => u.id === userId);
       const isCurrentlyLiked = currentUserItem?.is_liked || false;
 
       if (isCurrentlyLiked) {
-        // Remove notification if unliked
         await supabase
           .from("notifications")
           .delete()
           .eq("user_id", userId)
           .eq("action_url", `/profile/${profile.id}`)
           .eq("type", "profile");
-        
-        // Unliking
+
         const { error: deleteError } = await supabase
           .from("user_likes")
           .delete()
@@ -569,68 +636,60 @@ export default function DiscoverPage() {
 
         const currentLikesCount = currentUserItem?.likes_count || 0;
         const newLikesCount = Math.max(0, currentLikesCount - 1);
-        
-        // Update DB
+
         await supabase
           .from("profiles")
           .update({ likes_count: newLikesCount })
           .eq("id", userId);
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_liked: false, likes_count: newLikesCount }
-              : u
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.id === userId ? { ...u, is_liked: false, likes_count: newLikesCount } : u
           )
         );
       } else {
-        // Liking
-        const { error: insertError } = await supabase
-          .from("user_likes")
-          .insert({
-            user_id: profile.id,
-            liked_user_id: userId,
-          });
+        const { error: insertError } = await supabase.from("user_likes").insert({
+          user_id: profile.id,
+          liked_user_id: userId,
+        });
 
         if (insertError) throw insertError;
-        
-        // Add notification for the user
-        await supabase.from("notifications").insert({
-          user_id: userId,
-          title: "New Profile Like",
-          description: `${profile.full_name || profile.username || 'Someone'} liked your profile.`,
-          type: "profile",
-          action_url: `/profile/${profile.id}`
+
+        const { error: likeNotifErr } = await supabase.rpc("send_authorized_notification", {
+          p_recipient_id: userId,
+          p_title: "New Profile Like",
+          p_description: `${profile.full_name || profile.username || "Someone"} liked your profile.`,
+          p_type: "profile",
+          p_priority: "low",
+          p_action_url: `/profile/${profile.id}`,
         });
+        if (likeNotifErr) {
+          console.warn("Could not send profile like notification:", likeNotifErr);
+        }
 
         const currentLikesCount = currentUserItem?.likes_count || 0;
         const newLikesCount = currentLikesCount + 1;
 
-        // Update DB
         await supabase
           .from("profiles")
           .update({ likes_count: newLikesCount })
           .eq("id", userId);
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_liked: true, likes_count: newLikesCount }
-              : u
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.id === userId ? { ...u, is_liked: true, likes_count: newLikesCount } : u
           )
         );
       }
 
       toast({
         title: isCurrentlyLiked ? "User Unliked" : "User Liked",
-        description: isCurrentlyLiked 
+        description: isCurrentlyLiked
           ? `You unliked ${userName}'s profile`
           : `You liked ${userName}'s profile`,
       });
     } catch (error) {
-      console.error('Error liking user:', error);
+      console.error("Error liking user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -639,7 +698,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle save user
   const handleSave = async (userId: string, userName: string) => {
     try {
       if (!user?.id) {
@@ -660,11 +718,10 @@ export default function DiscoverPage() {
         return;
       }
 
-      const currentUserItem = users.find(u => u.id === userId);
+      const currentUserItem = users.find((u) => u.id === userId);
       const isCurrentlySaved = currentUserItem?.is_saved || false;
 
       if (isCurrentlySaved) {
-        // Unsaving
         const { error: deleteError } = await supabase
           .from("user_saves")
           .delete()
@@ -673,43 +730,30 @@ export default function DiscoverPage() {
 
         if (deleteError) throw deleteError;
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_saved: false }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: false } : u))
         );
       } else {
-        // Saving
-        const { error: insertError } = await supabase
-          .from("user_saves")
-          .insert({
-            user_id: profile.id,
-            saved_user_id: userId,
-          });
+        const { error: insertError } = await supabase.from("user_saves").insert({
+          user_id: profile.id,
+          saved_user_id: userId,
+        });
 
         if (insertError) throw insertError;
 
-        // Update local state
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === userId 
-              ? { ...u, is_saved: true }
-              : u
-          )
+        setUsers((prevUsers) =>
+          prevUsers.map((u) => (u.id === userId ? { ...u, is_saved: true } : u))
         );
       }
 
       toast({
         title: isCurrentlySaved ? "User Unsaved" : "User Saved",
-        description: isCurrentlySaved 
+        description: isCurrentlySaved
           ? `You unsaved ${userName}'s profile`
           : `You saved ${userName}'s profile`,
       });
     } catch (error) {
-      console.error('Error saving user:', error);
+      console.error("Error saving user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -718,7 +762,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Handle share user
   const handleShare = async (userId: string, userName: string) => {
     try {
       if (navigator.share) {
@@ -728,7 +771,6 @@ export default function DiscoverPage() {
           url: `${window.location.origin}/profile/${userId}`,
         });
       } else {
-        // Fallback: copy to clipboard
         await navigator.clipboard.writeText(`${window.location.origin}/profile/${userId}`);
         toast({
           title: "Link Copied",
@@ -736,7 +778,7 @@ export default function DiscoverPage() {
         });
       }
     } catch (error) {
-      console.error('Error sharing user:', error);
+      console.error("Error sharing user:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -745,117 +787,192 @@ export default function DiscoverPage() {
     }
   };
 
-  const getExperienceColor = (level?: string) => {
-    switch (level) {
-      case "Senior":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "Mid":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "Entry":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
+  const hasActiveFilters =
+    filterType !== "all" ||
+    categoryFilters.length > 0 ||
+    Boolean(locationFilter) ||
+    minLikes > 0 ||
+    sortType !== "recent";
 
-  const getCategoryIcon = (category?: string) => {
-    if (!category) return <Briefcase className="w-4 h-4" />;
-    
-    // Film & Media Projects
-    if (category.includes("Film") || category.includes("Series") || category.includes("Documentaries")) {
-        return <Award className="w-4 h-4" />;
-    }
-    
-    // Direction & Production
-    if (category.includes("Director") || category.includes("Producer")) {
-        return <UserIcon className="w-4 h-4" />;
-    }
-    
-    // Cinematography & Camera
-    if (category.includes("Cinematographer") || category.includes("Camera") || category.includes("Gaffer")) {
-        return <Heart className="w-4 h-4" />;
-    }
-    
-    // Actors & Performers
-    if (category.includes("Actor") || category.includes("Artist") || category.includes("Dancer")) {
-      return <Star className="w-4 h-4" />;
-    }
-    
-    // Writing & Creative
-    if (category.includes("Writer") || category.includes("Lyricist")) {
-        return <GraduationCap className="w-4 h-4" />;
-    }
-    
-    // Music & Sound
-    if (category.includes("Music") || category.includes("Sound") || category.includes("Singer")) {
-      return <GraduationCap className="w-4 h-4" />;
-    }
-    
-    // Art & Design
-    if (category.includes("Designer") || category.includes("Stylist") || category.includes("Artist")) {
-      return <Heart className="w-4 h-4" />;
-    }
-    
-    // Editing & Post Production
-    if (category.includes("Editor") || category.includes("VFX") || category.includes("Graphics")) {
-      return <Globe className="w-4 h-4" />;
-    }
-    
-    // Marketing & Distribution
-    if (category.includes("Marketer") || category.includes("PR") || category.includes("Social")) {
-        return <Briefcase className="w-4 h-4" />;
-    }
-    
-    // Film Community & Support
-    if (category.includes("Festival") || category.includes("Workshop") || category.includes("Casting")) {
-      return <Users className="w-4 h-4" />;
-    }
-    
-    return <Briefcase className="w-4 h-4" />;
-  };
+  const quickCrafts = ["All Crafts", "Director", "Actor", "Cinematographer", "Editor", "Writer", "Producer"];
 
   return (
-    <AppLayout>
-      <div className="space-y-6 bg-yellow-50/50 dark:bg-background min-h-screen p-6 -m-6 transition-colors duration-200">
-        {/* Header */}
-        <div className="bg-white dark:bg-background p-6 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+    <AppLayout pageTitle="Talent Hub">
+      <div className="max-w-[1440px] mx-auto space-y-6 pb-8">
+        {/* 03 / Talent Discovery Editorial Header & Inline Filter Bar */}
+        <FadeInSection>
+          <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5 pb-2">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 font-sans tracking-tight">Discover Creators</h1>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">
-                Connect with talented filmmakers, artists, and creative professionals
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
+                Find your next collaborator
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Discover talented filmmakers from around the world.
               </p>
             </div>
-            <div className="flex items-center gap-4 w-full lg:w-auto">
-              <div className="relative w-full max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+
+            {/* Inline Studio Noir Filter Bar matching 03 / Talent discovery */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search Input */}
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search by name, skills, or location..."
+                  placeholder="Search people, skills, locations..."
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); resetPaging(); }}
-                  className="pl-10 h-11 border-yellow-200 dark:border-yellow-900/40 rounded-lg focus:border-yellow-500 focus:ring-yellow-500 bg-white dark:bg-background dark:text-white"
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    resetPaging();
+                  }}
+                  className="pl-9 h-10 bg-surface-base/90 border-border/80 text-xs rounded-lg"
                 />
               </div>
-              
-              {/* Filter Sheet (Right Sidebar) */}
+
+              {/* Craft Pill Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>
+                      {categoryFilters.length > 0 ? `Craft (${categoryFilters.length})` : "Craft"}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {quickCrafts.map((craft) => (
+                    <DropdownMenuItem
+                      key={craft}
+                      onClick={() => {
+                        if (craft === "All Crafts") {
+                          setCategoryFilters([]);
+                        } else {
+                          handleToggleCategory(craft);
+                        }
+                        resetPaging();
+                      }}
+                      className="text-xs flex items-center justify-between cursor-pointer"
+                    >
+                      <span>{craft}</span>
+                      {(craft === "All Crafts" && categoryFilters.length === 0) ||
+                      categoryFilters.includes(craft) ? (
+                        <Check className="w-3.5 h-3.5 text-primary" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Location Quick Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>{locationFilter ? locationFilter : "Location"}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 p-2">
+                  <div className="space-y-1.5">
+                    <Input
+                      placeholder="Filter city or country..."
+                      value={locationFilter}
+                      onChange={(e) => {
+                        setLocationFilter(e.target.value);
+                        resetPaging();
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    {["Mumbai", "London", "Los Angeles", "Berlin", "Seoul", "Remote"].map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => {
+                          setLocationFilter(locationFilter === city ? "" : city);
+                          resetPaging();
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-surface-hover flex items-center justify-between text-muted-foreground hover:text-foreground"
+                      >
+                        <span>{city}</span>
+                        {locationFilter.toLowerCase() === city.toLowerCase() && (
+                          <Check className="w-3 h-3 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Availability / Tier Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground/90 gap-2"
+                  >
+                    <span>
+                      {filterType === "all"
+                        ? "Availability"
+                        : filterType === "verified"
+                          ? "Verified"
+                          : filterType === "new"
+                            ? "New Talent"
+                            : "Popular"}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {[
+                    { value: "all", label: "All Available" },
+                    { value: "verified", label: "Verified Only" },
+                    { value: "new", label: "New Talent (30d)" },
+                    { value: "popular", label: "High Demand" },
+                  ].map((item) => (
+                    <DropdownMenuItem
+                      key={item.value}
+                      onClick={() => {
+                        setFilterType(item.value as FilterType);
+                        resetPaging();
+                      }}
+                      className="text-xs flex items-center justify-between cursor-pointer"
+                    >
+                      <span>{item.label}</span>
+                      {filterType === item.value && <Check className="w-3.5 h-3.5 text-primary" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* More Filters Sheet */}
               <Sheet open={showFilters} onOpenChange={setShowFilters}>
                 <SheetTrigger asChild>
                   <Button
                     variant="outline"
-                    className="h-11 px-4 border-yellow-200 dark:border-yellow-900/40 hover:!bg-yellow-50 dark:hover:!bg-yellow-950/25 hover:!text-yellow-600 dark:hover:!text-yellow-400 text-gray-700 dark:text-gray-300 bg-white dark:bg-background relative shrink-0 animate-fade-in"
+                    className="h-10 px-3.5 rounded-lg bg-surface-base/90 border-border/80 text-xs font-medium text-foreground relative shrink-0"
                   >
-                    <Filter className="w-4 h-4 mr-2" />
-                    Filters
-                    {(filterType !== "all" || categoryFilters.length > 0 || locationFilter || minLikes > 0 || sortType !== "recent") && (
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3 rounded-full bg-yellow-500 ring-2 ring-white dark:ring-gray-900 animate-pulse" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 mr-2 text-primary" />
+                    More filters
+                    {hasActiveFilters && (
+                      <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
                     )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-full sm:max-w-md flex flex-col h-full bg-white dark:bg-background border-l border-yellow-200 dark:border-yellow-900/40 p-0">
-                  <div className="p-6 border-b border-yellow-100 dark:border-yellow-900/20 flex items-center justify-between">
+                <SheetContent
+                  side="right"
+                  className="w-full sm:max-w-md flex flex-col h-full bg-card border-l border-border/80 p-0"
+                >
+                  <div className="p-6 border-b border-border/70 flex items-center justify-between pr-12">
                     <div>
-                      <SheetTitle className="text-lg font-bold text-gray-900 dark:text-white">Filter Creators</SheetTitle>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Refine your creative connections</p>
+                      <SheetTitle className="text-lg font-semibold text-foreground">
+                        Filter Creators
+                      </SheetTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Refine your creative connections
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
@@ -868,22 +985,29 @@ export default function DiscoverPage() {
                         setSortType("recent");
                         resetPaging();
                       }}
-                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 font-medium"
+                      className="text-xs text-muted-foreground hover:text-primary"
                     >
                       Reset All
                     </Button>
                   </div>
-                  
+
                   <ScrollArea className="flex-1 p-6">
                     <div className="space-y-6 pb-8">
-                      {/* Filter by Type */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Filter by Type</label>
-                        <Select value={filterType} onValueChange={(value) => { setFilterType(value as FilterType); resetPaging(); }}>
-                          <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm">
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Filter by Type
+                        </label>
+                        <Select
+                          value={filterType}
+                          onValueChange={(value) => {
+                            setFilterType(value as FilterType);
+                            resetPaging();
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-background border-yellow-100 dark:border-yellow-900/40 text-gray-900 dark:text-white">
+                          <SelectContent>
                             <SelectItem value="all">All Users</SelectItem>
                             <SelectItem value="verified">Verified Only</SelectItem>
                             <SelectItem value="new">New Users (30 days)</SelectItem>
@@ -892,14 +1016,21 @@ export default function DiscoverPage() {
                         </Select>
                       </div>
 
-                      {/* Sort by */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Sort by</label>
-                        <Select value={sortType} onValueChange={(value) => { setSortType(value as SortType); resetPaging(); }}>
-                          <SelectTrigger className="w-full border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm">
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Sort by
+                        </label>
+                        <Select
+                          value={sortType}
+                          onValueChange={(value) => {
+                            setSortType(value as SortType);
+                            resetPaging();
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select sort" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-background border-yellow-100 dark:border-yellow-900/40 text-gray-900 dark:text-white">
+                          <SelectContent>
                             <SelectItem value="recent">Most Recent</SelectItem>
                             <SelectItem value="popular">Most Popular</SelectItem>
                             <SelectItem value="alphabetical">Alphabetical</SelectItem>
@@ -907,58 +1038,71 @@ export default function DiscoverPage() {
                         </Select>
                       </div>
 
-                      {/* Location Filter */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Location</label>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Location
+                        </label>
                         <div className="relative">
-                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                           <Input
                             placeholder="e.g. Austin, Toronto, Delhi..."
                             value={locationFilter}
-                            onChange={(e) => { setLocationFilter(e.target.value); resetPaging(); }}
-                            className="pl-9 border-yellow-200 dark:border-yellow-900/40 focus:ring-yellow-500 focus:border-yellow-500 bg-white dark:bg-background text-gray-900 dark:text-white text-sm h-10"
+                            onChange={(e) => {
+                              setLocationFilter(e.target.value);
+                              resetPaging();
+                            }}
+                            className="pl-9 h-10"
                           />
                         </div>
                       </div>
 
-                      {/* Likes Count Slider */}
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Minimum Likes</label>
-                          <span className="text-xs font-bold bg-yellow-100 dark:bg-yellow-950 text-yellow-800 dark:text-yellow-400 px-2.5 py-0.5 rounded-full border border-yellow-200 dark:border-yellow-900/30">
+                          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                            Minimum Likes
+                          </label>
+                          <Badge variant="outline" className="text-xs border-primary/30 text-primary">
                             {minLikes}+ Likes
-                          </span>
+                          </Badge>
                         </div>
                         <Slider
                           value={[minLikes]}
-                          onValueChange={(val) => { setMinLikes(val[0]); resetPaging(); }}
+                          onValueChange={(val) => {
+                            setMinLikes(val[0]);
+                            resetPaging();
+                          }}
                           max={250}
                           step={5}
-                          className="py-2 animate-pulse-slow"
+                          className="py-2"
                         />
-                        <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                           <span>0</span>
                           <span>125</span>
                           <span>250</span>
                         </div>
                       </div>
 
-                      {/* Categories Filter */}
                       <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wider uppercase">Categories</label>
+                        <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                          Categories
+                        </label>
                         <CategoryDropdown
                           multiple
                           value={categoryFilters}
                           onChange={(vals) => setCategoryFilters(vals)}
-                          placeholder={categoryFilters.length === 0 ? "Select Categories..." : `${categoryFilters.length} Selected`}
+                          placeholder={
+                            categoryFilters.length === 0
+                              ? "Select Categories..."
+                              : `${categoryFilters.length} Selected`
+                          }
                         />
-                         {categoryFilters.length > 0 && (
-                          <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto mt-2 p-1.5 border border-dashed border-yellow-200 dark:border-yellow-900/40 rounded-md bg-yellow-50/30 dark:bg-yellow-950/20">
+                        {categoryFilters.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto mt-2 p-2 border border-dashed border-border/80 rounded-lg bg-surface-elevated/50">
                             {categoryFilters.map((cat) => (
                               <Badge
                                 key={cat}
                                 variant="secondary"
-                                className="text-[10px] bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30 pr-1 flex items-center gap-1"
+                                className="text-[11px] pr-1 flex items-center gap-1"
                               >
                                 {cat}
                                 <button
@@ -967,9 +1111,9 @@ export default function DiscoverPage() {
                                     e.stopPropagation();
                                     handleToggleCategory(cat);
                                   }}
-                                  className="rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-900/40 p-0.5"
+                                  className="rounded-full hover:bg-surface-hover p-0.5"
                                 >
-                                  <X className="w-2.5 h-2.5 text-yellow-700 dark:text-yellow-400" />
+                                  <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
                                 </button>
                               </Badge>
                             ))}
@@ -982,284 +1126,625 @@ export default function DiscoverPage() {
               </Sheet>
             </div>
           </div>
-        </div>
 
-        {/* Tabs Bar */}
-        <div className="flex justify-between items-center bg-white dark:bg-background p-2 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
-          <Tabs value={currentTab} onValueChange={(val) => { setCurrentTab(val as "discover" | "liked" | "saved"); resetPaging(); }} className="w-full sm:w-auto">
-            <TabsList className="bg-yellow-50/50 dark:bg-background border border-yellow-100 dark:border-yellow-900/40 p-1">
-              <TabsTrigger 
-                value="discover" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Discover
-              </TabsTrigger>
-              <TabsTrigger 
-                value="liked" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
-                <Heart className="w-4 h-4 mr-2" />
-                Liked
-              </TabsTrigger>
-              <TabsTrigger 
-                value="saved" 
-                className="data-[state=active]:bg-yellow-500 data-[state=active]:text-white text-gray-700 dark:text-gray-300 text-sm px-4 py-2 font-medium transition-all"
-              >
-                <Bookmark className="w-4 h-4 mr-2" />
-                Saved
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mr-2 hidden sm:block font-mono">
-            {filtered.length} {filtered.length === 1 ? 'Creator' : 'Creators'} found
+          {/* Animated Tab Bar (Discover / Liked / Saved) + Result Counter */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-b border-border/60 pb-3">
+            <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-surface-base/90 border border-border/70">
+              {(
+                [
+                  { id: "discover", label: "Discover", icon: Users },
+                  { id: "liked", label: "Liked", icon: Heart },
+                  { id: "saved", label: "Saved", icon: Bookmark },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                const active = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentTab(tab.id);
+                      resetPaging();
+                    }}
+                    className={`relative px-3.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors ${
+                      active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="discover-tab-pill"
+                        className="absolute inset-0 rounded-md bg-surface-elevated border border-primary/30 shadow-sm"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <Icon
+                      className={`relative z-10 w-3.5 h-3.5 ${
+                        active ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
+                    <span className="relative z-10">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+              <span>
+                {filtered.length} {filtered.length === 1 ? "Creator" : "Creators"} available
+              </span>
+            </div>
           </div>
-        </div>
+        </FadeInSection>
 
-        {/* Users Grid */}
-        <div className="bg-white dark:bg-background rounded-lg shadow-sm p-6 border border-yellow-100 dark:border-yellow-900/40">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">Loading creators...</p>
-            </div>
-          ) : pageItems.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">No creators found</h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">Try adjusting your search or filters to find more creators.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pageItems.map((userItem) => (
-                <Card key={userItem.id} className="hover:shadow-lg transition-all duration-200 bg-white dark:bg-background border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden flex flex-col justify-between">
-                  <div>
-                    <CardHeader className="pb-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-12 w-12 border border-yellow-100 dark:border-yellow-900/40">
-                            <AvatarImage src={userItem.avatar_url} alt={userItem.full_name} />
-                            <AvatarFallback className="bg-yellow-100 dark:bg-yellow-950 text-yellow-600 dark:text-yellow-400 font-semibold text-sm">
-                              {userItem.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                              <span className="truncate">{userItem.full_name}</span>
-                              {userItem.tags?.map(skill => {
-                                const tagConfig = [
-                                  { label: "Verified", color: "bg-blue-50 text-blue-700 border-blue-200" },
-                                  { label: "Popular", color: "bg-green-50 text-green-700 border-green-200" },
-                                  { label: "Featured", color: "bg-purple-50 text-purple-700 border-purple-200" },
-                                  { label: "Trending", color: "bg-orange-50 text-orange-700 border-orange-200" },
-                                  { label: "Expert", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-                                  { label: "Mentor", color: "bg-pink-50 text-pink-700 border-pink-200" },
-                                  { label: "Influencer", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-                                  { label: "Rising Star", color: "bg-amber-50 text-amber-700 border-amber-200" }
-                                ].find(t => t.label === skill);
-                                if (!tagConfig) return null;
-                                return (
-                                  <Badge key={skill} variant="outline" className={`${tagConfig.color} text-[10px] px-2 py-0.5 rounded-full font-medium h-fit leading-tight`}>
-                                    {skill}
-                                  </Badge>
-                                );
-                              })}
-                            </CardTitle>
-                            <div className="mt-1 flex flex-col">
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium flex-wrap">
-                                <span className="text-yellow-600 dark:text-yellow-500 font-semibold flex items-center gap-1.5">
-                                  @{userItem.username || userItem.full_name.toLowerCase().replace(/\s+/g, "")}
+        {/* Main Master-Detail Talent Discovery Grid matching 03 / Talent discovery */}
+        {loading ? (
+          <div className="text-center py-20 bg-card/80 rounded-2xl border border-border/80">
+            <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4" />
+            <p className="text-muted-foreground text-sm">Loading creators...</p>
+          </div>
+        ) : pageItems.length === 0 ? (
+          <div className="text-center py-20 bg-card/80 rounded-2xl border border-border/80">
+            <Users className="w-12 h-12 text-muted-foreground/60 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold mb-1.5 text-foreground">No creators found</h3>
+            <p className="text-muted-foreground text-sm">
+              Try adjusting your search or filters to find more creators.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {/* LEFT 7 COLUMNS: 3-Column Vertical Portrait Dimensional Talent Grid */}
+            <div className="xl:col-span-7 space-y-6">
+              <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pageItems.map((userItem, idx) => {
+                  const portraitSrc = getPortraitImage(userItem, idx);
+                  const isSelected = selectedUser?.id === userItem.id;
+                  const availabilityLabel =
+                    idx % 4 === 2 ? "In 2 weeks" : idx % 5 === 4 ? "In 1 month" : "Available";
+                  const isImmediate = availabilityLabel === "Available";
+
+                  return (
+                    <StaggerItem key={userItem.id} index={idx}>
+                      <DimensionalCard
+                        tiltStrength={6}
+                        onClick={() => setSelectedUserId(userItem.id)}
+                        className={`h-full rounded-xl bg-card overflow-hidden cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-primary/65 ring-1 ring-primary/30 shadow-noir"
+                            : "border-border/80 hover:border-primary/40"
+                        }`}
+                      >
+                        {/* Top Portrait Frame */}
+                        <div className="relative aspect-[4/4.2] w-full overflow-hidden bg-surface-elevated">
+                          <ImageReveal
+                            src={portraitSrc}
+                            alt={userItem.full_name}
+                            containerClassName="w-full h-full"
+                            className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-transparent to-black/20" />
+
+                          {/* Top-right Quick Actions (Save & Share menu) */}
+                          <div
+                            className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="More options"
+                                  className="h-7 w-7 rounded-full bg-black/55 backdrop-blur-md border border-white/15 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                                >
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem
+                                  onClick={() => handleSave(userItem.id, userItem.full_name)}
+                                  className="flex items-center gap-2 cursor-pointer text-xs"
+                                >
+                                  <Bookmark className="w-3.5 h-3.5 text-muted-foreground" />
+                                  {userItem.is_saved ? "Unsave" : "Save"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleShare(userItem.id, userItem.full_name)}
+                                  className="flex items-center gap-2 cursor-pointer text-xs"
+                                >
+                                  <Share2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                  Share
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          {/* Verified badge if verified */}
+                          {userItem.is_verified && (
+                            <span className="absolute top-2.5 left-2.5 z-20 px-2 py-0.5 rounded bg-black/65 backdrop-blur-md border border-primary/40 text-[10px] font-medium text-primary">
+                              Verified
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Portrait Card Details */}
+                        <DimensionalLayer depth={14} className="p-4 flex flex-col justify-between gap-3">
+                          <div className="space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-[15px] font-semibold text-foreground truncate leading-snug">
+                                {userItem.full_name}
+                              </h3>
+                              <button
+                                type="button"
+                                aria-label={userItem.is_liked ? "Unlike profile" : "Like profile"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLike(userItem.id, userItem.full_name);
+                                }}
+                                className={`shrink-0 p-1 rounded-full transition-colors ${
+                                  userItem.is_liked
+                                    ? "text-primary"
+                                    : "text-muted-foreground hover:text-primary"
+                                }`}
+                              >
+                                <Heart
+                                  className={`w-4 h-4 ${userItem.is_liked ? "fill-current" : ""}`}
+                                />
+                              </button>
+                            </div>
+
+                            <p className="text-xs font-medium text-muted-foreground truncate">
+                              {userItem.role || "Filmmaker"}
+                            </p>
+
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/90 truncate pt-0.5">
+                              <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">
+                                {userItem.location || "Available Worldwide"}
+                              </span>
+                            </div>
+
+                            {/* Availability status dot matching 03 / Talent discovery */}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/90">
+                                <span
+                                  className={`h-2 w-2 rounded-full ${
+                                    isImmediate
+                                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]"
+                                      : "bg-primary shadow-[0_0_8px_rgba(233,180,87,0.6)]"
+                                  }`}
+                                />
+                                {availabilityLabel}
+                              </span>
+
+                              {(userItem.price_per_day || userItem.price_per_hour) && (
+                                <span className="text-[10px] font-mono text-primary">
+                                  {userItem.price_per_day
+                                    ? `₹${userItem.price_per_day}/d`
+                                    : `₹${userItem.price_per_hour}/h`}
                                 </span>
-                                <span className="text-gray-300 dark:text-gray-700">•</span>
-                                <span className="text-gray-600 dark:text-gray-300 truncate">{userItem.role}</span>
-                              </div>
-                              {userItem.location && (
-                                <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center mt-0.5 truncate">
-                                  <MapPin className="w-3 h-3 mr-0.5 text-gray-300 dark:text-gray-600" />
-                                  {userItem.location}
-                                </div>
                               )}
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {/* Like Button */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleLike(userItem.id, userItem.full_name)}
-                            className={`h-8 w-8 p-0 hover:bg-red-50/50 dark:hover:bg-red-950/20 rounded-full transition-colors ${userItem.is_liked ? 'text-red-500 hover:text-red-600' : 'text-gray-400 dark:text-gray-500 hover:text-red-500'}`}
+
+                          {/* Card Footer Actions */}
+                          <div
+                            className="flex items-center gap-1.5 pt-1"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Heart className={`w-4 h-4 ${userItem.is_liked ? 'fill-current animate-bounce-short' : ''}`} />
-                          </Button>
-                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 font-mono">{userItem.likes_count || 0}</span>
-                          
-                          {/* 3 Dots Menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full">
-                                <MoreVertical className="w-4 h-4" />
+                            <Button
+                              onClick={() => navigate(`/profile/${userItem.id}`)}
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 h-8 text-xs font-medium bg-surface-elevated/70 border-border/80 hover:border-primary/40 hover:text-foreground"
+                            >
+                              View profile
+                            </Button>
+
+                            {userItem.id !== user?.id && (
+                              <Button
+                                onClick={() =>
+                                  handleConnect(
+                                    userItem.id,
+                                    userItem.full_name,
+                                    userItem.connection_status,
+                                    userItem.connection_initiator
+                                  )
+                                }
+                                variant={
+                                  userItem.connection_status === "accepted" ? "secondary" : "ghost"
+                                }
+                                size="sm"
+                                disabled={
+                                  (userItem.connection_status === "pending" &&
+                                    userItem.connection_initiator === profile?.id) ||
+                                  userItem.allow_connections_from === "none" ||
+                                  userItem.allow_connections_from === "connections"
+                                }
+                                title={
+                                  userItem.connection_status === "accepted"
+                                    ? "Connected"
+                                    : userItem.connection_status === "pending"
+                                      ? "Pending"
+                                      : "Connect"
+                                }
+                                className="h-8 w-8 p-0 shrink-0 border border-border/70 bg-surface-elevated/50 hover:border-primary/40 hover:text-primary"
+                              >
+                                {userItem.connection_status === "accepted" ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : userItem.connection_status === "pending" ? (
+                                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                                ) : (
+                                  <UserPlus className="w-3.5 h-3.5" />
+                                )}
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-background border border-gray-100 dark:border-gray-800 shadow-md text-gray-900 dark:text-white">
-                              <DropdownMenuItem 
-                                onClick={() => handleSave(userItem.id, userItem.full_name)}
-                                className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
-                              >
-                                <Bookmark className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                {userItem.is_saved ? 'Unsave' : 'Save'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => handleShare(userItem.id, userItem.full_name)}
-                                className="flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
-                              >
-                                <Share2 className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                Share
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      {/* Bio */}
-                      {userItem.bio && (
-                        <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 leading-relaxed">{userItem.bio}</p>
-                      )}
-                      
-                      {/* Pricing and Experience */}
-                      {(userItem.total_experience || userItem.price_per_day || userItem.price_per_hour) && (
-                        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {userItem.total_experience && (
-                            <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                              <Briefcase className="w-3 h-3 text-gray-500" />
-                              {userItem.total_experience}
-                            </span>
-                          )}
-                          {(userItem.price_per_day || userItem.price_per_hour) && (
-                            <span className="flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-500 px-2 py-1 rounded-md border border-yellow-200 dark:border-yellow-800/50">
-                              <Award className="w-3 h-3" />
-                              {userItem.price_per_hour ? `₹${userItem.price_per_hour}/hr` : ''}
-                              {userItem.price_per_hour && userItem.price_per_day ? ' • ' : ''}
-                              {userItem.price_per_day ? `₹${userItem.price_per_day}/day` : ''}
-                              {userItem.price_negotiable ? ' (Neg.)' : ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Skills - Only show 2 skills */}
-                      {userItem.skills && userItem.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {userItem.skills.slice(0, 2).map((skill, index) => (
-                            <Badge key={index} variant="outline" className="text-[10px] bg-yellow-50/40 dark:bg-yellow-950/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/30">
-                              {skill}
-                            </Badge>
-                          ))}
-                          {userItem.skills.length > 2 && (
-                            <Badge variant="outline" className="text-[10px] bg-gray-50 dark:bg-background text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800">
-                              +{userItem.skills.length - 2} more
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </div>
-                  
-                  <CardContent className="pt-0 pb-4">
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 pt-2">
-                      {userItem.id !== user?.id && (
-                        userItem.connection_status === "accepted" ? (
-                          <Button
-                            className="flex-1 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/40 hover:bg-green-100 dark:hover:bg-green-950/30 font-medium text-xs h-9 transition-all cursor-default"
-                            size="sm"
-                          >
-                            <Check className="w-3.5 h-3.5 mr-1.5" />
-                            Connected
-                          </Button>
-                        ) : userItem.connection_status === "pending" ? (
-                          userItem.connection_initiator === profile?.id ? (
-                            <Button
-                              className="flex-1 bg-gray-100 dark:bg-background text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-800 font-medium text-xs h-9 cursor-not-allowed"
-                              size="sm"
-                              disabled
-                            >
-                              <Clock className="w-3.5 h-3.5 mr-1.5 text-gray-400 dark:text-gray-500" />
-                              Request Sent
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => handleConnect(userItem.id, userItem.full_name, userItem.connection_status, userItem.connection_initiator)}
-                              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium text-xs transition-all h-9"
-                              size="sm"
-                            >
-                              <UserCheck className="w-3.5 h-3.5 mr-1.5" />
-                              Accept Request
-                            </Button>
-                          )
-                        ) : (
-                          <Button
-                            onClick={() => handleConnect(userItem.id, userItem.full_name, userItem.connection_status, userItem.connection_initiator)}
-                            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-medium text-xs transition-all h-9 disabled:opacity-50"
-                            size="sm"
-                            disabled={userItem.allow_connections_from === 'none' || userItem.allow_connections_from === 'connections'}
-                          >
-                            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                            Connect
-                          </Button>
-                        )
-                      )}
+                            )}
+                          </div>
+                        </DimensionalLayer>
+                      </DimensionalCard>
+                    </StaggerItem>
+                  );
+                })}
+              </StaggerContainer>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="bg-card p-4 rounded-xl shadow-soft border border-border/80">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <span className="text-xs text-muted-foreground font-medium font-mono">
+                      Showing {(page - 1) * pageSize + 1} to{" "}
+                      {Math.min(page * pageSize, filtered.length)} of {filtered.length} creators
+                    </span>
+                    <div className="flex items-center gap-2">
                       <Button
-                        onClick={() => navigate(`/profile/${userItem.id}`)}
                         variant="outline"
-                        className={`${userItem.id === user?.id ? "w-full" : "flex-1"} border-gray-300 dark:border-gray-700 bg-white dark:bg-background text-gray-700 dark:text-gray-200 hover:!bg-yellow-50 hover:!text-yellow-700 hover:!border-yellow-300 dark:hover:!bg-yellow-950/30 dark:hover:!text-yellow-400 dark:hover:!border-yellow-900/40 font-medium text-xs h-9 transition-all`}
                         size="sm"
+                        disabled={page <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="text-xs h-8"
                       >
-                        <UserIcon className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
-                        View Profile
+                        Previous
+                      </Button>
+                      <span className="text-xs text-foreground font-semibold px-3 font-mono">
+                        Page {page} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        className="text-xs h-8"
+                      >
+                        Next
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="bg-white dark:bg-background p-4 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-900/40">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium font-mono">
-                Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, filtered.length)} of {filtered.length} creators
-              </span>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={page <= 1} 
-                  onClick={() => setPage((p) => Math.max(1, p - 1))} 
-                  className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-background hover:bg-gray-50 dark:hover:bg-gray-800 text-xs h-8"
-                >
-                  Previous
-                </Button>
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-bold px-3 font-mono">
-                  Page {page} of {totalPages}
-                </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={page >= totalPages} 
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))} 
-                  className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-background hover:bg-gray-50 dark:hover:bg-gray-800 text-xs h-8"
-                >
-                  Next
-                </Button>
+            {/* RIGHT 5 COLUMNS: Sticky Live Talent Showreel & Dossier Inspector matching 03 / Talent discovery */}
+            {selectedUser && (
+              <div className="xl:col-span-5 xl:sticky xl:top-20">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={selectedUser.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <DimensionalCard
+                      tiltStrength={3.5}
+                      className="rounded-2xl border border-border/80 bg-card/95 overflow-hidden shadow-noir"
+                    >
+                      {/* Top 16:9 Showreel Video Preview Frame */}
+                      <div
+                        onClick={() => {
+                          if (selectedUser.portfolio_url) {
+                            window.open(selectedUser.portfolio_url, "_blank", "noopener,noreferrer");
+                          } else {
+                            navigate(`/profile/${selectedUser.id}`);
+                          }
+                        }}
+                        className="relative aspect-[16/9] w-full overflow-hidden bg-surface-elevated cursor-pointer group/reel"
+                      >
+                        <img
+                          src={getPortraitImage(selectedUser, 0)}
+                          alt={`${selectedUser.full_name} Showreel`}
+                          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover/reel:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#121417] via-black/25 to-black/20" />
+
+                        {/* Centered Glassmorphic Play Button */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="h-14 w-14 rounded-full bg-black/55 backdrop-blur-md border border-white/25 flex items-center justify-center text-white shadow-xl group-hover/reel:scale-110 group-hover/reel:border-primary/60 group-hover/reel:text-primary transition-all">
+                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                          </div>
+                        </div>
+
+                        {/* Duration pill */}
+                        <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded bg-black/75 backdrop-blur-sm text-[11px] font-mono text-white/90 border border-white/10">
+                          02:16
+                        </span>
+                      </div>
+
+                      {/* Inspector Body */}
+                      <div className="p-5 sm:p-6 space-y-5">
+                        {/* Creator Identity & Primary Connect Bar */}
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <h2 className="font-serif text-2xl font-bold text-foreground tracking-tight">
+                              {selectedUser.full_name}
+                            </h2>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
+                              <span className="font-medium text-foreground/90">
+                                {selectedUser.role || "Director"}
+                              </span>
+                              <span>•</span>
+                              <span>{selectedUser.location || "Available Worldwide"}</span>
+                              <span>•</span>
+                              <span className="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                                Available
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {selectedUser.id !== user?.id && (
+                              <Button
+                                onClick={() =>
+                                  handleConnect(
+                                    selectedUser.id,
+                                    selectedUser.full_name,
+                                    selectedUser.connection_status,
+                                    selectedUser.connection_initiator
+                                  )
+                                }
+                                disabled={
+                                  (selectedUser.connection_status === "pending" &&
+                                    selectedUser.connection_initiator === profile?.id) ||
+                                  selectedUser.allow_connections_from === "none" ||
+                                  selectedUser.allow_connections_from === "connections"
+                                }
+                                className="h-9 px-5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold shadow-amber-glow"
+                              >
+                                {selectedUser.connection_status === "accepted" ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 mr-1.5" />
+                                    Connected
+                                  </>
+                                ) : selectedUser.connection_status === "pending" ? (
+                                  selectedUser.connection_initiator === profile?.id ? (
+                                    "Request Sent"
+                                  ) : (
+                                    "Accept Request"
+                                  )
+                                ) : (
+                                  "Connect"
+                                )}
+                              </Button>
+                            )}
+
+                            <button
+                              type="button"
+                              aria-label={selectedUser.is_liked ? "Unlike profile" : "Like profile"}
+                              onClick={() => handleLike(selectedUser.id, selectedUser.full_name)}
+                              className={`h-9 w-9 rounded-lg border border-border/80 bg-surface-elevated/70 flex items-center justify-center transition-colors ${
+                                selectedUser.is_liked
+                                  ? "text-primary border-primary/40"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <Heart
+                                className={`w-4 h-4 ${selectedUser.is_liked ? "fill-current" : ""}`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Animated Dossier Sub-Tabs (About / Showreel / Credits / Skills) */}
+                        <div className="flex items-center gap-5 border-b border-border/70">
+                          {(
+                            [
+                              { id: "about", label: "About" },
+                              { id: "showreel", label: "Showreel" },
+                              { id: "credits", label: "Credits" },
+                              { id: "skills", label: "Skills" },
+                            ] as const
+                          ).map((tab) => {
+                            const active = inspectorTab === tab.id;
+                            return (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setInspectorTab(tab.id)}
+                                className={`relative pb-2.5 text-xs font-medium transition-colors ${
+                                  active
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                {tab.label}
+                                {active && (
+                                  <motion.span
+                                    layoutId="dossier-inspector-tab"
+                                    className="absolute left-0 right-0 bottom-0 h-[2px] bg-primary rounded-full"
+                                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Tab Content */}
+                        {inspectorTab === "credits" ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-3 gap-2.5">
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Experience
+                                </div>
+                                <div className="text-sm font-semibold text-foreground mt-1">
+                                  {selectedUser.total_experience ||
+                                    selectedUser.experience_level ||
+                                    "Pro"}
+                                </div>
+                              </div>
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Projects
+                                </div>
+                                <div className="text-sm font-semibold text-foreground mt-1">
+                                  {selectedUser.projects_count || 3} Credits
+                                </div>
+                              </div>
+                              <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/70">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono">
+                                  Endorsements
+                                </div>
+                                <div className="text-sm font-semibold text-primary mt-1">
+                                  {selectedUser.likes_count || 0} Likes
+                                </div>
+                              </div>
+                            </div>
+
+                            {(selectedUser.price_per_day || selectedUser.price_per_hour) && (
+                              <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
+                                <span className="text-xs font-medium text-foreground">
+                                  Standard Production Rate
+                                </span>
+                                <span className="text-xs font-mono font-semibold text-primary">
+                                  {selectedUser.price_per_hour
+                                    ? `₹${selectedUser.price_per_hour}/hr`
+                                    : ""}
+                                  {selectedUser.price_per_hour && selectedUser.price_per_day
+                                    ? " • "
+                                    : ""}
+                                  {selectedUser.price_per_day
+                                    ? `₹${selectedUser.price_per_day}/day`
+                                    : ""}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : inspectorTab === "skills" ? (
+                          <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                              Verified craft specialties and production tags:
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(selectedUser.skills && selectedUser.skills.length > 0
+                                ? selectedUser.skills
+                                : [
+                                    selectedUser.role || "Filmmaking",
+                                    "Visual Storytelling",
+                                    "Production",
+                                    "Directing",
+                                  ]
+                              ).map((skill, i) => (
+                                <Badge
+                                  key={i}
+                                  variant="outline"
+                                  className="text-xs py-1 px-2.5 border-border/80 bg-surface-elevated/80 text-foreground"
+                                >
+                                  {skill}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* 3-Frame Showreel Strip matching 03 / Talent discovery */}
+                            <div className="grid grid-cols-3 gap-2.5">
+                              {SHOWREEL_STILLS[
+                                selectedUser.id.charCodeAt(0) % SHOWREEL_STILLS.length
+                              ].map((stillUrl, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                                  className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated cursor-pointer group/still"
+                                >
+                                  <img
+                                    src={stillUrl}
+                                    alt="Showreel frame"
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/still:scale-105"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Creator Bio */}
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {selectedUser.bio ||
+                                `I'm a ${(selectedUser.role || "filmmaker").toLowerCase()} and visual storyteller drawn to real characters, intimate moments and the beauty in everyday life. I love collaborating with passionate people to tell compelling stories.`}
+                            </p>
+                          </>
+                        )}
+
+                        {/* Selected Work Strip matching 03 / Talent discovery */}
+                        <div className="space-y-3 pt-1 border-t border-border/60">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-foreground">
+                              Selected work
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                            >
+                              View all
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2.5">
+                            {[
+                              {
+                                title: "Monsoon Letters",
+                                meta: `Short Film • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=500&q=80",
+                              },
+                              {
+                                title: "The Waiting Room",
+                                meta: `Short Film • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=500&q=80",
+                              },
+                              {
+                                title: "City of Dust",
+                                meta: `Music Video • ${selectedUser.role || "Director"}`,
+                                img: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=500&q=80",
+                              },
+                            ].map((work, wIdx) => (
+                              <div
+                                key={wIdx}
+                                onClick={() => navigate(`/profile/${selectedUser.id}`)}
+                                className="group/work cursor-pointer space-y-1.5"
+                              >
+                                <div className="aspect-[16/10] rounded-lg overflow-hidden border border-border/70 bg-surface-elevated">
+                                  <img
+                                    src={work.img}
+                                    alt={work.title}
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/work:scale-105"
+                                  />
+                                </div>
+                                <div className="text-[11px] font-semibold text-foreground truncate group-hover/work:text-primary transition-colors">
+                                  {work.title}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground truncate">
+                                  {work.meta}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </DimensionalCard>
+                  </motion.div>
+                </AnimatePresence>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
