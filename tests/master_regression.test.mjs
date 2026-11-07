@@ -2494,5 +2494,356 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       assert.equal(matchingRes.requiresExplicitKeyRotation, false);
       assert.equal(writeCountMatching, 0, 'R9-03: Matching key must NOT execute any public_key writes');
     });
+
+    test('R10-01 & R10-02: Ticket message boundary enforcement, profile blank key normalization, and verified publication readiness suite', async () => {
+      // 1. Engine version verification: accurately document the embedded PGlite engine version (PostgreSQL 18.6)
+      const engineCheckDb = new PGlite();
+      const versionRes = await engineCheckDb.query('SHOW server_version;');
+      const reportedVersion = versionRes.rows[0].server_version;
+      assert.ok(reportedVersion.startsWith('18.'), `Engine must report PostgreSQL 18.x (observed: ${reportedVersion})`);
+      await engineCheckDb.close();
+
+      // 2. Upgrade path: replay all migrations up to R9 (f < '20261111000000'), seed blank public_key, apply 20261111000000
+      const upgDb = new PGlite();
+      await upgDb.exec(supabaseMockPreamble);
+      const preR10Files = migrationFiles.filter(f => f < '20261111000000');
+      for (const file of preR10Files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await upgDb.exec(sql);
+      }
+
+      const seedUserAuth = 'cccc0000-0000-4000-8000-000000000010';
+      const seedUserProf = 'dddd0000-0000-4000-8000-000000000010';
+      await upgDb.exec(`
+        INSERT INTO auth.users (id, email) VALUES ('${seedUserAuth}', 'seed10@filmcollab.io');
+        DELETE FROM public.profiles WHERE user_id = '${seedUserAuth}';
+        INSERT INTO public.profiles (id, user_id, username, full_name, email, role, account_status, public_key)
+        VALUES ('${seedUserProf}', '${seedUserAuth}', 'seed_r10', 'Seed R10', 'seed10@filmcollab.io', 'user', 'active', '   ');
+      `);
+
+      const r10Sql = fs.readFileSync(
+        path.join(migrationsDir, '20261111000000_r10_ticket_boundary_and_crypto_readiness.sql'),
+        'utf8'
+      );
+      await upgDb.exec(r10Sql);
+
+      const normalizedProf = await upgDb.query(
+        `SELECT public_key FROM public.profiles WHERE id = '${seedUserProf}';`
+      );
+      assert.equal(normalizedProf.rows[0].public_key, null, 'R10-02 upgrade must normalize blank/whitespace public_key to NULL');
+
+      // Test trigger prevents future blank strings
+      await upgDb.exec(`
+        UPDATE public.profiles SET public_key = '' WHERE id = '${seedUserProf}';
+      `);
+      const recheckedProf = await upgDb.query(
+        `SELECT public_key FROM public.profiles WHERE id = '${seedUserProf}';`
+      );
+      assert.equal(recheckedProf.rows[0].public_key, null, 'R10-02 trigger must normalize empty string to NULL on update');
+      await upgDb.close();
+
+      // 3. Clean-install full multi-role PostgreSQL (PGlite 18.6) verification
+      const db = new PGlite();
+      await db.exec(supabaseMockPreamble);
+      for (const file of migrationFiles) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await db.exec(sql);
+      }
+
+      const aliceAuth   = 'aaaa1111-0000-4000-8000-000000000001';
+      const aliceProf   = 'bbbb1111-0000-4000-8000-000000000001';
+      const bobAuth     = 'aaaa1111-0000-4000-8000-000000000002';
+      const bobProf     = 'bbbb1111-0000-4000-8000-000000000002';
+      const adminAuth   = 'aaaa1111-0000-4000-8000-000000000003';
+      const adminProf   = 'bbbb1111-0000-4000-8000-000000000003';
+
+      await db.exec(`
+        INSERT INTO auth.users (id, email) VALUES
+          ('${aliceAuth}', 'alice@filmcollab.io'),
+          ('${bobAuth}', 'bob@filmcollab.io'),
+          ('${adminAuth}', 'admin@filmcollab.io');
+
+        DELETE FROM public.profiles WHERE user_id IN ('${aliceAuth}', '${bobAuth}', '${adminAuth}');
+
+        INSERT INTO public.profiles (
+          id, user_id, username, full_name, email, role, account_status,
+          privacy_show_directory, allow_profile_views
+        ) VALUES
+          ('${aliceProf}', '${aliceAuth}', 'alice_r10', 'Alice R10', 'alice@filmcollab.io', 'user', 'active', true, true),
+          ('${bobProf}', '${bobAuth}', 'bob_r10', 'Bob R10', 'bob@filmcollab.io', 'user', 'active', true, true),
+          ('${adminProf}', '${adminAuth}', 'admin_r10', 'Global Admin R10', 'admin@filmcollab.io', 'admin', 'active', true, true);
+
+        INSERT INTO public.user_roles (user_id, role) VALUES
+          ('${adminAuth}', 'admin')
+        ON CONFLICT (user_id, role) DO NOTHING;
+
+        INSERT INTO public.admin_team_members (user_id, profile_id, role, status, permissions) VALUES
+          ('${adminAuth}', '${adminProf}', 'Admin', 'Active', '{"Users": {"view": true, "edit": true, "delete": true}, "Tickets": {"view": true, "edit": true, "delete": true}}'::jsonb);
+      `);
+
+      // ======================================================================
+      // R10-01: Ticket message boundary enforcement & immutability suite
+      // ======================================================================
+      let aliceTicketId, bobTicketId, lockedTicketId, aliceMsgId;
+
+      await asUser(db, aliceAuth, async () => {
+        const atRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, priority, category, chat_enabled)
+          VALUES ('${aliceProf}', 'Alice Open Ticket', 'Open query', 'low', 'General', true)
+          RETURNING id;
+        `);
+        aliceTicketId = atRes.rows[0].id;
+
+        const amRes = await db.query(`
+          INSERT INTO public.ticket_messages (ticket_id, author_id, message)
+          VALUES ('${aliceTicketId}', '${aliceProf}', 'Alice initial reply')
+          RETURNING id;
+        `);
+        aliceMsgId = amRes.rows[0].id;
+
+        const ltRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, priority, category, chat_enabled)
+          VALUES ('${aliceProf}', 'Alice Locked Ticket', 'Chat disabled', 'low', 'General', false)
+          RETURNING id;
+        `);
+        lockedTicketId = ltRes.rows[0].id;
+      });
+
+      await asUser(db, bobAuth, async () => {
+        const btRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, priority, category, chat_enabled)
+          VALUES ('${bobProf}', 'Bob Private Ticket', 'Confidential ticket', 'medium', 'Billing', true)
+          RETURNING id;
+        `);
+        bobTicketId = btRes.rows[0].id;
+      });
+
+      // A. Reassigning ticket_id to Bob's ticket via WITH changed ... RETURNING 1 must fail with 42501
+      await asUser(db, aliceAuth, async () => {
+        await assert.rejects(
+          () => db.query(`
+            WITH changed AS (
+              UPDATE public.ticket_messages
+              SET ticket_id = '${bobTicketId}', message = 'Cross-ticket fixture'
+              WHERE id = '${aliceMsgId}'
+              RETURNING 1
+            )
+            SELECT count(*)::int AS changed FROM changed;
+          `),
+          /ticket_id cannot be reassigned/i,
+          'R10-01: ticket_messages UPDATE must forbid reassigning ticket_id to another ticket'
+        );
+
+        // Assert source row is preserved and destination contains zero rows
+        const srcCheck = await db.query(`
+          SELECT id, ticket_id, message FROM public.ticket_messages WHERE id = '${aliceMsgId}';
+        `);
+        assert.equal(srcCheck.rows[0].ticket_id, aliceTicketId, 'Source message must remain in Alice ticket');
+        assert.equal(srcCheck.rows[0].message, 'Alice initial reply', 'Source message text must remain unchanged after denied update');
+
+        const dstCheck = await db.query(`
+          SELECT count(*)::int AS cnt FROM public.ticket_messages WHERE ticket_id = '${bobTicketId}';
+        `);
+        assert.equal(dstCheck.rows[0].cnt, 0, 'Bob private ticket must have zero messages after denied cross-ticket move');
+      });
+
+      // B. Moving reply into Alice's locked ticket (chat_enabled = false) must be rejected
+      await asUser(db, aliceAuth, async () => {
+        await assert.rejects(
+          () => db.query(`
+            UPDATE public.ticket_messages
+            SET ticket_id = '${lockedTicketId}', message = 'Move into locked'
+            WHERE id = '${aliceMsgId}';
+          `),
+          /ticket_id cannot be reassigned/i,
+          'R10-01: ticket_messages UPDATE must forbid moving message into locked ticket'
+        );
+      });
+
+      // C. Outsider (Bob) attempting to edit Alice's ticket message -> denied by RLS (0 rows updated)
+      await asUser(db, bobAuth, async () => {
+        const outsiderUpdate = await db.query(`
+          UPDATE public.ticket_messages
+          SET message = 'Bob unauthorized tampering'
+          WHERE id = '${aliceMsgId}'
+          RETURNING 1;
+        `);
+        assert.equal(outsiderUpdate.rowCount, 0, 'R10-01: Outsider cannot update Alice ticket message');
+      });
+
+      // D. Legitimate same-ticket content edit by author -> succeeds
+      await asUser(db, aliceAuth, async () => {
+        const legitUpdate = await db.query(`
+          UPDATE public.ticket_messages
+          SET message = 'Alice edited reply with timestamp details'
+          WHERE id = '${aliceMsgId}'
+          RETURNING id, ticket_id, message;
+        `);
+        assert.equal(legitUpdate.rowCount, 1, 'R10-01: Author same-ticket message edit must succeed');
+        assert.equal(legitUpdate.rows[0].message, 'Alice edited reply with timestamp details');
+        assert.equal(legitUpdate.rows[0].ticket_id, aliceTicketId);
+      });
+
+      // E. Author reassignment on ticket_messages remains strictly rejected with 42501
+      await asUser(db, aliceAuth, async () => {
+        await assert.rejects(
+          () => db.query(`
+            UPDATE public.ticket_messages
+            SET author_id = '${bobProf}'
+            WHERE id = '${aliceMsgId}';
+          `),
+          /author_id cannot be reassigned/i,
+          'R10-01: Author reassignment must be rejected with 42501'
+        );
+      });
+
+      // F. Control: Admin deleting author profile ON DELETE SET NULL succeeds
+      await asUser(db, adminAuth, async () => {
+        const delRes = await db.query(`DELETE FROM public.profiles WHERE id = '${aliceProf}';`);
+        assert.equal(delRes.rowCount, 1, 'R10-01: Admin deleting profile with ticket messages must succeed');
+
+        const orphanedMsg = await db.query(`SELECT id, author_id FROM public.ticket_messages WHERE id = '${aliceMsgId}';`);
+        assert.equal(orphanedMsg.rows[0].author_id, null, 'Message author_id must be cleanly set to NULL via FK ON DELETE SET NULL');
+      });
+
+      await db.close();
+
+      // ======================================================================
+      // R10-02: Encryption readiness & blank key normalization suite
+      // ======================================================================
+      // Case 1: Cached blank key "" with rotation disabled -> initiates publication with verified absence filter
+      let writeCountBlank = 0;
+      let orFilterApplied = false;
+      const mockSupabaseBlankKeyAck = {
+        from: (table) => ({
+          update: (payload) => {
+            writeCountBlank += 1;
+            return {
+              eq: () => ({
+                or: (condition) => {
+                  if (condition.includes('is.null') || condition.includes('eq.')) orFilterApplied = true;
+                  return {
+                    select: async () => ({ data: [{ id: 'prof-r10-blank' }], error: null })
+                  };
+                },
+                is: () => ({
+                  select: async () => ({ data: [{ id: 'prof-r10-blank' }], error: null })
+                }),
+                select: async () => ({ data: [{ id: 'prof-r10-blank' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const blankKeyAckRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseBlankKeyAck,
+        profileId: 'prof-r10-blank',
+        existingRemotePublicKey: '',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(blankKeyAckRes.ready, true, 'R10-02: Cached blank key with acknowledged write must mark ready = true');
+      assert.equal(blankKeyAckRes.requiresExplicitKeyRotation, false);
+      assert.equal(writeCountBlank, 1, 'R10-02: Cached blank key must execute exactly 1 publication write');
+      assert.equal(orFilterApplied, true, 'R10-02: Publication must enforce verified-absence filter on blank key');
+
+      // Case 2: Cached blank key with write error -> must fail closed (ready: false, privKey: null)
+      const mockSupabaseBlankKeyErr = {
+        from: (table) => ({
+          update: () => ({
+            eq: () => ({
+              or: () => ({
+                select: async () => ({ data: null, error: { message: 'Database connection lost' } })
+              })
+            })
+          })
+        })
+      };
+
+      const blankKeyErrRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseBlankKeyErr,
+        profileId: 'prof-r10-blank-err',
+        existingRemotePublicKey: '   ',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(blankKeyErrRes.ready, false, 'R10-02: Failed write on blank key must leave ready = false');
+      assert.equal(blankKeyErrRes.privKey, null, 'R10-02: Failed write must not expose active private key');
+
+      // Case 3: Fresh lookup returning blank string "   " from DB -> normalized to null and published
+      let writeCountFreshBlank = 0;
+      const mockSupabaseFreshBlank = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'prof-r10-fresh-blank', public_key: '   ' },
+                error: null
+              })
+            })
+          }),
+          update: () => {
+            writeCountFreshBlank += 1;
+            return {
+              eq: () => ({
+                or: () => ({
+                  select: async () => ({ data: [{ id: 'prof-r10-fresh-blank' }], error: null })
+                }),
+                select: async () => ({ data: [{ id: 'prof-r10-fresh-blank' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const freshBlankRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseFreshBlank,
+        profileId: 'prof-r10-fresh-blank',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(freshBlankRes.ready, true, 'R10-02: Fresh lookup of blank key string must normalize to absent and publish');
+      assert.equal(writeCountFreshBlank, 1, 'R10-02: Fresh lookup of blank string must perform publication write');
+
+      // Case 4: End-to-end sender encryption and recipient decryption lifecycle
+      const senderKeys = await generateKeyPair();
+      const senderPrivKey = await importPrivateKey(senderKeys.privateKeyJwk);
+      const senderPubStr = JSON.stringify(senderKeys.publicKeyJwk);
+      const recipientKeys = await generateKeyPair();
+      const recipientPrivKey = await importPrivateKey(recipientKeys.privateKeyJwk);
+      const recipientPubStr = JSON.stringify(recipientKeys.publicKeyJwk);
+
+      // Sender encrypts message for recipient
+      const secretEnquiry = 'Confidential Studio Enquiry for Feature Film';
+      const encResult = await encryptForRecipientOrThrow({
+        plaintext: secretEnquiry,
+        senderPrivateKey: senderPrivKey,
+        recipientPublicKeyJwkOrStr: recipientPubStr,
+        keyId: computeKeyId(recipientKeys.publicKeyJwk)
+      });
+      const encryptedEnvelope = encResult.envelope;
+      assert.ok(encryptedEnvelope.startsWith('ENCRYPTED:'), 'Encrypted envelope must start with ENCRYPTED:');
+
+      // Recipient decrypts with blank/missing sender key -> throws E2EE_SENDER_KEY_UNAVAILABLE
+      await assert.rejects(
+        () => decryptEnvelopeWithKeyring({
+          envelope: encryptedEnvelope,
+          primaryPrivateKey: recipientPrivKey,
+          primaryPublicKeyJwk: recipientKeys.publicKeyJwk,
+          senderPublicKeyJwkOrStr: '',
+          peerPublicKeyHistory: []
+        }),
+        /E2EE_SENDER_KEY_UNAVAILABLE/i,
+        'R10-02: Decrypting envelope with blank sender key must throw E2EE_SENDER_KEY_UNAVAILABLE'
+      );
+
+      // Recipient decrypts with verified published sender public key -> successfully recovers plaintext
+      const decryptedText = await decryptEnvelopeWithKeyring({
+        envelope: encryptedEnvelope,
+        primaryPrivateKey: recipientPrivKey,
+        primaryPublicKeyJwk: recipientKeys.publicKeyJwk,
+        senderPublicKeyJwkOrStr: senderPubStr,
+        peerPublicKeyHistory: []
+      });
+      assert.equal(decryptedText, secretEnquiry, 'R10-02: Decrypting envelope with published key must recover exact plaintext');
+    });
   });
 });

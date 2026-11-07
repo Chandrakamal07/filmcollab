@@ -479,13 +479,20 @@ export async function ensureSenderE2EEPublicationReady(params: {
   let remotePublicKey: string | null = null;
   let remoteLookupState: "known_key" | "known_empty" | "lookup_failed" = "lookup_failed";
 
+  const sanitizeKey = (k: unknown): string | null => {
+    if (typeof k !== "string") return null;
+    const trimmed = k.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
   if (params.existingRemotePublicKey !== undefined) {
-    if (params.existingRemotePublicKey === null) {
+    const cleanParam = sanitizeKey(params.existingRemotePublicKey);
+    if (cleanParam === null) {
       remoteLookupState = "known_empty";
       remotePublicKey = null;
     } else {
       remoteLookupState = "known_key";
-      remotePublicKey = params.existingRemotePublicKey;
+      remotePublicKey = cleanParam;
     }
   } else if (supabaseClient?.from) {
     try {
@@ -498,9 +505,10 @@ export async function ensureSenderE2EEPublicationReady(params: {
       if (profErr) {
         remoteLookupState = "lookup_failed";
       } else if (profData) {
-        if (profData.public_key) {
+        const cleanFetched = sanitizeKey(profData.public_key);
+        if (cleanFetched !== null) {
           remoteLookupState = "known_key";
-          remotePublicKey = profData.public_key;
+          remotePublicKey = cleanFetched;
         } else {
           remoteLookupState = "known_empty";
           remotePublicKey = null;
@@ -569,9 +577,13 @@ export async function ensureSenderE2EEPublicationReady(params: {
         .update({ public_key: pubKeyStr })
         .eq("id", profileId);
 
-      // Race-safety: If initial publication without explicit rotation, enforce public_key IS NULL at write time
-      if (!allowExplicitKeyRotation && typeof updateQuery?.is === "function") {
-        updateQuery = updateQuery.is("public_key", null);
+      // Race-safety: If initial publication without explicit rotation, enforce public_key IS NULL or blank at write time
+      if (!allowExplicitKeyRotation) {
+        if (typeof updateQuery?.or === "function") {
+          updateQuery = updateQuery.or("public_key.is.null,public_key.eq.");
+        } else if (typeof updateQuery?.is === "function") {
+          updateQuery = updateQuery.is("public_key", null);
+        }
       }
 
       const updateRes =
