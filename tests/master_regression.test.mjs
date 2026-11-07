@@ -2041,5 +2041,458 @@ describe('FilmCollab Master Audit Regression Test Suite (M01-M28)', () => {
       const projectsPageSrc = fs.readFileSync(path.join(rootDir, 'src/pages/projects/page.tsx'), 'utf8');
       assert.ok(!projectsPageSrc.includes('Math.random()'), 'R8-07: src/pages/projects/page.tsx must not fabricate likes_count or team_size with Math.random()');
     });
+
+    test('R9-01..R9-03: Real PostgreSQL 16 ticket trigger, member cascade deletion, and E2EE key lookup safety suite', async () => {
+      // 1. Test upgrade path: replay all migrations up to R8 (f < '20261110000000'), seed data, then apply 20261110000000
+      const upgDb = new PGlite();
+      await upgDb.exec(supabaseMockPreamble);
+      const preR9Files = migrationFiles.filter(f => f < '20261110000000');
+      for (const file of preR9Files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await upgDb.exec(sql);
+      }
+
+      const r9Sql = fs.readFileSync(
+        path.join(migrationsDir, '20261110000000_r9_ticket_project_and_crypto_remediation.sql'),
+        'utf8'
+      );
+      await upgDb.exec(r9Sql);
+      await upgDb.close();
+
+      // 2. Full clean-install R9 multi-role PostgreSQL 16 verification
+      const db = new PGlite();
+      await db.exec(supabaseMockPreamble);
+      for (const file of migrationFiles) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await db.exec(sql);
+      }
+
+      const aliceAuth   = 'aaaa1111-0000-4000-8000-000000000001';
+      const aliceProf   = 'bbbb1111-0000-4000-8000-000000000001';
+      const bobAuth     = 'aaaa1111-0000-4000-8000-000000000002';
+      const bobProf     = 'bbbb1111-0000-4000-8000-000000000002';
+      const adminAuth   = 'aaaa1111-0000-4000-8000-000000000003';
+      const adminProf   = 'bbbb1111-0000-4000-8000-000000000003';
+      const staffAuth   = 'aaaa1111-0000-4000-8000-000000000004';
+      const staffProf   = 'bbbb1111-0000-4000-8000-000000000004';
+      const outsiderAuth= 'aaaa1111-0000-4000-8000-000000000099';
+      const outsiderProf= 'bbbb1111-0000-4000-8000-000000000099';
+
+      await db.exec(`
+        INSERT INTO auth.users (id, email) VALUES
+          ('${aliceAuth}', 'alice@filmcollab.io'),
+          ('${bobAuth}', 'bob@filmcollab.io'),
+          ('${adminAuth}', 'admin@filmcollab.io'),
+          ('${staffAuth}', 'staff@filmcollab.io'),
+          ('${outsiderAuth}', 'outsider@filmcollab.io');
+
+        DELETE FROM public.profiles WHERE user_id IN ('${aliceAuth}', '${bobAuth}', '${adminAuth}', '${staffAuth}', '${outsiderAuth}');
+
+        INSERT INTO public.profiles (
+          id, user_id, username, full_name, email, role, account_status,
+          privacy_show_directory, allow_profile_views
+        ) VALUES
+          ('${aliceProf}', '${aliceAuth}', 'alice_r9', 'Alice R9', 'alice@filmcollab.io', 'user', 'active', true, true),
+          ('${bobProf}', '${bobAuth}', 'bob_r9', 'Bob R9', 'bob@filmcollab.io', 'user', 'active', true, true),
+          ('${adminProf}', '${adminAuth}', 'admin_r9', 'Global Admin R9', 'admin@filmcollab.io', 'admin', 'active', true, true),
+          ('${staffProf}', '${staffAuth}', 'staff_r9', 'Staff Support R9', 'staff@filmcollab.io', 'moderator', 'active', true, true),
+          ('${outsiderProf}', '${outsiderAuth}', 'outsider_r9', 'Outsider R9', 'outsider@filmcollab.io', 'user', 'active', true, true);
+
+        INSERT INTO public.user_roles (user_id, role) VALUES
+          ('${adminAuth}', 'admin'),
+          ('${staffAuth}', 'moderator')
+        ON CONFLICT (user_id, role) DO NOTHING;
+
+        INSERT INTO public.admin_team_members (user_id, profile_id, role, status, permissions) VALUES
+          ('${adminAuth}', '${adminProf}', 'Admin', 'Active', '{"Users": {"view": true, "edit": true, "delete": true}, "Tickets": {"view": true, "edit": true, "delete": true}}'::jsonb),
+          ('${staffAuth}', '${staffProf}', 'Moderator', 'Active', '{"Tickets": {"view": true, "edit": true, "add": true}}'::jsonb);
+      `);
+
+      // ======================================================================
+      // R9-01: ticket_messages & ticket_updates author triggers and FK cleanup
+      // ======================================================================
+      let ticketId;
+      await asUser(db, aliceAuth, async () => {
+        const tRes = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, priority, category)
+          VALUES ('${aliceProf}', 'Audio sync problem in scene 4', 'Playback drifts after 3 minutes', 'medium', 'Technical')
+          RETURNING id
+        `);
+        ticketId = tRes.rows[0].id;
+
+        // A. Alice (ticket owner) inserts reply into ticket_messages -> must succeed without 42703 (no author_name column error)
+        const tmRes = await db.query(`
+          INSERT INTO public.ticket_messages (ticket_id, author_id, message)
+          VALUES ('${ticketId}', '${aliceProf}', 'Adding timestamp details: drift starts at 03:12')
+          RETURNING id, author_id, message
+        `);
+        assert.equal(tmRes.rows[0].author_id, aliceProf, 'R9-01A: ticket_messages INSERT must bind author_id to caller profile');
+        assert.equal(tmRes.rows[0].message, 'Adding timestamp details: drift starts at 03:12');
+
+        // B. Attempting to manually UPDATE ticket_messages.author_id while profile exists -> rejected with 42501
+        await assert.rejects(
+          () => db.query(`
+            UPDATE public.ticket_messages SET author_id = '${bobProf}'
+            WHERE id = '${tmRes.rows[0].id}'
+          `),
+          /author_id cannot be reassigned/i,
+          'R9-01A: ticket_messages UPDATE must forbid reassigning author_id to another user'
+        );
+
+        // Attempting to manually UPDATE ticket_messages.author_id = NULL while profile still exists -> rejected with 42501
+        await assert.rejects(
+          () => db.query(`
+            UPDATE public.ticket_messages SET author_id = NULL
+            WHERE id = '${tmRes.rows[0].id}'
+          `),
+          /author_id cannot be reassigned/i,
+          'R9-01A: ticket_messages UPDATE must forbid setting author_id to NULL while author profile exists'
+        );
+      });
+
+      // C. Staff agent posts ticket_messages reply and ticket_updates internal note
+      await asUser(db, staffAuth, async () => {
+        const staffMsg = await db.query(`
+          INSERT INTO public.ticket_messages (ticket_id, author_id, message)
+          VALUES ('${ticketId}', '${staffProf}', 'We have identified a sample rate mismatch.')
+          RETURNING id, author_id
+        `);
+        assert.equal(staffMsg.rows[0].author_id, staffProf, 'R9-01A: Support staff ticket_messages reply must bind to staff profile');
+
+        const staffUpd = await db.query(`
+          INSERT INTO public.ticket_updates (ticket_id, author_id, message)
+          VALUES ('${ticketId}', '${staffProf}', 'Escalated to sound engineering team')
+          RETURNING id, author_id, author_name
+        `);
+        assert.equal(staffUpd.rows[0].author_id, staffProf, 'R9-01A: ticket_updates INSERT must bind author_id to staff profile');
+        assert.equal(staffUpd.rows[0].author_name, 'Staff Support R9', 'R9-01A: ticket_updates INSERT must populate author_name from profile');
+      });
+
+      // D. Global Admin deletes author profile (bob creates a message, then bob profile is deleted)
+      let bobTicketId;
+      let bobMsgId;
+      await asUser(db, bobAuth, async () => {
+        const bTicket = await db.query(`
+          INSERT INTO public.tickets (user_id, subject, description, priority, category)
+          VALUES ('${bobProf}', 'Billing question', 'Invoice discrepancy', 'low', 'Billing')
+          RETURNING id
+        `);
+        bobTicketId = bTicket.rows[0].id;
+
+        const bMsg = await db.query(`
+          INSERT INTO public.ticket_messages (ticket_id, author_id, message)
+          VALUES ('${bobTicketId}', '${bobProf}', 'Please check March billing statement.')
+          RETURNING id
+        `);
+        bobMsgId = bMsg.rows[0].id;
+      });
+
+      // Admin deletes Bob's profile -> ON DELETE SET NULL must succeed without 42501!
+      await asUser(db, adminAuth, async () => {
+        const delRes = await db.query(`
+          DELETE FROM public.profiles WHERE id = '${bobProf}'
+        `);
+        assert.equal(delRes.rowCount, 1, 'R9-01B: Admin deleting profile with historical ticket messages must succeed');
+
+        // Verify Bob's ticket message remains with author_id = NULL
+        const orphanedMsg = await db.query(`
+          SELECT id, author_id, message FROM public.ticket_messages WHERE id = '${bobMsgId}'
+        `);
+        assert.equal(orphanedMsg.rows.length, 1, 'R9-01B: Ticket message must be retained after author profile deletion');
+        assert.equal(orphanedMsg.rows[0].author_id, null, 'R9-01B: Ticket message author_id must be cleanly set to NULL via FK ON DELETE SET NULL');
+      });
+
+      // ======================================================================
+      // R9-02: Project deletion with members CASCADE lifecycle resilience
+      // ======================================================================
+      let emptyProjId;
+      let memberProjId;
+
+      await asUser(db, aliceAuth, async () => {
+        // Create empty project
+        const epRes = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Empty Project R9', 'Short Film', 'Drama', 'planning', 'public', '${aliceAuth}')
+          RETURNING id
+        `);
+        emptyProjId = epRes.rows[0].id;
+
+        // Create project with member
+        const mpRes = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Feature Film With Team R9', 'Feature', 'Thriller', 'in_production', 'public', '${aliceAuth}')
+          RETURNING id
+        `);
+        memberProjId = mpRes.rows[0].id;
+      });
+
+      // Add outsider as member to memberProjId
+      await asUser(db, outsiderAuth, async () => {
+        await db.query(`
+          INSERT INTO public.project_members (project_id, user_id, role)
+          VALUES ('${memberProjId}', '${outsiderAuth}', 'Applicant')
+        `);
+      });
+
+      // Alice accepts outsider
+      await asUser(db, aliceAuth, async () => {
+        await db.query(`
+          UPDATE public.project_members SET role = 'Sound Designer'
+          WHERE project_id = '${memberProjId}' AND user_id = '${outsiderAuth}'
+        `);
+      });
+
+      // Test outsider cannot delete Alice's project (denied by RLS)
+      await asUser(db, outsiderAuth, async () => {
+        const unauthDel = await db.query(`
+          DELETE FROM public.projects WHERE id = '${memberProjId}'
+        `);
+        assert.equal(unauthDel.rowCount, 0, 'R9-02: Outsider must not be permitted to delete project');
+      });
+
+      // Test Alice deleting empty project -> succeeds
+      await asUser(db, aliceAuth, async () => {
+        const delEmpty = await db.query(`
+          DELETE FROM public.projects WHERE id = '${emptyProjId}'
+        `);
+        assert.equal(delEmpty.rowCount, 1, 'R9-02: Owner deleting empty project must succeed');
+
+        // Test Alice deleting project WITH members -> CASCADE must succeed without 23503!
+        const delWithMembers = await db.query(`
+          DELETE FROM public.projects WHERE id = '${memberProjId}'
+        `);
+        assert.equal(delWithMembers.rowCount, 1, 'R9-02: Owner deleting member-bearing project must succeed via CASCADE without FK 23503 error');
+
+        const remainingMembers = await db.query(`
+          SELECT * FROM public.project_members WHERE project_id = '${memberProjId}'
+        `);
+        assert.equal(remainingMembers.rows.length, 0, 'R9-02: Project members must be cascaded cleanly');
+      });
+
+      // Test direct member removal (preserves rejection event and allows rejection notification)
+      let standaloneProjId;
+      await asUser(db, aliceAuth, async () => {
+        const spRes = await db.query(`
+          INSERT INTO public.projects (title, category, project_type, status, visibility, created_by)
+          VALUES ('Standalone Casting Project R9', 'Short', 'Drama', 'planning', 'public', '${aliceAuth}')
+          RETURNING id
+        `);
+        standaloneProjId = spRes.rows[0].id;
+      });
+
+      await asUser(db, outsiderAuth, async () => {
+        await db.query(`
+          INSERT INTO public.project_members (project_id, user_id, role)
+          VALUES ('${standaloneProjId}', '${outsiderAuth}', 'Applicant')
+        `);
+      });
+
+      // Alice removes/rejects outsider directly
+      await asUser(db, aliceAuth, async () => {
+        const delMem = await db.query(`
+          DELETE FROM public.project_members
+          WHERE project_id = '${standaloneProjId}' AND user_id = '${outsiderAuth}'
+        `);
+        assert.equal(delMem.rowCount, 1, 'R9-02: Direct member removal must succeed');
+
+        // Verify rejected event was recorded in project_member_events
+        const events = await db.query(`
+          SELECT * FROM public.project_member_events
+          WHERE project_id = '${standaloneProjId}' AND user_id = '${outsiderAuth}' AND event_type = 'rejected'
+        `);
+        assert.equal(events.rows.length, 1, 'R9-02: Direct member removal must log rejected event');
+        assert.equal(events.rows[0].actor_id, aliceAuth);
+      });
+
+      await db.close();
+
+      // ======================================================================
+      // R9-03: Sender E2EE publication & remote-key lookup safety verification
+      // ======================================================================
+      // Case 1: Resolved lookup error (timeout/PostgREST error) -> fail closed, 0 writes
+      let writeCountLookupErr = 0;
+      const mockSupabaseResolvedLookupError = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: null,
+                error: { message: 'Read timeout contacting database' }
+              })
+            })
+          }),
+          update: () => {
+            writeCountLookupErr += 1;
+            return {
+              eq: () => ({
+                is: () => ({
+                  select: async () => ({ data: [{ id: 'p1' }], error: null })
+                }),
+                select: async () => ({ data: [{ id: 'p1' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const resolvedErrRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseResolvedLookupError,
+        profileId: 'prof-r9-resolved-err',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(resolvedErrRes.ready, false, 'R9-03: Resolved remote-key lookup error must leave ready = false');
+      assert.equal(resolvedErrRes.privKey, null, 'R9-03: Failed lookup must not expose sending privateKey');
+      assert.equal(resolvedErrRes.requiresExplicitKeyRotation, false, 'R9-03: Lookup error is not a confirmed mismatched rotation state');
+      assert.equal(writeCountLookupErr, 0, 'R9-03: Failed remote-key lookup must NOT execute any public_key write');
+
+      // Case 2: Thrown network exception during lookup -> fail closed, 0 writes
+      let writeCountThrownErr = 0;
+      const mockSupabaseThrownLookupError = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => {
+                throw new Error('ECONNRESET: Connection terminated unexpectedly');
+              }
+            })
+          }),
+          update: () => {
+            writeCountThrownErr += 1;
+            return {
+              eq: () => ({
+                select: async () => ({ data: [{ id: 'p1' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const thrownErrRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseThrownLookupError,
+        profileId: 'prof-r9-thrown-err',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(thrownErrRes.ready, false, 'R9-03: Thrown remote-key lookup exception must leave ready = false');
+      assert.equal(thrownErrRes.privKey, null, 'R9-03: Thrown exception must not expose privateKey');
+      assert.equal(writeCountThrownErr, 0, 'R9-03: Thrown lookup exception must NOT execute any public_key write');
+
+      // Case 3: Genuine empty remote key (verified absence) -> publishes with .is("public_key", null), 1 write, ready: true
+      let writeCountVerifiedEmpty = 0;
+      let isFilterApplied = false;
+      const mockSupabaseVerifiedEmpty = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'prof-r9-empty', public_key: null },
+                error: null
+              })
+            })
+          }),
+          update: () => {
+            writeCountVerifiedEmpty += 1;
+            return {
+              eq: () => ({
+                is: (col, val) => {
+                  if (col === 'public_key' && val === null) isFilterApplied = true;
+                  return {
+                    select: async () => ({ data: [{ id: 'prof-r9-empty' }], error: null })
+                  };
+                },
+                select: async () => ({ data: [{ id: 'prof-r9-empty' }], error: null })
+              })
+            };
+          }
+        })
+      };
+
+      const emptyLookupRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseVerifiedEmpty,
+        profileId: 'prof-r9-empty',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(emptyLookupRes.ready, true, 'R9-03: Verified absence of remote key must allow initial publication');
+      assert.equal(emptyLookupRes.requiresExplicitKeyRotation, false);
+      assert.equal(writeCountVerifiedEmpty, 1, 'R9-03: Initial publication must perform exactly 1 write');
+      assert.equal(isFilterApplied, true, 'R9-03: Initial publication must enforce .is("public_key", null) for race safety');
+
+      // Case 4: Stale read / racing concurrent publication (0 rows updated) -> fail closed, requiresExplicitKeyRotation: true
+      let writeCountStaleRead = 0;
+      const mockSupabaseStaleRead = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'prof-r9-stale', public_key: null },
+                error: null
+              })
+            })
+          }),
+          update: () => {
+            writeCountStaleRead += 1;
+            return {
+              eq: () => ({
+                is: () => ({
+                  select: async () => ({ data: [], error: null }) // 0 rows updated because another device published first!
+                })
+              })
+            };
+          }
+        })
+      };
+
+      const staleReadRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseStaleRead,
+        profileId: 'prof-r9-stale',
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(staleReadRes.ready, false, 'R9-03: Stale read with 0 rows updated must fail closed');
+      assert.equal(staleReadRes.privKey, null);
+      assert.equal(staleReadRes.requiresExplicitKeyRotation, true, 'R9-03: Concurrently updated server key must require explicit rotation confirmation');
+
+      // Case 5: Matching key on server -> 0 writes, ready: true
+      const memStore = new Map();
+      globalThis.localStorage = {
+        getItem: (k) => memStore.get(k) ?? null,
+        setItem: (k, v) => memStore.set(k, String(v)),
+        removeItem: (k) => memStore.delete(k),
+        clear: () => memStore.clear()
+      };
+      const matchingKeyPair = await generateKeyPair();
+      const matchingPubStr = JSON.stringify(matchingKeyPair.publicKeyJwk);
+      const matchingPrivStr = JSON.stringify(matchingKeyPair.privateKeyJwk);
+      globalThis.localStorage.setItem('e2ee_pub_prof-r9-matching', matchingPubStr);
+      globalThis.localStorage.setItem('e2ee_priv_prof-r9-matching', matchingPrivStr);
+
+      let writeCountMatching = 0;
+      const mockSupabaseMatching = {
+        from: (table) => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'prof-r9-matching', public_key: matchingPubStr },
+                error: null
+              })
+            })
+          }),
+          update: () => {
+            writeCountMatching += 1;
+            return {
+              eq: () => ({ select: async () => ({ data: [{ id: 'prof-r9-matching' }], error: null }) })
+            };
+          }
+        })
+      };
+
+      const matchingRes = await ensureSenderE2EEPublicationReady({
+        supabaseClient: mockSupabaseMatching,
+        profileId: 'prof-r9-matching',
+        existingRemotePublicKey: matchingPubStr,
+        allowExplicitKeyRotation: false
+      });
+      assert.equal(matchingRes.ready, true, 'R9-03: Matching key must be ready immediately');
+      assert.equal(matchingRes.requiresExplicitKeyRotation, false);
+      assert.equal(writeCountMatching, 0, 'R9-03: Matching key must NOT execute any public_key writes');
+    });
   });
 });

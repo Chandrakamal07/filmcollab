@@ -476,20 +476,56 @@ export async function ensureSenderE2EEPublicationReady(params: {
     };
   }
 
-  let remotePublicKey = params.existingRemotePublicKey;
-  if (remotePublicKey === undefined && supabaseClient?.from) {
+  let remotePublicKey: string | null = null;
+  let remoteLookupState: "known_key" | "known_empty" | "lookup_failed" = "lookup_failed";
+
+  if (params.existingRemotePublicKey !== undefined) {
+    if (params.existingRemotePublicKey === null) {
+      remoteLookupState = "known_empty";
+      remotePublicKey = null;
+    } else {
+      remoteLookupState = "known_key";
+      remotePublicKey = params.existingRemotePublicKey;
+    }
+  } else if (supabaseClient?.from) {
     try {
       const { data: profData, error: profErr } = await supabaseClient
         .from("profiles")
         .select("id, public_key")
         .eq("id", profileId)
         .maybeSingle();
-      if (!profErr && profData) {
-        remotePublicKey = profData.public_key ?? null;
+
+      if (profErr) {
+        remoteLookupState = "lookup_failed";
+      } else if (profData) {
+        if (profData.public_key) {
+          remoteLookupState = "known_key";
+          remotePublicKey = profData.public_key;
+        } else {
+          remoteLookupState = "known_empty";
+          remotePublicKey = null;
+        }
+      } else {
+        remoteLookupState = "lookup_failed";
       }
     } catch {
-      // Proceed with local check; publication step below will still verify server acknowledgement
+      remoteLookupState = "lookup_failed";
     }
+  } else {
+    remoteLookupState = "lookup_failed";
+  }
+
+  // R9-03: Fail closed on unverified/failed remote lookup without performing any unconfirmed key write
+  if (remoteLookupState === "lookup_failed") {
+    return {
+      ready: false,
+      privKey: null,
+      pubKeyStr: null,
+      pubKeyJwk: null,
+      keyId: null,
+      requiresExplicitKeyRotation: false,
+      error: "E2EE_REMOTE_KEY_LOOKUP_FAILED: Failed to verify existing encryption key state from server."
+    };
   }
 
   const { privKey, pubKeyStr, pubKeyJwk, keyId } = await getOrInitUserE2EE(profileId, {
@@ -513,12 +549,30 @@ export async function ensureSenderE2EEPublicationReady(params: {
     };
   }
 
-  if (!remotePublicKey || (!keysMatch && allowExplicitKeyRotation)) {
+  // If remote key matches, local key is already synchronized on server; no write needed
+  if (remotePublicKey && keysMatch) {
+    return {
+      ready: true,
+      privKey,
+      pubKeyStr,
+      pubKeyJwk,
+      keyId,
+      requiresExplicitKeyRotation: false
+    };
+  }
+
+  // Publish either verified initial key (known_empty) or explicitly confirmed rotation (!keysMatch && allowExplicitKeyRotation)
+  if (remoteLookupState === "known_empty" || (!keysMatch && allowExplicitKeyRotation)) {
     try {
-      const updateQuery = supabaseClient
+      let updateQuery = supabaseClient
         .from("profiles")
         .update({ public_key: pubKeyStr })
         .eq("id", profileId);
+
+      // Race-safety: If initial publication without explicit rotation, enforce public_key IS NULL at write time
+      if (!allowExplicitKeyRotation && typeof updateQuery?.is === "function") {
+        updateQuery = updateQuery.is("public_key", null);
+      }
 
       const updateRes =
         typeof updateQuery?.select === "function"
@@ -536,10 +590,10 @@ export async function ensureSenderE2EEPublicationReady(params: {
           pubKeyStr: null,
           pubKeyJwk: null,
           keyId: null,
-          requiresExplicitKeyRotation: Boolean(remotePublicKey && !keysMatch),
+          requiresExplicitKeyRotation: Boolean(remotePublicKey && !keysMatch) || zeroRowsUpdated,
           error:
             updateErr?.message ||
-            "E2EE_KEY_PUBLICATION_FAILED: Could not verify sender encryption key publication on server."
+            "E2EE_KEY_PUBLICATION_FAILED: Could not verify sender encryption key publication on server (key may have been updated concurrently)."
         };
       }
     } catch (err: any) {
